@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+@layer utilities {
+  @media print {
+    @page {
+      size: letter portrait;
+      margin: 4mm 6mm 4mm 6mm;
+    }
+
+    html, body {
+      background-color: #ffffff !important;
+      color: #000000 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* Refined .print:hidden and print-hidden classes: completely eliminate all visual and layout presence */
+    .print\:hidden,
+    .print-hidden,
+    [class*="print:hidden"],
+    [data-print="hidden"] {
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      min-height: 0 !important;
+      max-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      opacity: 0 !important;
+      overflow: hidden !important;
+      position: absolute !important;
+      pointer-events: none !important;
+      clip: rect(0, 0, 0, 0) !important;
+      clip-path: inset(50%) !important;
+    }
+
+    /* Reset modal wrappers and fixed overlays in print */
+    .fixed.inset-0,
+    div[class*="fixed inset-0"] {
+      position: static !important;
+      overflow: visible !important;
+      max-height: none !important;
+      height: auto !important;
+      background: transparent !important;
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+
+    /* Report Sheet layout in print */
+    #vaclinic-official-pdf-sheet,
+    #vaclinic-official-report-sheet,
+    [id*="official-report-sheet"],
+    [id*="official-pdf-sheet"] {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      overflow: visible !important;
+    }
+
+    /* Multi-sheet report structure: anchor signatures and footer at the bottom without accidental page break */
+    .report-sheet-container,
+    [id="vaclinic-official-report-sheet"],
+    [id="vaclinic-official-pdf-sheet"] > div {
+      display: flex !important;
+      flex-direction: column !important;
+      min-height: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .avoid-page-break,
+    .report-signatures-footer,
+    .signatures-block {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+      -webkit-column-break-inside: avoid !important;
+    }
+
+    .avoid-page-break-after {
+      break-after: avoid !important;
+      page-break-after: avoid !important;
+    }
+
+    /* Keep the signatures block and final footer docked to the bottom block in multi-sheet reports */
+    .report-signatures-footer,
+    .signatures-block,
+    footer.report-footer,
+    .report-sheet-container > footer {
+      margin-top: auto !important;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+      break-before: auto !important;
+    }
+
+    /* Prevent orphan breaks across table lines */
+    table {
+      page-break-inside: auto !important;
+      break-inside: auto !important;
+    }
+
+    tr, td, th {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+
+    thead {
+      display: table-header-group !important;
+    }
+
+    tfoot {
+      display: table-footer-group !important;
+    }
+
+    /* Force 4-column horizontal distribution for signatures and pillars in print */
+    .signatures-grid,
+    .print-grid-cols-4 {
+      display: grid !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 0.5rem !important;
+    }
+  }
+}

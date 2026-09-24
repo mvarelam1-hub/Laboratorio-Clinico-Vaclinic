@@ -1,0 +1,6 @@
+{
+  "name": "LABVACLINIC - Laboratorio Clínico",
+  "description": "Sistema de gestión integral para LABVACLINIC Laboratorio Clínico con control de trazabilidad, pacientes, muestras, redacción con IA y portal de resultados.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
