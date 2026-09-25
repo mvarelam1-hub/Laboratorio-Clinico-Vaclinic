@@ -9,6 +9,11 @@ import { pool } from "./server/db";
 dotenv.config();
 
 const app = express();
+// Hallazgo real de seguridad (Entregable DevOps 2, TC-11): el backend exponía
+// la cabecera "X-Powered-By: Express" en cada respuesta, revelando el
+// framework usado y facilitando a un atacante enfocar exploits conocidos de
+// Express. Se corrige aquí, antes de montar cualquier ruta.
+app.disable("x-powered-by");
 app.use(express.json({ limit: "10mb" }));
 const PORT = 3000;
 
