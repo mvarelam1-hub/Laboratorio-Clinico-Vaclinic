@@ -141,11 +141,21 @@ jobs:
       - name: Instalar Chrome para Selenium
         uses: browser-actions/setup-chrome@v1
         id: setup-chrome
+        with:
+          # Hallazgo real (ver sección 5 del entregable): sin install-chromedriver,
+          # Selenium recogía el chromedriver 153 preinstalado en el runner de
+          # ubuntu-latest (via PATH) en vez de uno compatible con el Chrome que
+          # esta acción instala (156.x), y la sesión de Selenium fallaba con
+          # "session not created: This version of ChromeDriver only supports
+          # Chrome version 153". Con install-chromedriver: true la acción
+          # descarga un chromedriver que sí coincide con el Chrome instalado.
+          install-chromedriver: true
 
       - name: Ejecutar pytest (integración, sistema, seguridad, rendimiento)
         env:
           VACLINIC_BASE_URL: http://localhost:3000
           CHROME_BINARY: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.setup-chrome.outputs.chromedriver-path }}
         run: |
           pytest tests_python/ -v --html=reports/reporte_pytest.html --self-contained-html
 
