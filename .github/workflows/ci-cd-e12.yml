@@ -1,0 +1,205 @@
+name: CI/CD E12 - Pipeline completo (build, test, deploy staging)
+
+# Entregable "DevOps 2" (ACS, Fase 2, E11-E12): pipeline de Integración
+# Continua / Entrega Continua con las 4 etapas exigidas por el enunciado:
+# checkout -> build -> test -> deploy staging.
+#
+# Este workflow es una AMPLIACIÓN del ci.yml existente (E10: build + pruebas
+# unitarias con cobertura). No lo reemplaza — se agrega aquí la capa de
+# pruebas de sistema/integración/seguridad/rendimiento en Python
+# (pytest + Selenium, ver tests_python/) y la etapa de deploy a un entorno
+# de staging real.
+#
+# Un Jenkinsfile equivalente (mismas 4 etapas) se entrega en la raíz del
+# repositorio como definición portable de este mismo pipeline, documentado
+# como listo para ejecutarse en un servidor Jenkins real (ver la nota al
+# inicio de ese archivo sobre por qué la ejecución verificada de este
+# entregable es la de GitHub Actions).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # necesario para la etapa deploy-staging (gh-pages)
+  pages: write
+
+jobs:
+  # ------------------------------------------------------------------
+  # Etapa 1-2: checkout + build (+ pruebas unitarias nativas, Vitest/E10)
+  # ------------------------------------------------------------------
+  build:
+    name: 1-2. Checkout + Build + Unitarias (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Build (frontend + backend)
+        run: npm run build
+
+      - name: Pruebas unitarias con cobertura (Vitest, E10)
+        run: npm run test:coverage
+
+      - name: Publicar artefacto de build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-dist
+          path: dist
+
+      - name: Publicar reporte de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage
+
+  # ------------------------------------------------------------------
+  # Etapa 3: test (integración, sistema/aceptación, seguridad,
+  # rendimiento) - pytest + Selenium contra una instancia real y efímera
+  # de VACLINIC con PostgreSQL real, corriendo en el propio runner.
+  # ------------------------------------------------------------------
+  system-tests:
+    name: 3. Pruebas de sistema (pytest + Selenium)
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vaclinic_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/vaclinic_ci
+      PGSSLMODE: disable
+      PORTAL_TOKEN_SECRET: clave-larga-de-prueba-para-ci-1234567890abcdef
+      DEV_AUTH_BYPASS_UID: ci-test-uid
+      NODE_ENV: development
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Aplicar migraciones + datos de prueba (--seed)
+        run: npm run migrate -- --seed
+
+      - name: Mapear un usuario semilla al bypass de autenticación de CI
+        run: |
+          psql "$DATABASE_URL" -c "UPDATE usuario SET uid = 'ci-test-uid' WHERE rol = 'director_laboratorio';"
+
+      - name: Build
+        run: npm run build
+
+      - name: Arrancar el servidor real en segundo plano
+        run: |
+          nohup node dist/server.cjs > server.log 2>&1 &
+          echo "Esperando a que /api/health responda..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health > /dev/null; then
+              echo "Servidor listo."; exit 0
+            fi
+            sleep 1
+          done
+          echo "El servidor no respondió a tiempo."; cat server.log; exit 1
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias de la suite pytest
+        run: pip install -r tests_python/requirements.txt
+
+      - name: Instalar Chrome para Selenium
+        uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+
+      - name: Ejecutar pytest (integración, sistema, seguridad, rendimiento)
+        env:
+          VACLINIC_BASE_URL: http://localhost:3000
+          CHROME_BINARY: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: |
+          pytest tests_python/ -v --html=reports/reporte_pytest.html --self-contained-html
+
+      - name: Publicar reporte HTML de pytest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: tests_python/reports
+
+      - name: Publicar log del servidor
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-log
+          path: server.log
+
+  # ------------------------------------------------------------------
+  # Etapa 4: deploy a staging (solo en push a main, tras build+test
+  # exitosos). "Staging" aquí es una vista previa estática y real del
+  # frontend compilado, publicada en GitHub Pages — un entorno separado
+  # de "producción" (Render + Neon), sin tocar la base de datos real.
+  # ------------------------------------------------------------------
+  deploy-staging:
+    name: 4. Deploy staging (GitHub Pages)
+    needs: [build, system-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Se recompila SOLO el frontend con --base apuntando a la subruta del
+      # sitio de GitHub Pages de este repositorio (una "página de proyecto",
+      # no de usuario/organización, así que las rutas absolutas del build
+      # normal (/assets/...) necesitan ese prefijo para resolver bien).
+      # El backend (dist/server.cjs) ya se validó en el job "build"; aquí
+      # solo se publica el frontend estático como entorno de staging.
+      - name: Build del frontend para staging (base=/Laboratorio-Clinico-Vaclinic/staging/)
+        run: npx vite build --base=/Laboratorio-Clinico-Vaclinic/staging/
+
+      - name: Publicar el frontend en GitHub Pages (staging)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          destination_dir: staging
