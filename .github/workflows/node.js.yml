@@ -16,7 +16,13 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        # Hallazgo real (ver sección 5 del entregable): Node 18.x llegó a su
+        # fin de soporte (EOL) en abril de 2025 y falla en este proyecto con
+        # un bug conocido de npm en dependencias opcionales nativas
+        # (@tailwindcss/oxide, ver https://github.com/npm/cli/issues/4828),
+        # no relacionado con el código de VACLINIC. Se retira del matrix y se
+        # mantienen las versiones de Node soportadas.
+        node-version: [20.x, 22.x]
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
