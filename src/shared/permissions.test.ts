@@ -75,4 +75,34 @@ describe('hasPermission', () => {
     const subject: PermissionSubject = { status: 'activo', roleId: 'administrador_ti' };
     expect(hasPermission(subject, 'admin_usuarios_roles')).toBe(true);
   });
+
+  describe('tercer parámetro rolesConfig (catálogo efectivo, ver server/rolePermissionsCache.ts)', () => {
+    it('sin tercer parámetro, se comporta exactamente igual que antes (usa INITIAL_ROLES_CONFIG)', () => {
+      const subject: PermissionSubject = { status: 'activo', roleId: 'recepcionista' };
+      expect(hasPermission(subject, 'admision_crear_ordenes')).toBe(true);
+    });
+
+    it('con un rolesConfig distinto, respeta ESE catálogo en vez del estático', () => {
+      const subject: PermissionSubject = { status: 'activo', roleId: 'recepcionista' };
+      const catalogoEditado = [{
+        id: 'recepcionista' as const, name: '', title: '', description: '', badgeColor: '',
+        defaultPermissions: ['validacion_publicacion'], // editado vía UI de administración
+      }];
+      expect(hasPermission(subject, 'validacion_publicacion', catalogoEditado as any)).toBe(true);
+      // admision_crear_ordenes SÍ está en el estático pero ya NO en este catálogo editado:
+      expect(hasPermission(subject, 'admision_crear_ordenes', catalogoEditado as any)).toBe(false);
+    });
+
+    it('customPermissions sigue ganando por encima de rolesConfig, con o sin el tercer parámetro', () => {
+      const subject: PermissionSubject = {
+        status: 'activo', roleId: 'recepcionista',
+        customPermissions: { validacion_publicacion: true },
+      };
+      const catalogoEditado = [{
+        id: 'recepcionista' as const, name: '', title: '', description: '', badgeColor: '',
+        defaultPermissions: [],
+      }];
+      expect(hasPermission(subject, 'validacion_publicacion', catalogoEditado as any)).toBe(true);
+    });
+  });
 });

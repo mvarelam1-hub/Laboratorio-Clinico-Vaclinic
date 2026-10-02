@@ -8,6 +8,7 @@ import { pool } from '../db';
 import { requireStaffAuth } from '../auth-firebase';
 import { requirePermission } from '../permissions-middleware';
 import { hasPermission } from '../../src/shared/permissions';
+import { getEffectiveRolesConfig } from '../rolePermissionsCache';
 import { asyncHandler } from '../asyncHandler';
 
 export const episodiosRouter = Router();
@@ -98,7 +99,7 @@ episodiosRouter.patch('/:id/avanzar', asyncHandler(async (req, res) => {
   if (!permisoRequerido) {
     return res.status(400).json({ error: 'siguienteDimension inválida. Usa D2_flebotomia, D3_analizadores o D4_validacion.' });
   }
-  if (!hasPermission(req.staffUser!, permisoRequerido)) {
+  if (!hasPermission(req.staffUser!, permisoRequerido, getEffectiveRolesConfig())) {
     return res.status(403).json({ error: `El rol "${req.staffUser!.roleId}" no tiene el permiso "${permisoRequerido}".` });
   }
 

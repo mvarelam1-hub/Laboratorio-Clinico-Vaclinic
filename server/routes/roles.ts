@@ -4,18 +4,21 @@
  * ClinicContext.tsx updateRolePermissions). Migración real:
  * db/migrations/0011_modulos_restantes.sql (tabla `rol_permiso_default`).
  *
- * ALCANCE DECLARADO HONESTAMENTE (ya documentado en la migración 0011 y
- * en el commit que la introdujo): estas rutas SÍ persisten los cambios
- * de verdad en Postgres, pero `hasPermission()` (src/shared/permissions.ts),
- * que es la única función que de verdad autoriza cada petición HTTP real
- * -tanto en el backend como en el frontend-, sigue leyendo del arreglo
- * estático INITIAL_ROLES_CONFIG en memoria, no de esta tabla. Es decir:
- * hoy se puede guardar y consultar una edición de permisos por rol, pero
- * todavía NO cambia qué puede hacer ese rol en el sistema real. Cerrar esa
- * brecha requiere que hasPermission() consulte esta tabla (o una caché de
- * ella) en tiempo de autorización, lo cual es un cambio de arquitectura
- * más grande que se deja pendiente a propósito en vez de fabricar un
- * wiring falso.
+ * HISTORIAL DEL ALCANCE (declarado honestamente, no borrado): hasta la
+ * rama feature/mejoras-estructura-profesional, estas rutas SÍ persistían
+ * los cambios de verdad en Postgres, pero `hasPermission()`
+ * (src/shared/permissions.ts) seguía leyendo siempre del arreglo estático
+ * INITIAL_ROLES_CONFIG en memoria, nunca de esta tabla -se podía guardar
+ * una edición que no cambiaba la autorización real-. Eso quedó
+ * documentado aquí mismo en vez de fabricar un wiring falso.
+ *
+ * CERRADO: `hasPermission()` ahora acepta un catálogo de roles efectivo
+ * (ver server/rolePermissionsCache.ts), y `requirePermission` /
+ * episodios.ts / resultados.ts se lo pasan en cada verificación. Por eso
+ * el PUT de abajo llama a `invalidateRolePermissionsCache()` justo
+ * después de confirmar la transacción: así la edición que se acaba de
+ * guardar aquí ya autoriza (o deja de autorizar) la siguiente petición,
+ * sin esperar el refresco periódico de la caché.
  */
 import { Router } from 'express';
 import { pool } from '../db';
@@ -23,6 +26,7 @@ import { requireStaffAuth } from '../auth-firebase';
 import { requirePermission } from '../permissions-middleware';
 import { asyncHandler } from '../asyncHandler';
 import { LAB_PERMISSIONS_CATALOG } from '../../src/shared/permissions';
+import { invalidateRolePermissionsCache } from '../rolePermissionsCache';
 
 export const rolesRouter = Router();
 rolesRouter.use(requireStaffAuth);
@@ -65,6 +69,8 @@ rolesRouter.put('/:roleId/permisos', requirePermission('admin_usuarios_roles'), 
   } finally {
     client.release();
   }
+
+  await invalidateRolePermissionsCache();
 
   const { rows } = await pool.query(
     'SELECT id_permiso, habilitado, fecha_actualizacion FROM rol_permiso_default WHERE id_rol = $1',

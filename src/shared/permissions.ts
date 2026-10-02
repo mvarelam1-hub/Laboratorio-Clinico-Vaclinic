@@ -140,12 +140,36 @@ export interface PermissionSubject {
  * (frontend) y por lo tanto solo servía para ocultar botones: cualquier
  * petición HTTP directa la evadía por completo. Ahora también corre en
  * el backend (server/permissions-middleware.ts) contra cada endpoint.
+ *
+ * CORRECCIÓN (rama feature/mejoras-estructura-profesional): hasta este
+ * cambio, esta función SIEMPRE resolvía contra `INITIAL_ROLES_CONFIG`
+ * (el arreglo estático en memoria), sin importar que
+ * `server/routes/roles.ts` ya permitiera editar y persistir permisos por
+ * rol en la tabla `rol_permiso_default` — es decir, se podía guardar una
+ * edición que nunca afectaba la autorización real. Eso quedó documentado
+ * explícitamente en el comentario de cabecera de roles.ts en vez de
+ * fabricar un wiring falso.
+ *
+ * Ahora `hasPermission()` acepta un tercer parámetro opcional
+ * `rolesConfig`. El frontend (src/data/staffUserData.ts,
+ * ClinicContext.tsx) sigue llamándola sin ese parámetro: solo decide qué
+ * botones mostrar, nunca fue el límite real de seguridad, así que se deja
+ * con el catálogo estático por defecto, sin cambios de comportamiento.
+ * El backend (server/permissions-middleware.ts y los call sites directos
+ * en episodios.ts / resultados.ts) ahora pasa el catálogo efectivo que
+ * arma `server/rolePermissionsCache.ts` a partir de `rol_permiso_default`
+ * — ahí sí se cierra la brecha, porque es el único lado que de verdad
+ * autoriza una petición HTTP.
  */
-export function hasPermission(subject: PermissionSubject, permissionId: string): boolean {
+export function hasPermission(
+  subject: PermissionSubject,
+  permissionId: string,
+  rolesConfig: LabRoleConfig[] = INITIAL_ROLES_CONFIG
+): boolean {
   if (subject.status !== 'activo') return false;
   if (subject.customPermissions && subject.customPermissions[permissionId] !== undefined) {
     return subject.customPermissions[permissionId];
   }
-  const roleConfig = INITIAL_ROLES_CONFIG.find((r) => r.id === subject.roleId);
+  const roleConfig = rolesConfig.find((r) => r.id === subject.roleId);
   return roleConfig ? roleConfig.defaultPermissions.includes(permissionId) : false;
 }

@@ -81,7 +81,12 @@ describe('PUT /api/roles/:roleId/permisos', () => {
   });
 
   it('reemplaza en una transacción real (BEGIN, DELETE, un INSERT por permiso del catálogo, COMMIT) y responde con el estado final', async () => {
-    queryMock.mockResolvedValueOnce({ rows: [{ id_permiso: 'admision_pacientes', habilitado: true }] });
+    // Dos SELECTs vía pool.query tras el COMMIT: (1) invalidateRolePermissionsCache()
+    // relee rol_permiso_default completa para refrescar la caché de autorización,
+    // (2) el SELECT final de esta ruta para devolver el estado guardado.
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id_permiso: 'admision_pacientes', habilitado: true }] });
     const app = await buildApp();
     const res = await request(app).put('/api/roles/bioanalista/permisos').send({ permissions: ['admision_pacientes'] });
     expect(res.status).toBe(200);
@@ -94,6 +99,22 @@ describe('PUT /api/roles/:roleId/permisos', () => {
     expect(llamadas.filter((sql) => sql.includes('INSERT INTO rol_permiso_default'))).toHaveLength(LAB_PERMISSIONS_CATALOG.length);
     expect(llamadas[llamadas.length - 1]).toBe('COMMIT');
     expect(clientReleaseMock).toHaveBeenCalled();
+  });
+
+  it('invalida la caché de autorización (rolePermissionsCache) después de confirmar la transacción', async () => {
+    // Prueba de la corrección de la brecha documentada arriba: un PUT exitoso
+    // debe releer rol_permiso_default (vía invalidateRolePermissionsCache)
+    // ANTES del SELECT final, para que la siguiente petición ya autorice
+    // contra lo recién guardado y no contra una caché vieja de hasta 60s.
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ id_rol: 'bioanalista', id_permiso: 'admision_pacientes', habilitado: true }] })
+      .mockResolvedValueOnce({ rows: [{ id_permiso: 'admision_pacientes', habilitado: true }] });
+    const app = await buildApp();
+    const res = await request(app).put('/api/roles/bioanalista/permisos').send({ permissions: ['admision_pacientes'] });
+    expect(res.status).toBe(200);
+    expect(queryMock).toHaveBeenCalledTimes(2);
+    expect(String(queryMock.mock.calls[0][0])).toContain('SELECT id_rol, id_permiso, habilitado FROM rol_permiso_default');
+    expect(String(queryMock.mock.calls[1][0])).toContain('WHERE id_rol = $1');
   });
 
   it('hace ROLLBACK real si una escritura falla a medio camino', async () => {

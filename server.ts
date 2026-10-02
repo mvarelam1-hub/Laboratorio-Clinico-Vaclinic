@@ -1,10 +1,12 @@
 import express from "express";
+import helmet from "helmet";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { apiRouter } from "./server/routes/index";
 import { pool } from "./server/db";
+import { loadRolePermissionOverrides, startRolePermissionsCacheRefresh } from "./server/rolePermissionsCache";
 
 dotenv.config();
 
@@ -14,6 +16,22 @@ const app = express();
 // framework usado y facilitando a un atacante enfocar exploits conocidos de
 // Express. Se corrige aquí, antes de montar cualquier ruta.
 app.disable("x-powered-by");
+// Endurecimiento de cabeceras HTTP (mejora de estructura profesional,
+// rama feature/mejoras-estructura-profesional): antes de esto, lo único
+// que corregía una cabecera de seguridad era el disable("x-powered-by")
+// de arriba (hallazgo real TC-11). helmet añade, entre otras, HSTS,
+// X-Content-Type-Options: nosniff, X-Frame-Options (anti-clickjacking) y
+// Referrer-Policy.
+//
+// contentSecurityPolicy se deja DESACTIVADO explícitamente, no por
+// descuido: el mismo Express sirve el SPA de React (vía Vite en dev, o
+// dist/ estático en producción) y la CSP por defecto de helmet bloquea
+// scripts/estilos inline sin una política ya afinada contra el bundle
+// real — activarla a ciegas, sin poder probar visualmente la aplicación
+// completa en esta sesión, arriesgaba dejar el portal o el panel de
+// personal en blanco. Queda documentado como el siguiente paso de este
+// mismo hallazgo, no como "ya resuelto".
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "10mb" }));
 const PORT = 3000;
 
@@ -1157,6 +1175,15 @@ process.on("unhandledRejection", (reason) => {
 
 // Mount Vite middleware or Static files
 async function startServer() {
+  // Carga el catálogo de roles EFECTIVO (estático + ediciones guardadas en
+  // rol_permiso_default) ANTES de aceptar tráfico, para que ninguna
+  // petición temprana se autorice contra una caché vacía. Si falla (por
+  // ejemplo DATABASE_URL no configurada en este arranque puntual), el
+  // propio loader ya deja la caché en modo "solo catálogo estático" en
+  // vez de tumbar el servidor (ver rolePermissionsCache.ts).
+  await loadRolePermissionOverrides();
+  startRolePermissionsCacheRefresh();
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

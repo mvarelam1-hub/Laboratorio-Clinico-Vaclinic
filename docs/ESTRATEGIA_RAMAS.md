@@ -17,7 +17,7 @@ Trunk-based simplificado (GitHub Flow):
 2. Hacer commits pequenos y descriptivos en esa rama (prefijos usados en este repositorio: chore, test, fix, ci, docs).
 3. Abrir un Pull Request de la rama hacia master, describiendo que cambia y por que.
 4. Revision: al menos un integrante del equipo distinto del autor revisa el PR antes de aprobarlo (en un repositorio de 3 personas, revision cruzada entre los 3).
-5. La verificacion automatica de CI (E13, .github/workflows/ci.yml) debe pasar en el PR antes de fusionar.
+5. La verificacion automatica de CI (E13, .github/workflows/ci-cd-e12.yml -antes ci.yml, consolidado en la rama feature/mejoras-estructura-profesional junto con node.js.yml, que eran duplicados/plantillas sin usar-) debe pasar en el PR antes de fusionar.
 6. Fusionar con squash merge (un solo commit limpio en master) y eliminar la rama.
 
 ## Ejemplo real de este proyecto

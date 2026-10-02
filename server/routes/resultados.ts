@@ -11,6 +11,7 @@ import { pool, withAuditContext } from '../db';
 import { requireStaffAuth } from '../auth-firebase';
 import { requirePermission } from '../permissions-middleware';
 import { hasPermission } from '../../src/shared/permissions';
+import { getEffectiveRolesConfig } from '../rolePermissionsCache';
 import { asyncHandler } from '../asyncHandler';
 
 export const resultadosRouter = Router();
@@ -86,7 +87,7 @@ resultadosRouter.patch('/:id/:accion', asyncHandler(async (req, res) => {
     }
 
     const staffUser = req.staffUser!;
-    if (!hasPermission(staffUser, transicion.permiso)) {
+    if (!hasPermission(staffUser, transicion.permiso, getEffectiveRolesConfig())) {
       return res.status(403).json({ error: `El rol "${staffUser.roleId}" no tiene el permiso "${transicion.permiso}".` });
     }
 
