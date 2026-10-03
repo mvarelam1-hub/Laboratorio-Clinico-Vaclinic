@@ -86,6 +86,11 @@ import {
   InformesApiError
 } from '../services/informesApiService';
 import {
+  fetchConfigLab,
+  updateConfigLab,
+  ConfigLabError
+} from '../services/configLabApiService';
+import {
   crearResultadoRemoto,
   validarResultadoRemoto,
   publicarResultadoRemoto,
@@ -1223,6 +1228,22 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
   }, [lastSyncTime]);
+
+  // Fetch lab settings from backend on mount
+  useEffect(() => {
+    const syncLabSettings = async () => {
+      if (!isEffectiveOnline || !getStaffSessionToken()) return;
+      try {
+        const remoteSettings = await fetchConfigLab();
+        setLabSettingsState(remoteSettings);
+        localStorage.setItem(LAB_SETTINGS_STORAGE_KEY, JSON.stringify(remoteSettings));
+      } catch (error: any) {
+        console.error('Error fetching lab settings from backend:', error);
+        // Continue with localStorage values if backend fetch fails
+      }
+    };
+    syncLabSettings();
+  }, [isEffectiveOnline]);
 
   const queuePendingAction = (actionData: Omit<OfflinePendingAction, 'id' | 'timestamp' | 'status' | 'retryCount'>): OfflinePendingAction => {
     const newAction: OfflinePendingAction = {
@@ -2889,7 +2910,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return INITIAL_LAB_SETTINGS;
   });
 
-  const updateLabSettings = (updates: Partial<LabSettings>) => {
+  const updateLabSettings = async (updates: Partial<LabSettings>) => {
     setLabSettingsState(prev => {
       const updated = { ...prev, ...updates };
       try {
@@ -2899,6 +2920,19 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       return updated;
     });
+
+    // Try to sync to backend if online and auth token exists
+    if (isEffectiveOnline && getStaffSessionToken()) {
+      try {
+        await updateConfigLab(updates);
+      } catch (error: any) {
+        console.error('Error updating lab settings remotely:', error);
+        showNotification(
+          'Los cambios se guardaron localmente, pero no se sincronizaron con el servidor.',
+          'warning'
+        );
+      }
+    }
   };
 
   const resetLabSettingsToFactory = () => {

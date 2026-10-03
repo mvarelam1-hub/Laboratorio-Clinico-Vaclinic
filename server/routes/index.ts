@@ -19,6 +19,7 @@ import { reactivosRouter } from './reactivos';
 import { plantillasRouter } from './plantillas';
 import { chatRouter } from './chat';
 import { informesRouter } from './informes';
+import { configLabRouter } from './configLab';
 
 export const apiRouter = Router();
 
@@ -84,3 +85,4 @@ apiRouter.use('/reactivos', reactivosRouter);
 apiRouter.use('/plantillas', plantillasRouter);
 apiRouter.use('/chat', chatRouter);
 apiRouter.use('/informes', informesRouter);
+apiRouter.use('/config-lab', configLabRouter);
