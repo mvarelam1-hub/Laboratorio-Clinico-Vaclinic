@@ -195,6 +195,89 @@ describe('GET /api/ordenes (listado) y GET /api/ordenes/:id (detalle)', () => {
   });
 });
 
+describe('Ciclo de vida de la orden: archivar / restaurar / eliminar (migración 0013)', () => {
+  it('PATCH /:id/archivar marca archivada=true y devuelve 404 si la orden no existe o ya fue eliminada', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id_orden: 1, archivada: true, fecha_archivo: '2026-01-01', id_usuario_archivo: 1 }] });
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/1/archivar');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id_orden: 1, archivada: true });
+    expect(queryMock.mock.calls[0][0]).toMatch(/UPDATE orden/);
+    expect(queryMock.mock.calls[0][0]).toMatch(/archivada = TRUE/);
+    expect(queryMock.mock.calls[0][1]).toEqual([1, 1]);
+
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    const res404 = await request(app).patch('/api/ordenes/999/archivar');
+    expect(res404.status).toBe(404);
+  });
+
+  it('PATCH /:id/restaurar limpia archivada/fecha_archivo/id_usuario_archivo', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id_orden: 1, archivada: false }] });
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/1/restaurar');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id_orden: 1, archivada: false });
+    expect(queryMock.mock.calls[0][0]).toMatch(/archivada = FALSE/);
+  });
+
+  it('DELETE /:id elimina lógicamente (nunca borra la fila) y guarda el motivo recibido', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ id_orden: 1, eliminada: true, fecha_eliminacion: '2026-01-01' }]
+    });
+    const app = await buildApp();
+    const res = await request(app).delete('/api/ordenes/1').send({ motivo: 'Duplicada por error de captura' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, id_orden: 1, eliminada: true });
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(sql).toMatch(/UPDATE orden/);
+    expect(sql).not.toMatch(/DELETE FROM orden/);
+    expect(sql).toMatch(/eliminada = TRUE/);
+    expect(params).toEqual([1, 'Duplicada por error de captura', 1]);
+  });
+
+  it('DELETE /:id devuelve 404 si la orden no existe o ya estaba eliminada', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    const app = await buildApp();
+    const res = await request(app).delete('/api/ordenes/999');
+    expect(res.status).toBe(404);
+  });
+
+  it('las rutas de archivar/restaurar/eliminar rechazan con 403 a un rol sin admision_crear_ordenes', async () => {
+    currentStaffUser = { idUsuario: 2, roleId: 'tecnico_flebotomista', status: 'activo', nombreCompleto: 'Técnico Demo' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/1/archivar');
+    expect(res.status).toBe(403);
+  });
+
+  it('PATCH /archivar-varias, /restaurar-varias y /eliminar-varias validan idsOrdenes y aplican el UPDATE masivo', async () => {
+    const app = await buildApp();
+
+    const res400 = await request(app).patch('/api/ordenes/archivar-varias').send({ idsOrdenes: [] });
+    expect(res400.status).toBe(400);
+
+    queryMock.mockResolvedValueOnce({ rowCount: 2 });
+    const resArchivar = await request(app).patch('/api/ordenes/archivar-varias').send({ idsOrdenes: [1, 2] });
+    expect(resArchivar.status).toBe(200);
+    expect(resArchivar.body).toEqual({ ok: true, actualizadas: 2 });
+    expect(queryMock.mock.calls[0][1]).toEqual([1, [1, 2]]);
+
+    queryMock.mockResolvedValueOnce({ rowCount: 2 });
+    const resRestaurar = await request(app).patch('/api/ordenes/restaurar-varias').send({ idsOrdenes: [1, 2] });
+    expect(resRestaurar.status).toBe(200);
+    expect(resRestaurar.body).toEqual({ ok: true, actualizadas: 2 });
+
+    queryMock.mockResolvedValueOnce({ rowCount: 2 });
+    const resEliminar = await request(app)
+      .patch('/api/ordenes/eliminar-varias')
+      .send({ idsOrdenes: [1, 2], motivo: 'Limpieza masiva de prueba' });
+    expect(resEliminar.status).toBe(200);
+    expect(resEliminar.body).toEqual({ ok: true, actualizadas: 2 });
+    const [sqlEliminar, paramsEliminar] = queryMock.mock.calls[2];
+    expect(sqlEliminar).toMatch(/eliminada = TRUE/);
+    expect(paramsEliminar).toEqual([1, 'Limpieza masiva de prueba', [1, 2]]);
+  });
+});
+
 describe('GET /api/ordenes/pendientes-validacion y /resultados-criticos', () => {
   it('devuelve las filas de vw_ordenes_pendientes_validacion para un rol autorizado', async () => {
     currentStaffUser = { idUsuario: 3, roleId: 'bioanalista', status: 'activo', nombreCompleto: 'Bioanalista Demo' };

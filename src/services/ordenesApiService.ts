@@ -54,3 +54,69 @@ export async function createOrdenRemote(idPaciente: number, examenesIds: number[
   }
   return res.json();
 }
+
+async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const token = getStaffSessionToken();
+  if (!token) {
+    throw new OrdenesApiError('No hay una sesión de personal activa para llamar a la API.');
+  }
+  return fetch(path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(options.headers || {}) }
+  });
+}
+
+async function parseErrorBody(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    if (body?.error) return body.error;
+  } catch {
+    /* sin cuerpo JSON */
+  }
+  return `El servidor respondió ${res.status}.`;
+}
+
+/**
+ * Ciclo de vida de la orden (server/routes/ordenes.ts, migración 0013):
+ * archivar/restaurar/eliminar (lógicamente, nunca un DELETE físico) + sus
+ * variantes masivas. Ver ClinicContext.tsx archiveOrder/restoreOrder/
+ * deleteOrder/bulkArchiveOrders/bulkRestoreOrders/bulkDeleteOrders para el
+ * mismo patrón de resiliencia que ya usan reactivos/carpetas/personal: si
+ * la llamada remota falla -o la orden todavía no tiene remoteId porque
+ * nunca llegó a crearse en Postgres- el cambio se sigue aplicando
+ * localmente, avisando con honestidad que no quedó sincronizado.
+ */
+export async function archivarOrdenRemota(idOrden: number): Promise<{ id_orden: number; archivada: boolean }> {
+  const res = await authFetch(`/api/ordenes/${idOrden}/archivar`, { method: 'PATCH' });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+export async function restaurarOrdenRemota(idOrden: number): Promise<{ id_orden: number; archivada: boolean }> {
+  const res = await authFetch(`/api/ordenes/${idOrden}/restaurar`, { method: 'PATCH' });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+export async function eliminarOrdenRemota(idOrden: number, motivo?: string): Promise<void> {
+  const res = await authFetch(`/api/ordenes/${idOrden}`, { method: 'DELETE', body: JSON.stringify({ motivo }) });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+}
+
+export async function archivarVariasOrdenesRemoto(idsOrdenes: number[]): Promise<{ ok: boolean; actualizadas: number }> {
+  const res = await authFetch('/api/ordenes/archivar-varias', { method: 'PATCH', body: JSON.stringify({ idsOrdenes }) });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+export async function restaurarVariasOrdenesRemoto(idsOrdenes: number[]): Promise<{ ok: boolean; actualizadas: number }> {
+  const res = await authFetch('/api/ordenes/restaurar-varias', { method: 'PATCH', body: JSON.stringify({ idsOrdenes }) });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+export async function eliminarVariasOrdenesRemoto(idsOrdenes: number[], motivo?: string): Promise<{ ok: boolean; actualizadas: number }> {
+  const res = await authFetch('/api/ordenes/eliminar-varias', { method: 'PATCH', body: JSON.stringify({ idsOrdenes, motivo }) });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}

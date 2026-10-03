@@ -68,7 +68,16 @@ import {
   type CrearPacienteInput
 } from '../services/pacientesApiService';
 import { resolverCodigosAIdsExamen, ExamenesApiError } from '../services/examenesApiService';
-import { createOrdenRemote, OrdenesApiError } from '../services/ordenesApiService';
+import {
+  createOrdenRemote,
+  archivarOrdenRemota,
+  restaurarOrdenRemota,
+  eliminarOrdenRemota,
+  archivarVariasOrdenesRemoto,
+  restaurarVariasOrdenesRemoto,
+  eliminarVariasOrdenesRemoto,
+  OrdenesApiError
+} from '../services/ordenesApiService';
 import {
   crearResultadoRemoto,
   validarResultadoRemoto,
@@ -303,12 +312,12 @@ interface ClinicContextType {
   orderFolders: OrderFolder[];
   addOrder: (order: Omit<LabOrder, 'id' | 'seqNumber'>) => Promise<LabOrder>;
   updateOrder: (id: string, updates: Partial<LabOrder>) => void;
-  deleteOrder: (id: string) => void;
-  archiveOrder: (id: string) => void;
-  restoreOrder: (id: string) => void;
-  bulkArchiveOrders: (ids: string[]) => void;
-  bulkRestoreOrders: (ids: string[]) => void;
-  bulkDeleteOrders: (ids: string[]) => void;
+  deleteOrder: (id: string, motivo?: string) => Promise<void>;
+  archiveOrder: (id: string) => Promise<void>;
+  restoreOrder: (id: string) => Promise<void>;
+  bulkArchiveOrders: (ids: string[]) => Promise<void>;
+  bulkRestoreOrders: (ids: string[]) => Promise<void>;
+  bulkDeleteOrders: (ids: string[], motivo?: string) => Promise<void>;
   moveOrderToFolder: (orderId: string, folderId: string) => Promise<void>;
   bulkMoveOrdersToFolder: (orderIds: string[], folderId: string) => Promise<void>;
   createOrderFolder: (name: string, color: string, description?: string) => Promise<OrderFolder>;
@@ -2935,6 +2944,18 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return newOrder;
   };
 
+  /**
+   * ANTES/AHORA (Fase 1 - Persistencia, migración 0013): a diferencia de
+   * archiveOrder/restoreOrder/deleteOrder/bulk* (justo abajo), esta función
+   * sigue siendo 100% local a propósito. El `status` de LabOrder
+   * (Pendiente/En Proceso/Listo/Entregado) no corresponde al `estado` real
+   * de la tabla `orden` (Registrada/En proceso/Completada/Cancelada, ver
+   * migración 0002) y updateOrder también toca campos sin columna propia
+   * todavía (prioridad, método de pago, datos biométricos -brecha ya
+   * señalada en esta fase-). Mapear esto sin antes definir esa
+   * correspondencia arriesgaría grabar un estado clínico incorrecto en la
+   * base de datos real; queda pendiente junto con esas columnas.
+   */
   const updateOrder = (id: string, updates: Partial<LabOrder>) => {
     setOrders(prev => prev.map(o => {
       if (o.id === id) {
@@ -2983,12 +3004,43 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const deleteOrder = (id: string) => {
+  /**
+   * ANTES: borrado físico del arreglo local (`setOrders(prev =>
+   * prev.filter(...))`), sin ninguna llamada a la API -de haber existido
+   * sincronización, habría significado perder la orden para siempre,
+   * justo lo que el informe técnico (sección 4.3) advierte evitar-. AHORA:
+   * si la orden tiene remoteId (ya existe de verdad en Postgres), se
+   * elimina lógicamente vía DELETE /api/ordenes/:id (migración 0013 -
+   * marca `eliminada`, nunca borra la fila); mismo patrón de resiliencia
+   * que updateReagent/deleteReagent: si la llamada remota falla, se avisa
+   * y se sigue aplicando el cambio local para no bloquear al usuario.
+   */
+  const deleteOrder = async (id: string, motivo?: string): Promise<void> => {
+    const target = orders.find(o => o.id === id);
+    if (isEffectiveOnline && target?.remoteId) {
+      try {
+        await eliminarOrdenRemota(target.remoteId, motivo);
+      } catch (err) {
+        const mensaje = err instanceof OrdenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo eliminar la orden en el servidor:', err);
+        showNotification(`No se pudo eliminar la orden en el servidor (${mensaje}). Se eliminó solo localmente.`, 'warning');
+      }
+    }
     setOrders(prev => prev.filter(o => o.id !== id));
     showNotification('Orden eliminada del sistema', 'info');
   };
 
-  const archiveOrder = (id: string) => {
+  const archiveOrder = async (id: string): Promise<void> => {
+    const target = orders.find(o => o.id === id);
+    if (isEffectiveOnline && target?.remoteId) {
+      try {
+        await archivarOrdenRemota(target.remoteId);
+      } catch (err) {
+        const mensaje = err instanceof OrdenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo archivar la orden en el servidor:', err);
+        showNotification(`No se pudo sincronizar el archivado con el servidor (${mensaje}). Se archivó solo localmente.`, 'warning');
+      }
+    }
     const now = new Date();
     const formattedDate = `${now.toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' })}, ${now.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}`;
     setOrders(prev => prev.map(o => {
@@ -3005,7 +3057,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showNotification('Orden archivada correctamente', 'success');
   };
 
-  const restoreOrder = (id: string) => {
+  const restoreOrder = async (id: string): Promise<void> => {
+    const target = orders.find(o => o.id === id);
+    if (isEffectiveOnline && target?.remoteId) {
+      try {
+        await restaurarOrdenRemota(target.remoteId);
+      } catch (err) {
+        const mensaje = err instanceof OrdenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo restaurar la orden en el servidor:', err);
+        showNotification(`No se pudo sincronizar la restauración con el servidor (${mensaje}). Se restauró solo localmente.`, 'warning');
+      }
+    }
     setOrders(prev => prev.map(o => {
       if (o.id === id) {
         return {
@@ -3020,7 +3082,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showNotification('Orden restaurada a órdenes activas', 'success');
   };
 
-  const bulkArchiveOrders = (ids: string[]) => {
+  const bulkArchiveOrders = async (ids: string[]): Promise<void> => {
+    const idsRemotos = orders.filter(o => ids.includes(o.id) && o.remoteId).map(o => o.remoteId!) as number[];
+    if (isEffectiveOnline && idsRemotos.length > 0) {
+      try {
+        await archivarVariasOrdenesRemoto(idsRemotos);
+      } catch (err) {
+        const mensaje = err instanceof OrdenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudieron archivar las órdenes en el servidor:', err);
+        showNotification(`No se pudo sincronizar el archivado masivo con el servidor (${mensaje}). Se archivaron solo localmente.`, 'warning');
+      }
+    }
     const now = new Date();
     const formattedDate = `${now.toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' })}, ${now.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}`;
     setOrders(prev => prev.map(o => {
@@ -3037,7 +3109,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showNotification(`${ids.length} orden(es) archivadas con éxito`, 'success');
   };
 
-  const bulkRestoreOrders = (ids: string[]) => {
+  const bulkRestoreOrders = async (ids: string[]): Promise<void> => {
+    const idsRemotos = orders.filter(o => ids.includes(o.id) && o.remoteId).map(o => o.remoteId!) as number[];
+    if (isEffectiveOnline && idsRemotos.length > 0) {
+      try {
+        await restaurarVariasOrdenesRemoto(idsRemotos);
+      } catch (err) {
+        const mensaje = err instanceof OrdenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudieron restaurar las órdenes en el servidor:', err);
+        showNotification(`No se pudo sincronizar la restauración masiva con el servidor (${mensaje}). Se restauraron solo localmente.`, 'warning');
+      }
+    }
     setOrders(prev => prev.map(o => {
       if (ids.includes(o.id)) {
         return {
@@ -3052,7 +3134,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showNotification(`${ids.length} orden(es) restauradas a activas`, 'success');
   };
 
-  const bulkDeleteOrders = (ids: string[]) => {
+  const bulkDeleteOrders = async (ids: string[], motivo?: string): Promise<void> => {
+    const idsRemotos = orders.filter(o => ids.includes(o.id) && o.remoteId).map(o => o.remoteId!) as number[];
+    if (isEffectiveOnline && idsRemotos.length > 0) {
+      try {
+        await eliminarVariasOrdenesRemoto(idsRemotos, motivo);
+      } catch (err) {
+        const mensaje = err instanceof OrdenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudieron eliminar las órdenes en el servidor:', err);
+        showNotification(`No se pudo sincronizar la eliminación masiva con el servidor (${mensaje}). Se eliminaron solo localmente.`, 'warning');
+      }
+    }
     setOrders(prev => prev.filter(o => !ids.includes(o.id)));
     showNotification(`${ids.length} orden(es) eliminadas`, 'info');
   };

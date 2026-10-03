@@ -71,13 +71,21 @@ ordenesRouter.post('/', requirePermission('admision_crear_ordenes'), asyncHandle
 // recepción, bioanalistas, director y auditoría necesitan verlo por
 // distintos motivos; lo que sí está protegido por permiso es CREAR,
 // VALIDAR o PUBLICAR (abajo y en resultados.ts).
+//
+// Excluye `eliminada = TRUE` (migración 0013): una orden eliminada
+// lógicamente no debe reaparecer en el listado general -el borrado sigue
+// pareciendo definitivo desde la UI, igual que antes de esta migración-,
+// pero el registro permanece en la base de datos para auditoría y se puede
+// seguir consultando por id (GET /:id más abajo, que no filtra por esto).
 ordenesRouter.get('/', asyncHandler(async (req, res) => {
   const limite = Math.min(Number(req.query.limite) || 100, 500);
   const { rows } = await pool.query(
     `SELECT o.id_orden, o.numero_orden, o.fecha_registro, o.estado, o.total_cobrado, o.sede,
+            o.archivada, o.fecha_archivo, o.id_carpeta,
             p.id_paciente, p.nombre_completo AS paciente_nombre
      FROM orden o
      JOIN paciente p ON p.id_paciente = o.id_paciente
+     WHERE o.eliminada = FALSE
      ORDER BY o.fecha_registro DESC
      LIMIT $1`,
     [limite]
@@ -121,4 +129,117 @@ ordenesRouter.get('/:id', asyncHandler(async (req, res) => {
     [idOrden]
   );
   return res.json({ ...ordenRows[0], detalle: detalleRows });
+}));
+
+// ------------------------------------------------------------
+// Ciclo de vida de la orden: archivar / restaurar / eliminar
+// (migración 0013). ANTES: ClinicContext.tsx manejaba las 7 funciones de
+// este ciclo (updateOrder, deleteOrder, archiveOrder, restoreOrder,
+// bulk*) 100% en el navegador, sin ninguna de estas rutas -y
+// deleteOrder/bulkDeleteOrders hacían además un borrado físico del
+// arreglo local, lo que habría significado perder la orden para
+// siempre de haber existido sincronización-. AHORA: archivar/restaurar
+// usan las columnas ya existentes desde la migración 0003
+// (archivada/fecha_archivo), completadas aquí con el usuario
+// responsable; "eliminar" NUNCA borra la fila, solo la marca
+// `eliminada = TRUE` (eliminación lógica, informe técnico sección 4.3).
+//
+// updateOrder (edición general de campos como estado/sede/prioridad)
+// queda deliberadamente fuera de esta migración: el `estado` del
+// frontend (Pendiente/En Proceso/Listo/Entregado) no corresponde al
+// `estado` real de la tabla orden (Registrada/En proceso/Completada/
+// Cancelada, ver migración 0002), y columnas como prioridad, método de
+// pago o datos biométricos todavía no existen en `orden` -mapearlas
+// sin definir antes esa correspondencia arriesgaría introducir un
+// estado clínico incorrecto. Queda pendiente junto con el resto de
+// columnas de pago/prioridad/biometría ya señaladas como brecha en
+// esta fase.
+//
+// Se reutiliza el permiso 'admision_crear_ordenes' (igual que
+// carpetas.ts para mover/eliminar carpetas): no existe en el catálogo
+// un permiso más específico para archivar/eliminar órdenes, y crear uno
+// nuevo implicaría tocar el catálogo de roles/permisos (src/shared/
+// permissions.ts) y la migración de rol_permiso_default, fuera del
+// alcance de esta pieza.
+
+ordenesRouter.patch('/:id/archivar', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const idOrden = Number(req.params.id);
+  const { rows } = await pool.query(
+    `UPDATE orden
+     SET archivada = TRUE, fecha_archivo = NOW(), id_usuario_archivo = $1
+     WHERE id_orden = $2 AND eliminada = FALSE
+     RETURNING id_orden, archivada, fecha_archivo, id_usuario_archivo`,
+    [req.staffUser!.idUsuario, idOrden]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: 'Orden no encontrada o ya eliminada.' });
+  return res.json(rows[0]);
+}));
+
+ordenesRouter.patch('/:id/restaurar', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const idOrden = Number(req.params.id);
+  const { rows } = await pool.query(
+    `UPDATE orden
+     SET archivada = FALSE, fecha_archivo = NULL, id_usuario_archivo = NULL
+     WHERE id_orden = $1 AND eliminada = FALSE
+     RETURNING id_orden, archivada`,
+    [idOrden]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: 'Orden no encontrada o ya eliminada.' });
+  return res.json(rows[0]);
+}));
+
+ordenesRouter.delete('/:id', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const idOrden = Number(req.params.id);
+  const { motivo } = req.body || {};
+  const { rows } = await pool.query(
+    `UPDATE orden
+     SET eliminada = TRUE, fecha_eliminacion = NOW(), id_usuario_eliminacion = $1,
+         motivo_eliminacion = $2
+     WHERE id_orden = $3 AND eliminada = FALSE
+     RETURNING id_orden, eliminada, fecha_eliminacion`,
+    [req.staffUser!.idUsuario, (motivo && String(motivo).trim()) || null, idOrden]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: 'Orden no encontrada o ya estaba eliminada.' });
+  return res.json({ ok: true, ...rows[0] });
+}));
+
+ordenesRouter.patch('/archivar-varias', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const { idsOrdenes } = req.body || {};
+  if (!Array.isArray(idsOrdenes) || idsOrdenes.length === 0) {
+    return res.status(400).json({ error: 'idsOrdenes (arreglo no vacío) es obligatorio.' });
+  }
+  const { rowCount } = await pool.query(
+    `UPDATE orden SET archivada = TRUE, fecha_archivo = NOW(), id_usuario_archivo = $1
+     WHERE id_orden = ANY($2::int[]) AND eliminada = FALSE`,
+    [req.staffUser!.idUsuario, idsOrdenes.map(Number)]
+  );
+  return res.json({ ok: true, actualizadas: rowCount });
+}));
+
+ordenesRouter.patch('/restaurar-varias', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const { idsOrdenes } = req.body || {};
+  if (!Array.isArray(idsOrdenes) || idsOrdenes.length === 0) {
+    return res.status(400).json({ error: 'idsOrdenes (arreglo no vacío) es obligatorio.' });
+  }
+  const { rowCount } = await pool.query(
+    `UPDATE orden SET archivada = FALSE, fecha_archivo = NULL, id_usuario_archivo = NULL
+     WHERE id_orden = ANY($1::int[]) AND eliminada = FALSE`,
+    [idsOrdenes.map(Number)]
+  );
+  return res.json({ ok: true, actualizadas: rowCount });
+}));
+
+ordenesRouter.patch('/eliminar-varias', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const { idsOrdenes, motivo } = req.body || {};
+  if (!Array.isArray(idsOrdenes) || idsOrdenes.length === 0) {
+    return res.status(400).json({ error: 'idsOrdenes (arreglo no vacío) es obligatorio.' });
+  }
+  const { rowCount } = await pool.query(
+    `UPDATE orden
+     SET eliminada = TRUE, fecha_eliminacion = NOW(), id_usuario_eliminacion = $1,
+         motivo_eliminacion = $2
+     WHERE id_orden = ANY($3::int[]) AND eliminada = FALSE`,
+    [req.staffUser!.idUsuario, (motivo && String(motivo).trim()) || null, idsOrdenes.map(Number)]
+  );
+  return res.json({ ok: true, actualizadas: rowCount });
 }));
