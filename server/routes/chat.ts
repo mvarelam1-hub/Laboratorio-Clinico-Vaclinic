@@ -25,7 +25,7 @@
  */
 import { Router } from 'express';
 import { pool } from '../db';
-import { requireStaffAuth } from '../auth-firebase';
+import { requireStaffAuth } from '../auth-staff';
 import { asyncHandler } from '../asyncHandler';
 
 export const chatRouter = Router();

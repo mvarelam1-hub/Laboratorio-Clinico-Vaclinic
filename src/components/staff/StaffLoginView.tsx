@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { useClinic } from '../../context/ClinicContext';
+import { useClinic, STAFF_SESSION_TOKEN_STORAGE_KEY } from '../../context/ClinicContext';
 import { VaclinicPosterGraphic } from '../common/VaclinicPosterGraphic';
-import { getFirebaseAuth } from '../../services/firebaseConfig';
-import { verifyStaffSession } from '../../services/staffAuthService';
+import { loginStaff, verifyTotp, verifyStaffSession } from '../../services/staffAuthService';
 import {
   Lock,
   User,
@@ -34,11 +32,18 @@ interface StaffLoginViewProps {
  * contraseñas fijas ('admin', '1234', 'admin1234', 'lis2026', 'password')
  * y botones de "Acceso Rápido" que autocompletaban esas credenciales en
  * pantalla. Cualquiera que abriera esta pantalla entraba al sistema LIS.
+ * Luego (Firebase Authentication): se delegaba la verificación de
+ * contraseña a un SDK externo y se volvía a confirmar contra el backend.
  *
- * AHORA: se autentica contra Firebase Authentication con correo y
- * contraseña reales, y el resultado se vuelve a verificar contra el
- * backend (`GET /api/auth/whoami`, ver server/auth-firebase.ts) antes de
- * considerar la sesión válida — el frontend nunca decide esto por sí solo.
+ * AHORA: autenticación 100% propia (POST /api/auth/login, ver
+ * server/routes/auth.ts) — sin SDK externo. Dos pasos posibles:
+ *   1) Correo + contraseña. Si la cuenta no tiene TOTP, el backend ya
+ *      devuelve la sesión completa aquí mismo.
+ *   2) Si la cuenta SÍ tiene TOTP activado (obligatorio para
+ *      director_laboratorio/administrador_ti, ver server/totp.ts), el
+ *      backend responde `requiresTotp: true` + un ticket de 5 minutos, y
+ *      esta pantalla muestra un segundo paso para el código de 6 dígitos
+ *      antes de recibir la sesión real.
  */
 export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
   onSuccess,
@@ -48,6 +53,7 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
     setRole,
     staffUsers,
     setCurrentStaffUser,
+    setStaffAuthMeta,
     logAuditEvent,
     showNotification
   } = useClinic();
@@ -58,22 +64,112 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const mapFirebaseError = (code: string): string => {
-    switch (code) {
-      case 'auth/invalid-email':
-        return 'El correo ingresado no tiene un formato válido.';
-      case 'auth/user-not-found':
-      case 'auth/invalid-credential':
-      case 'auth/wrong-password':
-        return 'Correo o contraseña incorrectos.';
-      case 'auth/too-many-requests':
-        return 'Demasiados intentos fallidos. Espera unos minutos antes de volver a intentar.';
-      case 'auth/user-disabled':
-        return 'Esta cuenta fue deshabilitada. Contacta al administrador de VACLINIC.';
-      case 'auth/network-request-failed':
-        return 'No hay conexión con Firebase Authentication. Verifica tu red.';
-      default:
-        return `No se pudo iniciar sesión (${code}).`;
+  // Paso 2 (solo cuentas con TOTP activado): ticket de corto plazo emitido
+  // por /login tras validar correo+contraseña, y el código de 6 dígitos que
+  // el usuario escribe desde su app autenticadora.
+  const [loginTicket, setLoginTicket] = useState<string | null>(null);
+  const [totpCode, setTotpCode] = useState('');
+
+  /**
+   * Completa el login una vez que el backend ya emitió una sesión real
+   * (directo desde /login si la cuenta no tiene TOTP, o desde /verify-totp
+   * si sí lo tiene) — mismo comportamiento final que antes tenía el login
+   * de Firebase exitoso: guarda el token, arma el perfil local, registra
+   * la auditoría y entra al panel de personal.
+   */
+  const finalizarLogin = async (resultado: {
+    token: string;
+    mustChangePassword: boolean;
+    idUsuario: number;
+    nombreCompleto: string;
+    roleId: string;
+  }) => {
+    try {
+      localStorage.setItem(STAFF_SESSION_TOKEN_STORAGE_KEY, resultado.token);
+    } catch (e) {
+      console.error('[Auth] No se pudo guardar el token de sesión de personal:', e);
+    }
+
+    // Emparejar con el perfil local enriquecido (nombre, foto, licencia,
+    // etc.) por el id real de `usuario` (remoteId) o, como respaldo, por
+    // correo. El acceso real ya fue otorgado por el backend arriba; esto
+    // solo decide qué datos de perfil se muestran en pantalla.
+    const cleanEmail = email.trim().toLowerCase();
+    const matchedUser =
+      staffUsers.find(u => u.remoteId === resultado.idUsuario) ||
+      staffUsers.find(u => u.email.toLowerCase() === cleanEmail);
+
+    const activeUser = matchedUser || {
+      id: `usr-${resultado.idUsuario}`,
+      fullName: resultado.nombreCompleto,
+      username: cleanEmail,
+      email: cleanEmail,
+      phone: '',
+      roleId: resultado.roleId as any,
+      roleName: resultado.roleId,
+      specialty: '',
+      licenseNumber: '',
+      assignedBranch: 'todas' as any,
+      status: 'activo' as any,
+      pinCode: '',
+      createdAt: new Date().toISOString(),
+      remoteId: resultado.idUsuario
+    };
+
+    setCurrentStaffUser(activeUser);
+
+    // IMPORTANTE: NO se puede armar `staffAuthMeta` a mano con
+    // totpEnabled/totpSetupRequired/totpMandatory fijos (p. ej. `false`) —
+    // esos tres campos dependen del ROL del usuario (server/totp.ts::
+    // MANDATORY_TOTP_ROLES) y la respuesta de /login y /verify-totp no los
+    // trae. Si se inventaran aquí, un director_laboratorio o
+    // administrador_ti que todavía no activó TOTP quedaría con
+    // totpSetupRequired=false en el cliente (aunque el backend SÍ lo exige,
+    // ver server/routes/index.ts) hasta el próximo refresh de página —
+    // viviría bloqueado con 403 TOTP_SETUP_REQUIRED en cada acción real sin
+    // que la app lo redirija nunca a la pantalla de enrolamiento
+    // (ForcedTotpEnrollmentView). Por eso se pide el estado autoritativo a
+    // GET /api/auth/whoami (mismo endpoint/contrato que ya usa el efecto de
+    // montaje en ClinicContext.tsx) antes de dar el login por completado.
+    const verificacion = await verifyStaffSession(resultado.token);
+    setStaffAuthMeta(
+      verificacion.ok
+        ? {
+            mustChangePassword: verificacion.data.mustChangePassword,
+            totpEnabled: verificacion.data.totpEnabled,
+            totpSetupRequired: verificacion.data.totpSetupRequired,
+            totpMandatory: verificacion.data.totpMandatory
+          }
+        : {
+            // Respaldo improbable (whoami falló justo después de un login
+            // exitoso): al menos se respeta mustChangePassword, que sí vino
+            // en la respuesta de /login o /verify-totp. totpSetupRequired
+            // quedaría sin reflejar hasta el próximo refresh, pero el
+            // backend lo sigue exigiendo de todas formas.
+            mustChangePassword: resultado.mustChangePassword,
+            totpEnabled: false,
+            totpSetupRequired: false,
+            totpMandatory: false
+          }
+    );
+
+    logAuditEvent({
+      userId: activeUser.id,
+      userName: activeUser.fullName,
+      userRole: activeUser.roleName,
+      action: 'Inicio de Sesión en Terminal LIS',
+      module: 'autenticacion',
+      details: `Acceso autorizado vía autenticación propia (${cleanEmail}).`
+    });
+
+    setRole('personal');
+    showNotification(`Bienvenido al Sistema LIS, ${activeUser.fullName}`, 'success');
+    setPassword('');
+    setTotpCode('');
+    setLoginTicket(null);
+
+    if (onSuccess) {
+      onSuccess();
     }
   };
 
@@ -88,73 +184,56 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
     }
 
     setIsLoading(true);
-    const auth = getFirebaseAuth();
+    const resultado = await loginStaff(cleanEmail, password);
+    setIsLoading(false);
 
-    try {
-      const credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
-      const idToken = await credential.user.getIdToken();
-
-      // El backend, no Firebase por sí solo, decide si esta cuenta puede
-      // entrar al LIS (debe existir y estar activa en la tabla `usuario`).
-      const verification = await verifyStaffSession(idToken);
-
-      if (verification.ok === false) {
-        await signOut(auth).catch(() => undefined);
-        setError(verification.message);
-        setIsLoading(false);
+    if (resultado.ok === true) {
+      if (resultado.requiresTotp === true) {
+        // Paso 2: pedir el código de la app autenticadora antes de emitir la sesión real.
+        setLoginTicket(resultado.loginTicket);
         return;
       }
-
-      // Emparejar con el perfil local enriquecido (nombre, foto, licencia,
-      // etc.) por UID de Firebase si ya se vinculó, o por correo como
-      // respaldo mientras se completa esa vinculación manual en Firebase
-      // Console. El acceso real ya fue otorgado por el backend arriba;
-      // esto solo decide qué datos de perfil se muestran en pantalla.
-      const uid = credential.user.uid;
-      const matchedUser =
-        staffUsers.find(u => u.firebaseUid && u.firebaseUid === uid) ||
-        staffUsers.find(u => u.email.toLowerCase() === cleanEmail.toLowerCase());
-
-      const activeUser = matchedUser || {
-        id: `fb-${verification.data.idUsuario}`,
-        fullName: verification.data.nombreCompleto,
-        username: cleanEmail,
-        email: cleanEmail,
-        phone: '',
-        roleId: verification.data.roleId as any,
-        roleName: verification.data.roleId,
-        specialty: '',
-        licenseNumber: '',
-        assignedBranch: 'todas' as any,
-        status: 'activo' as any,
-        pinCode: '',
-        createdAt: new Date().toISOString(),
-        firebaseUid: uid
-      };
-
-      setCurrentStaffUser(activeUser);
-
-      logAuditEvent({
-        userId: activeUser.id,
-        userName: activeUser.fullName,
-        userRole: activeUser.roleName,
-        action: 'Inicio de Sesión en Terminal LIS',
-        module: 'autenticacion',
-        details: `Acceso autorizado vía Firebase Authentication (${cleanEmail}), verificado contra el backend.`
-      });
-
-      setRole('personal');
-      showNotification(`Bienvenido al Sistema LIS, ${activeUser.fullName}`, 'success');
-      setPassword('');
-
-      if (onSuccess) {
-        onSuccess();
-      }
-    } catch (err: any) {
-      const code = err?.code || 'auth/unknown';
-      setError(mapFirebaseError(code));
-      setIsLoading(false);
+      await finalizarLogin(resultado);
+      return;
     }
+    setError(resultado.message);
+  };
+
+  const handleVerifyTotp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setError(null);
+
+    if (!loginTicket) {
+      setError('La sesión de verificación expiró. Inicia sesión de nuevo.');
+      return;
+    }
+    if (!/^\d{6}$/.test(totpCode.trim())) {
+      setError('Ingresa el código de 6 dígitos de tu app autenticadora.');
+      return;
+    }
+
+    setIsLoading(true);
+    const resultado = await verifyTotp(loginTicket, totpCode.trim());
+    setIsLoading(false);
+
+    if (resultado.ok === true) {
+      if (resultado.requiresTotp === true) {
+        // No debería ocurrir (verify-totp nunca vuelve a pedir TOTP), pero se
+        // cubre explícitamente en vez de asumir el shape de la respuesta.
+        setError('No se pudo completar la verificación. Inicia sesión de nuevo.');
+        setLoginTicket(null);
+        return;
+      }
+      finalizarLogin(resultado);
+      return;
+    }
+    setError(resultado.message);
+  };
+
+  const handleCancelTotp = () => {
+    setLoginTicket(null);
+    setTotpCode('');
+    setError(null);
   };
 
   const handleBack = () => {
@@ -274,10 +353,11 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
                 </p>
               </div>
 
-              {/* Login Form */}
+              {!loginTicket ? (
+              /* Login Form — paso 1: correo + contraseña (POST /api/auth/login) */
               <form onSubmit={handleLogin} className="mt-6 space-y-4">
-                
-                {/* Field: Correo institucional (Firebase Authentication) */}
+
+                {/* Field: Correo institucional */}
                 <div>
                   <label
                     htmlFor="email"
@@ -307,8 +387,8 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
 
                 {/* Field: Contraseña */}
                 <div>
-                  <label 
-                    htmlFor="password" 
+                  <label
+                    htmlFor="password"
                     className="block text-xs font-bold text-slate-700 mb-1.5"
                   >
                     Contraseña
@@ -370,13 +450,82 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
                   )}
                 </button>
               </form>
+              ) : (
+              /* Paso 2 (solo cuentas con TOTP activado): código de 6 dígitos (POST /api/auth/verify-totp) */
+              <form onSubmit={handleVerifyTotp} className="mt-6 space-y-4">
+                <div className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs flex items-start gap-2">
+                  <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5 text-teal-600" />
+                  <span className="font-medium">
+                    Esta cuenta tiene verificación en dos pasos activada. Ingresa el código de 6 dígitos de tu app autenticadora.
+                  </span>
+                </div>
+
+                <div>
+                  <label htmlFor="totp-code" className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Código de verificación
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <KeyRound className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <input
+                      id="totp-code"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d{6}"
+                      maxLength={6}
+                      autoComplete="one-time-code"
+                      autoFocus
+                      value={totpCode}
+                      onChange={(e) => {
+                        setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                        setError(null);
+                      }}
+                      placeholder="000000"
+                      className="w-full pl-10 pr-4 py-3 bg-[#eef2fa] hover:bg-[#e6ecf8] focus:bg-white border border-slate-200 rounded-xl text-base font-bold tracking-[0.3em] text-center text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2 animate-shake">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
+                    <span className="font-medium">{error}</span>
+                  </div>
+                )}
+
+                <button
+                  id="btn-verificar-totp"
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full mt-2 py-3.5 px-4 bg-[#007065] hover:bg-[#005c53] active:bg-[#004740] text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Verificando código...</span>
+                    </>
+                  ) : (
+                    <span>Verificar e ingresar</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCancelTotp}
+                  className="w-full text-xs font-semibold text-slate-500 hover:text-slate-700 py-1 cursor-pointer"
+                >
+                  Volver a ingresar correo y contraseña
+                </button>
+              </form>
+              )}
 
               {/* Aviso honesto: ya no hay credenciales de demostración visibles */}
               <div className="mt-5 pt-4 border-t border-slate-100 text-center">
                 <p className="text-[11px] text-slate-400 leading-relaxed flex items-start gap-1.5 text-left">
                   <ShieldAlert className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                   <span>
-                    Cada colaborador ingresa con su propia cuenta de Firebase Authentication.
+                    Cada colaborador ingresa con su propia cuenta de personal VACLINIC.
                     Si no tienes credenciales, solicítalas al administrador del sistema —
                     no existen usuarios ni contraseñas de prueba en esta pantalla.
                   </span>

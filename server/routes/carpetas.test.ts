@@ -11,7 +11,7 @@ import request from 'supertest';
 
 let currentStaffUser: any = { idUsuario: 1, roleId: 'recepcionista', status: 'activo', nombreCompleto: 'Recepcionista Demo' };
 
-vi.mock('../auth-firebase', () => ({
+vi.mock('../auth-staff', () => ({
   requireStaffAuth: (req: any, _res: any, next: any) => {
     req.staffUser = currentStaffUser;
     next();

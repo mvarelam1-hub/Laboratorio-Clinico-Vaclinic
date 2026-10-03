@@ -13,7 +13,7 @@
  */
 import { Router } from 'express';
 import { pool } from '../db';
-import { requireStaffAuth } from '../auth-firebase';
+import { requireStaffAuth } from '../auth-staff';
 import { requirePermission } from '../permissions-middleware';
 import { asyncHandler } from '../asyncHandler';
 

@@ -1495,7 +1495,7 @@
       ]
     },
     {
-      "name": "05 - Autorizacion negativa con rol limitado (ejecutar aparte, servidor con DEV_AUTH_BYPASS_UID=uid-recepcionista-e11)",
+      "name": "05 - Autorizacion negativa con rol limitado (ejecutar aparte, servidor con DEV_AUTH_BYPASS_ID_USUARIO=<id_usuario recepcionista>)",
       "item": [
         {
           "name": "PATCH resultados/1/validar como recepcionista -> 403",

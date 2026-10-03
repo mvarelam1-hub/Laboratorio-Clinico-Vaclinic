@@ -8,7 +8,7 @@ import request from 'supertest';
  * real en vez de un catálogo hardcodeado en localStorage.
  */
 
-vi.mock('../auth-firebase', () => ({
+vi.mock('../auth-staff', () => ({
   requireStaffAuth: (req: any, _res: any, next: any) => {
     req.staffUser = { idUsuario: 1, roleId: 'recepcionista', status: 'activo', nombreCompleto: 'Recepcionista Demo' };
     next();

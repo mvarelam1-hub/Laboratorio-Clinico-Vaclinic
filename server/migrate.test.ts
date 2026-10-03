@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readdirSync } from 'node:fs';
 import {
   versionDeArchivo,
@@ -7,7 +7,8 @@ import {
   seleccionarPendientes,
   versionesDeLineaBase,
   DIRECTORIO_MIGRACIONES,
-  ULTIMA_VERSION_LINEA_BASE
+  ULTIMA_VERSION_LINEA_BASE,
+  asegurarAdministradorDeArranque
 } from '../scripts/migrate.mjs';
 
 /**
@@ -75,6 +76,45 @@ describe('versionesDeLineaBase', () => {
     const ordenadas = ['0001_a.sql', '0009_b.sql', '0010_c.sql', '0011_d.sql'];
     expect(ULTIMA_VERSION_LINEA_BASE).toBe('0009');
     expect(versionesDeLineaBase(ordenadas)).toEqual(['0001', '0009']);
+  });
+});
+
+describe('asegurarAdministradorDeArranque', () => {
+  const ADMIN_INITIAL_PASSWORD_ORIGINAL = process.env.ADMIN_INITIAL_PASSWORD;
+
+  beforeEach(() => {
+    process.env.ADMIN_INITIAL_PASSWORD = 'ClaveDeArranque123!';
+  });
+  afterEach(() => {
+    process.env.ADMIN_INITIAL_PASSWORD = ADMIN_INITIAL_PASSWORD_ORIGINAL;
+  });
+
+  function fakeClient(filas: any[]) {
+    return { query: vi.fn().mockResolvedValueOnce({ rows: filas }).mockResolvedValue({ rows: [] }) };
+  }
+
+  it('no hace nada si ya existe un usuario administrador_ti (idempotente)', async () => {
+    const client = fakeClient([{ '?column?': 1 }]);
+    const resultado = await asegurarAdministradorDeArranque(client, () => {});
+    expect(resultado.creado).toBe(false);
+    expect(client.query).toHaveBeenCalledTimes(1); // solo el SELECT, nunca el INSERT
+  });
+
+  it('crea la cuenta de arranque si no existe ningún administrador_ti', async () => {
+    const client = fakeClient([]);
+    const resultado = await asegurarAdministradorDeArranque(client, () => {});
+    expect(resultado.creado).toBe(true);
+    expect(client.query).toHaveBeenCalledTimes(2);
+    const [, params] = (client.query as any).mock.calls[1];
+    expect(params[2]).toMatch(/^[0-9a-f]+:[0-9a-f]+$/); // contrasena_hash en formato salt:hash
+  });
+
+  it('no crea nada (y avisa) si falta ADMIN_INITIAL_PASSWORD', async () => {
+    delete process.env.ADMIN_INITIAL_PASSWORD;
+    const client = fakeClient([]);
+    const resultado = await asegurarAdministradorDeArranque(client, () => {});
+    expect(resultado.creado).toBe(false);
+    expect(client.query).toHaveBeenCalledTimes(1); // solo el SELECT
   });
 });
 

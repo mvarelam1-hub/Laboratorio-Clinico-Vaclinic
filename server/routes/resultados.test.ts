@@ -11,14 +11,14 @@ import request from 'supertest';
  * Dobles de prueba usados (justificación): se sustituyen `pool` y
  * `withAuditContext` de `../db` (que abrirían una transacción real de
  * PostgreSQL) por versiones controladas, y `requireStaffAuth` de
- * `../auth-firebase` (que llamaría a Firebase Admin) por inyección directa
+ * `../auth-staff` por inyección directa
  * del usuario de prueba — así se prueba la lógica de negocio del router de
  * forma aislada, sin una base de datos real.
  */
 
 let currentStaffUser: any = { idUsuario: 1, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Bioanalista Senior Demo' };
 
-vi.mock('../auth-firebase', () => ({
+vi.mock('../auth-staff', () => ({
   requireStaffAuth: (req: any, _res: any, next: any) => {
     req.staffUser = currentStaffUser;
     next();

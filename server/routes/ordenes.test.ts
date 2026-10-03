@@ -9,7 +9,7 @@ import request from 'supertest';
  *
  * Dobles de prueba usados (justificación): se sustituye `pool` de `../db`
  * (PostgreSQL real) por un cliente falso en memoria, y `requireStaffAuth` de
- * `../auth-firebase` (que llamaría a Firebase Admin y a la base de datos) por
+ * `../auth-staff` (que llamaría a la base de datos) por
  * un middleware que inyecta directamente el usuario de prueba. Esto aísla la
  * lógica de negocio del router de dos dependencias externas reales (red y
  * base de datos), que es exactamente lo que debe hacer una prueba UNITARIA
@@ -18,7 +18,7 @@ import request from 'supertest';
 
 let currentStaffUser: any = { idUsuario: 1, roleId: 'recepcionista', status: 'activo', nombreCompleto: 'Recepcionista Demo' };
 
-vi.mock('../auth-firebase', () => ({
+vi.mock('../auth-staff', () => ({
   requireStaffAuth: (req: any, _res: any, next: any) => {
     req.staffUser = currentStaffUser;
     next();

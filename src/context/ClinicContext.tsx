@@ -58,9 +58,7 @@ import { playNotificationChime } from '../utils/audioChime';
 import { OfflinePendingAction, OfflineActionType } from '../types/offlineQueue';
 import { LabFullBackup, BackupSnapshot } from '../types/backup';
 import { BackupService } from '../services/backupService';
-import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
-import { getFirebaseAuth } from '../services/firebaseConfig';
-import { verifyStaffSession } from '../services/staffAuthService';
+import { verifyStaffSession, logoutStaff as logoutStaffBackend, type StaffAuthMeta } from '../services/staffAuthService';
 import {
   createPacienteRemote,
   updatePacienteRemote,
@@ -253,6 +251,11 @@ interface ClinicContextType {
   setIsStaffAuthenticated: (authenticated: boolean) => void;
   loginStaffUser: (user: LabStaffUser) => void;
   logoutStaff: () => void;
+  // Autenticación propia de personal (ver server/routes/auth.ts): metadatos
+  // de la sesión actual que deciden si hay que forzar una pantalla de
+  // cambio de contraseña o de enrolamiento TOTP antes de usar el sistema.
+  staffAuthMeta: StaffAuthMeta | null;
+  setStaffAuthMeta: (meta: StaffAuthMeta | null) => void;
   staffUsers: LabStaffUser[];
   staffRoles: LabRoleConfig[];
   auditLogs: LabAuditLog[];
@@ -390,16 +393,23 @@ const OFFLINE_QUEUE_STORAGE_KEY = 'vaclinic_offline_queue_v1';
 const SIMULATE_OFFLINE_STORAGE_KEY = 'vaclinic_simulate_offline_v1';
 const LAST_SYNC_TIME_STORAGE_KEY = 'vaclinic_last_sync_time_v1';
 const LAST_BACKUP_TIME_STORAGE_KEY = 'vaclinic_last_backup_time_v1';
+// Autenticación propia de personal (reemplaza Firebase Authentication, que
+// guardaba su propia sesión internamente vía el SDK): el token firmado que
+// emite POST /api/auth/login o /api/auth/verify-totp (ver
+// server/session.ts) se guarda aquí para sobrevivir un refresh de página.
+export const STAFF_SESSION_TOKEN_STORAGE_KEY = 'vaclinic_session_token';
 
 export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Etapa 3 (seguridad): antes 'personal' + `true` por defecto significaba
   // que CUALQUIERA que abriera la app por primera vez, sin iniciar sesión,
   // caía directo dentro del panel de personal del laboratorio. Ahora el
   // valor por defecto es el portal público del paciente, y el acceso de
-  // personal solo se concede tras una verificación real (ver el efecto de
-  // `onAuthStateChanged` más abajo, que es la única fuente de verdad).
+  // personal solo se concede tras una verificación real (ver el efecto que
+  // lee STAFF_SESSION_TOKEN_STORAGE_KEY más abajo, que es la única fuente
+  // de verdad).
   const [role, setRole] = useState<UserRole>('paciente');
   const [isStaffAuthenticated, setIsStaffAuthenticated] = useState<boolean>(false);
+  const [staffAuthMeta, setStaffAuthMeta] = useState<StaffAuthMeta | null>(null);
   const [currentBranch, setCurrentBranch] = useState<BranchSiteId>('central');
   const [branches] = useState<BranchSite[]>(INITIAL_BRANCHES);
 
@@ -802,49 +812,65 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   // Etapa 3 (seguridad): única fuente de verdad de "¿hay personal con
-  // sesión válida?". Antes esto era un booleano en localStorage que
-  // cualquiera podía escribir a mano desde DevTools. Ahora se deriva de
-  // la sesión REAL de Firebase Authentication (persistida por el propio
-  // SDK, no por nosotros) y se vuelve a confirmar contra el backend
-  // (server/auth-firebase.ts) cada vez que esa sesión cambia. Si Firebase
-  // reporta una sesión pero el backend la rechaza (cuenta dada de baja,
-  // no registrada como personal, etc.), se cierra la sesión de Firebase
-  // también, en vez de dejar al usuario en un estado ambiguo.
+  // sesión válida?". Antes esto se derivaba de la sesión REAL de Firebase
+  // Authentication (persistida por el propio SDK, vía `onAuthStateChanged`)
+  // y se volvía a confirmar contra el backend cada vez que esa sesión
+  // cambiaba. AHORA no hay SDK externo: el propio backend emite y controla
+  // la sesión (server/session.ts), así que lo único persistido en el
+  // cliente es el token firmado (STAFF_SESSION_TOKEN_STORAGE_KEY). Al
+  // montar la app se lee ese token y se vuelve a confirmar contra
+  // `GET /api/auth/whoami` (server/routes/auth.ts) exactamente igual que
+  // antes — el backend sigue siendo quien decide, nunca el token por sí
+  // solo. Si el backend lo rechaza (cuenta dada de baja, sesión revocada,
+  // token expirado, etc.), se borra el token local también, en vez de
+  // dejar al usuario en un estado ambiguo.
   useEffect(() => {
-    const auth = getFirebaseAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (!firebaseUser) {
-        setIsStaffAuthenticated(false);
-        return;
-      }
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem(STAFF_SESSION_TOKEN_STORAGE_KEY);
+    } catch (e) {
+      console.error('[Auth] No se pudo leer el token de sesión de personal:', e);
+    }
+
+    if (!token) {
+      setIsStaffAuthenticated(false);
+      return;
+    }
+
+    (async () => {
       try {
-        const idToken = await firebaseUser.getIdToken();
-        const verification = await verifyStaffSession(idToken);
+        const verification = await verifyStaffSession(token!);
         if (verification.ok === false) {
           if (verification.reason !== 'network') {
-            // Solo se cierra sesión si el backend respondió y RECHAZÓ la
+            // Solo se borra el token si el backend respondió y RECHAZÓ la
             // cuenta. Un error de red no debe desloguear a alguien que sí
-            // tiene una sesión de Firebase válida.
-            await firebaseSignOut(auth).catch(() => undefined);
+            // tiene una sesión válida.
+            try { localStorage.removeItem(STAFF_SESSION_TOKEN_STORAGE_KEY); } catch { /* ignore */ }
           }
           setIsStaffAuthenticated(false);
           return;
         }
 
-        const matchedUser =
-          staffUsers.find((u) => u.firebaseUid && u.firebaseUid === firebaseUser.uid) ||
-          staffUsers.find((u) => u.email.toLowerCase() === (firebaseUser.email || '').toLowerCase());
-
-        if (matchedUser) {
-          setCurrentStaffUser(matchedUser);
+        // Emparejar con el perfil local enriquecido (nombre, foto, licencia,
+        // etc.) por el id real de `usuario` (remoteId, ver types.ts) — el
+        // acceso real ya lo otorgó el backend arriba; esto solo decide qué
+        // datos de perfil se muestran en pantalla.
+        const usuarioCoincidente = staffUsers.find((u) => u.remoteId === verification.data.idUsuario);
+        if (usuarioCoincidente) {
+          setCurrentStaffUser(usuarioCoincidente);
         }
+        setStaffAuthMeta({
+          mustChangePassword: verification.data.mustChangePassword,
+          totpEnabled: verification.data.totpEnabled,
+          totpSetupRequired: verification.data.totpSetupRequired,
+          totpMandatory: verification.data.totpMandatory
+        });
         setIsStaffAuthenticated(true);
       } catch (err) {
         console.error('[Auth] Error verificando sesión de personal:', err);
         setIsStaffAuthenticated(false);
       }
-    });
-    return () => unsubscribe();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -2491,14 +2517,15 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showNotification(`Permisos para rol "${roleObj?.name || roleId}" actualizados`, 'success');
   };
 
-  // NOTA (Etapa 3): esta función NO pasa por Firebase Authentication — es
-  // el mecanismo que usa el login biométrico (WebAuthn) existente, que
-  // todavía es local y no está vinculado a una identidad de Firebase. Se
-  // deja funcionando para no romper esa función ya existente, pero queda
-  // documentado como una vía de acceso que el backend no puede verificar
-  // hoy (server/auth-firebase.ts solo confía en tokens de Firebase). Cerrar
-  // esta brecha requiere emitir un Firebase Custom Token tras la
-  // verificación WebAuthn — pendiente, fuera del alcance de este cambio.
+  // NOTA (Etapa 3): esta función NO pasa por el login propio (POST
+  // /api/auth/login) — es el mecanismo que usa el login biométrico
+  // (WebAuthn) existente, que todavía es local y no emite una sesión real
+  // del backend. Se deja funcionando para no romper esa función ya
+  // existente, pero queda documentado como una vía de acceso que el
+  // backend no puede verificar hoy (server/auth-staff.ts solo confía en
+  // tokens de sesión propios, ver server/session.ts). Cerrar esta brecha
+  // requiere emitir una sesión real tras la verificación WebAuthn —
+  // pendiente, fuera del alcance de este cambio.
   const loginStaffUser = (user: LabStaffUser) => {
     setCurrentStaffUser(user);
     setIsStaffAuthenticated(true);
@@ -2506,10 +2533,22 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const logoutStaff = () => {
     setIsStaffAuthenticated(false);
-    // Cierra también la sesión real de Firebase (si la hay). Sin esto,
-    // `onAuthStateChanged` la detectaría de nuevo como válida y reabriría
-    // el acceso de personal en la próxima recarga.
-    firebaseSignOut(getFirebaseAuth()).catch(() => undefined);
+    setStaffAuthMeta(null);
+    // Revoca también la sesión real en el servidor (server/session.ts::
+    // revokeSession) — en "best effort", sin esperar la respuesta: el
+    // logout local no debe depender de que el servidor responda. Sin
+    // borrar el token local, el próximo refresh lo encontraría de nuevo y
+    // reabriría el acceso de personal.
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem(STAFF_SESSION_TOKEN_STORAGE_KEY);
+      localStorage.removeItem(STAFF_SESSION_TOKEN_STORAGE_KEY);
+    } catch (e) {
+      console.error('[Auth] No se pudo borrar el token de sesión de personal:', e);
+    }
+    if (token) {
+      logoutStaffBackend(token).catch(() => undefined);
+    }
     showNotification('Sesión de personal bloqueada', 'info');
   };
 
@@ -3781,6 +3820,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         importCatalogJson,
         isStaffAuthenticated,
         setIsStaffAuthenticated,
+        staffAuthMeta,
+        setStaffAuthMeta,
         loginStaffUser,
         logoutStaff,
         staffUsers,

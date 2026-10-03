@@ -42,6 +42,7 @@ import 'dotenv/config';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomBytes, scryptSync } from 'node:crypto';
 import pg from 'pg';
 
 export const DIRECTORIO_MIGRACIONES = path.resolve(
@@ -138,6 +139,55 @@ async function registrarLineaBase(client, ordenadas) {
   return versiones;
 }
 
+// ---------------------------------------------------------------------------
+// Administrador de arranque (Etapa de autenticación propia, migración 0012).
+//
+// ANTES (Firebase Authentication): la PRIMERA cuenta de personal se creaba a
+// mano desde la consola de Firebase, y luego se vinculaba manualmente a una
+// fila de `usuario` (ver server/routes/personal.ts) — un paso manual fuera
+// de este repositorio, sin el cual nadie podía entrar nunca al sistema.
+//
+// AHORA: ya no existe una consola externa que resuelva ese problema del
+// huevo y la gallina (¿quién crea al primer administrador?). Este script ya
+// corre en cada arranque (`npm start`), así que es el lugar natural para
+// garantizar que SIEMPRE exista al menos una cuenta `administrador_ti`
+// utilizable, de forma idempotente: si ya existe alguna, no hace nada.
+//
+// hashPassword() se reimplementa aquí (en vez de importar
+// server/password.ts) porque este script es .mjs plano ejecutado con
+// `node` directo (sin transpilar TypeScript) — ver la cabecera de este
+// archivo. Es el MISMO algoritmo (scrypt, salt:hash en hex), verificado
+// contra server/password.test.ts.
+function hashPasswordDeArranque(password) {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+const CORREO_ADMIN_ARRANQUE = process.env.ADMIN_INITIAL_EMAIL || 'admin.sistemas@vaclinic.local';
+
+export async function asegurarAdministradorDeArranque(client, log = console.log) {
+  const { rows } = await client.query("SELECT 1 FROM usuario WHERE rol = 'administrador_ti' LIMIT 1");
+  if (rows.length > 0) {
+    return { creado: false };
+  }
+
+  const passwordInicial = process.env.ADMIN_INITIAL_PASSWORD;
+  if (!passwordInicial) {
+    log('[migrate] AVISO: no existe ningún usuario administrador_ti y falta ADMIN_INITIAL_PASSWORD: no se puede crear la cuenta de arranque. Defínela y vuelve a ejecutar `npm run migrate`.');
+    return { creado: false };
+  }
+
+  await client.query(
+    `INSERT INTO usuario (nombre_completo, correo, contrasena_hash, rol, estado, must_change_password)
+     VALUES ($1, $2, $3, 'administrador_ti', TRUE, TRUE)
+     ON CONFLICT (correo) DO NOTHING`,
+    ['Administrador de Sistemas (cuenta de arranque)', CORREO_ADMIN_ARRANQUE, hashPasswordDeArranque(passwordInicial)]
+  );
+  log(`[migrate] Cuenta de arranque administrador_ti creada: ${CORREO_ADMIN_ARRANQUE} (must_change_password=true — cambia la contraseña en el primer inicio de sesión).`);
+  return { creado: true };
+}
+
 async function aplicarMigracion(client, nombre) {
   const version = versionDeArchivo(nombre);
   const sql = await readFile(path.join(DIRECTORIO_MIGRACIONES, nombre), 'utf8');
@@ -182,7 +232,16 @@ export async function ejecutar({ soloEstado = false, incluirSemillas = false, lo
       log(`[migrate] OK ${nombre} (${Date.now() - inicio} ms)`);
     }
     if (ejecutadas.length === 0) log('[migrate] Base de datos al día, nada que aplicar.');
-    return { aplicadas, pendientes, ejecutadas };
+
+    // Se ejecuta DESPUÉS de aplicar las migraciones pendientes (necesita que
+    // 0012_staff_password_auth.sql ya haya corrido, es decir, que existan
+    // las columnas must_change_password/totp_*) y SIEMPRE, no solo cuando
+    // hubo migraciones nuevas que aplicar — por eso no está dentro del `if`
+    // de arriba: una base de datos ya al día también puede no tener todavía
+    // ningún administrador_ti (por ejemplo, justo después de este despliegue).
+    const { creado } = await asegurarAdministradorDeArranque(client, log);
+
+    return { aplicadas, pendientes, ejecutadas, administradorDeArranqueCreado: creado };
   } finally {
     client.release();
     await pool.end();

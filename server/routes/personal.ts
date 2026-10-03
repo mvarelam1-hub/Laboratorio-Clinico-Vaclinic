@@ -5,28 +5,29 @@
  *
  * A diferencia de los módulos anteriores, este NO crea una tabla nueva:
  * reutiliza `usuario`, la misma tabla real que ya usa la autenticación de
- * personal (server/auth-firebase.ts), extendida en la migración
- * 0011_modulos_restantes.sql con las columnas que le faltaban
- * (nombre_usuario, telefono, sede_asignada, color_avatar,
+ * personal (server/auth-staff.ts, antes server/auth-firebase.ts), extendida
+ * en la migración 0011_modulos_restantes.sql con las columnas que le
+ * faltaban (nombre_usuario, telefono, sede_asignada, color_avatar,
  * texto_sello_firma, url_imagen_firma, doble_factor_habilitado, notas,
- * ultimo_login).
+ * ultimo_login) y en la 0012 con las de autenticación propia
+ * (contrasena_hash real, totp_secret, totp_enabled, must_change_password).
  *
  * Nota de alcance real, heredada de cómo YA funciona el login (no es una
  * limitación nueva de este módulo): `usuario.estado` es BOOLEAN, no el
  * enum de 4 valores que usa el frontend (UserStatus: activo/inactivo/
- * suspendido/vacaciones) — auth-firebase.ts ya colapsa
+ * suspendido/vacaciones) — auth-staff.ts ya colapsa
  * `estado ? 'activo' : 'inactivo'` para decidir el acceso real. Este
  * módulo hace exactamente lo mismo: cualquier estado que no sea "activo"
  * se guarda como estado=false: la distinción entre inactivo/suspendido/
  * vacaciones no sobrevive en el backend real, igual que ya ocurría en el
- * login. Crear un usuario aquí tampoco crea su cuenta de Firebase: el
- * campo `uid` queda vacío hasta que un administrador lo vincule
- * manualmente desde la consola de Firebase, exactamente como ya
- * documenta LabStaffUser.firebaseUid en types.ts.
+ * login. Crear un usuario aquí tampoco crea su contraseña real: queda sin
+ * `contrasena_hash` utilizable hasta que un administrador le asigne una
+ * contraseña inicial (quedando con must_change_password=TRUE), ya que este
+ * módulo administra el PERFIL del colaborador, no emite credenciales.
  */
 import { Router } from 'express';
 import { pool } from '../db';
-import { requireStaffAuth } from '../auth-firebase';
+import { requireStaffAuth } from '../auth-staff';
 import { requirePermission } from '../permissions-middleware';
 import { asyncHandler } from '../asyncHandler';
 

@@ -33,6 +33,8 @@ import { LabDispatchesView } from './components/staff/LabDispatchesView';
 import { AiLabAssistantView } from './components/staff/AiLabAssistantView';
 import { AuditLogsView } from './components/staff/AuditLogsView';
 import { StaffLoginView } from './components/staff/StaffLoginView';
+import { ForcedPasswordChangeView } from './components/staff/ForcedPasswordChangeView';
+import { ForcedTotpEnrollmentView } from './components/staff/ForcedTotpEnrollmentView';
 import { BiometricSecuritySection } from './components/staff/BiometricSecuritySection';
 import { GlobalShortcutsManager } from './components/staff/GlobalShortcutsManager';
 import { MicroscopicAtlasView } from './components/staff/MicroscopicAtlasView';
@@ -42,13 +44,33 @@ import { BackupRestoreModal } from './components/staff/BackupRestoreModal';
 import { CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { role, staffActiveTab, notification, isStaffAuthenticated, isBackupModalOpen, setIsBackupModalOpen } = useClinic();
+  const { role, staffActiveTab, notification, isStaffAuthenticated, staffAuthMeta, isBackupModalOpen, setIsBackupModalOpen } = useClinic();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // If in staff mode and not authenticated, show the official Staff Login screen
   if (role === 'personal' && !isStaffAuthenticated) {
     return <StaffLoginView />;
+  }
+
+  // Sesión LIMITADA (usuario.must_change_password = TRUE, ver migración 0012
+  // y server/routes/auth.ts): el backend ya rechaza con 403
+  // MUST_CHANGE_PASSWORD cualquier endpoint que no sea /api/auth/*; aquí se
+  // refleja esa misma regla en la UI, antes de que el usuario llegue a
+  // tocar cualquier pantalla real del sistema.
+  if (role === 'personal' && isStaffAuthenticated && staffAuthMeta?.mustChangePassword) {
+    return <ForcedPasswordChangeView />;
+  }
+
+  // TOTP OBLIGATORIO por rol (server/totp.ts::MANDATORY_TOTP_ROLES): el
+  // backend ya rechaza con 403 TOTP_SETUP_REQUIRED cualquier endpoint que no
+  // sea /api/auth/* mientras esto sea true (server/routes/index.ts) — aquí
+  // se refleja esa misma regla en la UI, igual que con mustChangePassword
+  // arriba, para que "obligatorio" bloquee de verdad el resto de la app y no
+  // sea solo el aviso que ya mostraba TotpEnrollmentSection dentro de
+  // Biometría y Acceso Seguro.
+  if (role === 'personal' && isStaffAuthenticated && staffAuthMeta?.totpSetupRequired) {
+    return <ForcedTotpEnrollmentView />;
   }
 
   return (

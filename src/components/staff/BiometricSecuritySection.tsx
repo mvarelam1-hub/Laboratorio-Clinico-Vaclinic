@@ -33,6 +33,7 @@ import { LabOrder, LabStaffUser, StaffBiometricCredential } from '../../types';
 import { BiometricAuthModal } from './BiometricAuthModal';
 import { FingerprintEnrollmentModal } from './FingerprintEnrollmentModal';
 import { FingerprintVerifyModal } from './FingerprintVerifyModal';
+import { TotpEnrollmentSection } from './TotpEnrollmentSection';
 
 export const BiometricSecuritySection: React.FC = () => {
   const { 
@@ -269,6 +270,12 @@ export const BiometricSecuritySection: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Verificación en dos pasos (TOTP) — autenticación propia de personal,
+          ver server/routes/auth.ts y server/totp.ts. Se muestra siempre
+          arriba (no depende de activeTab) porque es la credencial de la
+          cuenta actual, no un listado del personal. */}
+      <TotpEnrollmentSection />
 
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
