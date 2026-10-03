@@ -758,6 +758,18 @@ export interface LabOrder {
   isArchived: boolean;
   archivedAt?: string;
   archivedBy?: string;
+  /**
+   * Papelera (eliminación lógica, migración 0013 / server/routes/ordenes.ts
+   * DELETE /:id, /eliminar-varias, GET /papelera, /:id/restaurar-papelera,
+   * /restaurar-varias-papelera). Antes, "eliminar" una orden la quitaba por
+   * completo del arreglo local (isDeleted no existía): el backend sí la
+   * marcaba como eliminada y la conservaba, pero la UI no tenía forma de
+   * volver a mostrarla ni de restaurarla -la Papelera estaba siempre vacía-.
+   */
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+  deleteReason?: string;
   folderId?: string; // ID de la carpeta donde se guarda
   priority: 'rutina' | 'urgente' | 'stat_panico';
   branchId?: BranchSiteId;

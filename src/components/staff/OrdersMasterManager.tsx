@@ -58,7 +58,7 @@ import { BiometricAuthResult } from '../../services/biometricService';
 import { generateDemographicParametersForTests } from '../../utils/referenceRangeEvaluator';
 
 interface OrdersMasterManagerProps {
-  mode: 'active' | 'archived';
+  mode: 'active' | 'archived' | 'trash';
 }
 
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string; badge: string; hover: string; ring: string }> = {
@@ -196,10 +196,12 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
     archiveOrder, 
     restoreOrder, 
     updateOrder,
-    bulkArchiveOrders, 
-    bulkRestoreOrders, 
-    deleteOrder, 
-    bulkDeleteOrders, 
+    bulkArchiveOrders,
+    bulkRestoreOrders,
+    deleteOrder,
+    bulkDeleteOrders,
+    restoreOrderFromTrash,
+    bulkRestoreOrdersFromTrash,
     moveOrderToFolder, 
     bulkMoveOrdersToFolder, 
     createOrderFolder, 
@@ -279,9 +281,17 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
     return new Set(selectedOrdersList.map(o => o.patientName)).size;
   }, [selectedOrdersList]);
 
-  // Filter orders by mode (active vs archived)
+  // Filter orders by mode (active vs archived vs trash/papelera). Una orden
+  // en la Papelera (isDeleted) nunca debe aparecer en "active" ni
+  // "archived" -antes de agregar isDeleted, deleteOrder/bulkDeleteOrders
+  // quitaban la orden del arreglo por completo, así que este caso no podía
+  // ocurrir; ahora que se conserva marcada, hay que excluirla aquí.
   const baseModeOrders = useMemo(() => {
-    return orders.filter(o => mode === 'archived' ? o.isArchived : !o.isArchived);
+    return orders.filter(o => {
+      if (mode === 'trash') return !!o.isDeleted;
+      if (o.isDeleted) return false;
+      return mode === 'archived' ? o.isArchived : !o.isArchived;
+    });
   }, [orders, mode]);
 
   // Extract distinct available years from orders
@@ -792,6 +802,10 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
               <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600 border border-teal-200">
                 <Archive className="w-6 h-6" />
               </div>
+            ) : mode === 'trash' ? (
+              <div className="p-2.5 rounded-xl bg-slate-100 text-slate-600 border border-slate-200">
+                <Trash2 className="w-6 h-6" />
+              </div>
             ) : (
               <div className="p-2.5 rounded-xl bg-teal-50 text-teal-600 border border-teal-200">
                 <FileText className="w-6 h-6" />
@@ -799,11 +813,13 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
             )}
             <div>
               <h1 className="text-2xl font-black text-slate-900">
-                {mode === 'archived' ? 'Órdenes Archivadas' : 'Órdenes de Laboratorio'} ({baseModeOrders.length})
+                {mode === 'archived' ? 'Órdenes Archivadas' : mode === 'trash' ? 'Papelera de Órdenes' : 'Órdenes de Laboratorio'} ({baseModeOrders.length})
               </h1>
               <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                {mode === 'archived' 
+                {mode === 'archived'
                   ? 'Órdenes históricas organizadas por año, mes y carpetas temáticas para consulta limpia.'
+                  : mode === 'trash'
+                  ? 'Órdenes eliminadas. Se conservan en el sistema y pueden restaurarse a órdenes activas en cualquier momento.'
                   : 'Gestión completa de órdenes: ver exámenes cargados, imprimir boletas e informes membretados con QR.'}
               </p>
             </div>
@@ -811,13 +827,15 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-          <button
-            onClick={() => setIsCreateFolderModalOpen(true)}
-            className="px-3.5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-2 transition-all cursor-pointer shadow-2xs"
-          >
-            <FolderPlus className="w-4 h-4 text-teal-600" />
-            <span>+ Nueva Carpeta</span>
-          </button>
+          {mode !== 'trash' && (
+            <button
+              onClick={() => setIsCreateFolderModalOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-2 transition-all cursor-pointer shadow-2xs"
+            >
+              <FolderPlus className="w-4 h-4 text-teal-600" />
+              <span>+ Nueva Carpeta</span>
+            </button>
+          )}
 
           {mode === 'active' && (
             <button
@@ -883,25 +901,29 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                setBulkCashTendered(totalSelectedOrdersAmount.toFixed(2));
-                setIsBulkLiquidationReviewOpen(true);
-              }}
-              className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-black px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 border border-teal-500/50 shadow-md shadow-teal-900/40 cursor-pointer transition-all hover:scale-[1.02]"
-              title="Revisar detalle y confirmar liquidación en caja"
-            >
-              <Receipt className="w-3.5 h-3.5" />
-              <span>Revisar y Liquidar ({selectedOrderIds.length})</span>
-            </button>
+            {mode !== 'trash' && (
+              <button
+                onClick={() => {
+                  setBulkCashTendered(totalSelectedOrdersAmount.toFixed(2));
+                  setIsBulkLiquidationReviewOpen(true);
+                }}
+                className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-black px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 border border-teal-500/50 shadow-md shadow-teal-900/40 cursor-pointer transition-all hover:scale-[1.02]"
+                title="Revisar detalle y confirmar liquidación en caja"
+              >
+                <Receipt className="w-3.5 h-3.5" />
+                <span>Revisar y Liquidar ({selectedOrderIds.length})</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => handleOpenMoveModal(selectedOrderIds)}
-              className="bg-slate-800 hover:bg-slate-700 text-teal-300 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 cursor-pointer"
-            >
-              <Folder className="w-3.5 h-3.5 text-amber-400" />
-              <span>Mover a Carpeta</span>
-            </button>
+            {mode !== 'trash' && (
+              <button
+                onClick={() => handleOpenMoveModal(selectedOrderIds)}
+                className="bg-slate-800 hover:bg-slate-700 text-teal-300 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+              >
+                <Folder className="w-3.5 h-3.5 text-amber-400" />
+                <span>Mover a Carpeta</span>
+              </button>
+            )}
 
             {mode === 'active' ? (
               <button
@@ -913,6 +935,17 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
               >
                 <Archive className="w-3.5 h-3.5 text-slate-400" />
                 <span>Archivar</span>
+              </button>
+            ) : mode === 'trash' ? (
+              <button
+                onClick={() => {
+                  bulkRestoreOrdersFromTrash(selectedOrderIds);
+                  setSelectedOrderIds([]);
+                }}
+                className="bg-emerald-800/80 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 border border-emerald-600 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restaurar de la Papelera</span>
               </button>
             ) : (
               <button
@@ -927,18 +960,20 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
               </button>
             )}
 
-            <button
-              onClick={() => {
-                if (window.confirm(`¿Estás seguro de eliminar permanentemente ${selectedOrderIds.length} orden(es)?`)) {
-                  bulkDeleteOrders(selectedOrderIds);
-                  setSelectedOrderIds([]);
-                }
-              }}
-              className="bg-rose-950 hover:bg-rose-900 text-rose-300 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 border border-rose-800 cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span>Eliminar</span>
-            </button>
+            {mode !== 'trash' && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`¿Enviar ${selectedOrderIds.length} orden(es) a la Papelera? Podrás restaurarlas luego desde ahí.`)) {
+                    bulkDeleteOrders(selectedOrderIds);
+                    setSelectedOrderIds([]);
+                  }
+                }}
+                className="bg-rose-950 hover:bg-rose-900 text-rose-300 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 border border-rose-800 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Eliminar</span>
+              </button>
+            )}
 
             <button
               onClick={() => setSelectedOrderIds([])}
@@ -1331,13 +1366,14 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                   <th className="px-4 py-3.5">ESTADO</th>
                   <th className="px-4 py-3.5">INFORME</th>
                   {mode === 'archived' && <th className="px-4 py-3.5">ARCHIVADO</th>}
+                  {mode === 'trash' && <th className="px-4 py-3.5">ELIMINADO</th>}
                   <th className="px-4 py-3.5 text-right">ACCIONES</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={mode === 'archived' ? 10 : 9} className="text-center py-16 text-slate-400">
+                    <td colSpan={mode === 'archived' || mode === 'trash' ? 10 : 9} className="text-center py-16 text-slate-400">
                       <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                       <div className="font-bold text-slate-600 text-sm">No se encontraron órdenes</div>
                       <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
@@ -1512,6 +1548,17 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                           </td>
                         )}
 
+                        {/* Eliminado Info (solo en Papelera) */}
+                        {mode === 'trash' && (
+                          <td className="px-4 py-3.5 text-[11px] text-slate-500 whitespace-nowrap">
+                            <div>{ord.deletedAt ? new Date(ord.deletedAt).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</div>
+                            <div className="text-[10px] text-slate-400">por {ord.deletedBy || 'Personal VACLINIC'}</div>
+                            {ord.deleteReason && (
+                              <div className="text-[10px] text-slate-400 italic mt-0.5">"{ord.deleteReason}"</div>
+                            )}
+                          </td>
+                        )}
+
                         {/* Acciones */}
                         <td 
                           className="px-4 py-3.5 text-right whitespace-nowrap"
@@ -1560,16 +1607,18 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                               <Receipt className="w-3.5 h-3.5 text-amber-600" />
                             </button>
 
-                            {/* Mover a Carpeta */}
-                            <button
-                              onClick={() => handleOpenMoveModal([ord.id])}
-                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
-                              title="Guardar / Mover a Carpeta"
-                            >
-                              <Folder className="w-3.5 h-3.5 text-amber-600" />
-                            </button>
+                            {/* Mover a Carpeta (no aplica a órdenes en Papelera) */}
+                            {mode !== 'trash' && (
+                              <button
+                                onClick={() => handleOpenMoveModal([ord.id])}
+                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
+                                title="Guardar / Mover a Carpeta"
+                              >
+                                <Folder className="w-3.5 h-3.5 text-amber-600" />
+                              </button>
+                            )}
 
-                            {/* Archivar / Restaurar */}
+                            {/* Archivar / Restaurar / Restaurar de Papelera */}
                             {mode === 'archived' ? (
                               <button
                                 onClick={() => restoreOrder(ord.id)}
@@ -1577,6 +1626,15 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                                 title="Restaurar a órdenes activas"
                               >
                                 <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
+                              </button>
+                            ) : mode === 'trash' ? (
+                              <button
+                                onClick={() => restoreOrderFromTrash(ord.id)}
+                                className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center gap-1 border border-emerald-200 cursor-pointer shadow-2xs"
+                                title="Restaurar desde la Papelera"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>Restaurar</span>
                               </button>
                             ) : (
                               <button
@@ -1588,18 +1646,20 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                               </button>
                             )}
 
-                            {/* Eliminar */}
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`¿Eliminar orden ${ord.orderNumber} de ${ord.patientName}?`)) {
-                                  deleteOrder(ord.id);
-                                }
-                              }}
-                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 text-slate-600 hover:text-rose-600 cursor-pointer"
-                              title="Eliminar"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                            </button>
+                            {/* Eliminar (no aplica a órdenes ya en Papelera -no hay borrado permanente) */}
+                            {mode !== 'trash' && (
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`¿Enviar la orden ${ord.orderNumber} de ${ord.patientName} a la Papelera? Podrás restaurarla luego desde ahí.`)) {
+                                    deleteOrder(ord.id);
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 text-slate-600 hover:text-rose-600 cursor-pointer"
+                                title="Enviar a la Papelera"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                              </button>
+                            )}
                           </div>
                         </td>
 

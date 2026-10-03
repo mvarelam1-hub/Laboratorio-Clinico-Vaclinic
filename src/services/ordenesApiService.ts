@@ -135,6 +135,39 @@ export async function eliminarVariasOrdenesRemoto(idsOrdenes: number[], motivo?:
 }
 
 /**
+ * Papelera (server/routes/ordenes.ts, GET /papelera + /:id/restaurar-papelera
+ * + /restaurar-varias-papelera). Contraparte real de eliminarOrdenRemota/
+ * eliminarVariasOrdenesRemoto: antes de esto no existía ninguna forma de
+ * listar ni revertir una orden eliminada lógicamente desde el cliente.
+ */
+export interface OrdenPapeleraApiRow {
+  id_orden: number;
+  numero_orden: string;
+  fecha_eliminacion: string;
+  motivo_eliminacion: string | null;
+  eliminado_por: string | null;
+  [key: string]: unknown;
+}
+
+export async function obtenerPapeleraRemota(): Promise<OrdenPapeleraApiRow[]> {
+  const res = await authFetch('/api/ordenes/papelera');
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+export async function restaurarDesdeLaPapeleraRemota(idOrden: number): Promise<{ id_orden: number; eliminada: boolean }> {
+  const res = await authFetch(`/api/ordenes/${idOrden}/restaurar-papelera`, { method: 'PATCH' });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+export async function restaurarVariasDesdeLaPapeleraRemoto(idsOrdenes: number[]): Promise<{ ok: boolean; actualizadas: number }> {
+  const res = await authFetch('/api/ordenes/restaurar-varias-papelera', { method: 'PATCH', body: JSON.stringify({ idsOrdenes }) });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+/**
  * Edición general de la orden (server/routes/ordenes.ts, migración 0016,
  * PATCH /api/ordenes/:id): estado operativo (status), prioridad, método de
  * pago, saldo pendiente, promoción, cama/sede y autorización biométrica.

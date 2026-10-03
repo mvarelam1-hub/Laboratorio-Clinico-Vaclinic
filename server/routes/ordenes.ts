@@ -146,6 +146,36 @@ ordenesRouter.get('/resultados-criticos', requirePermission('analizadores_panico
   return res.json(rows);
 }));
 
+/**
+ * GET /api/ordenes/papelera — lista las órdenes eliminadas lógicamente
+ * (eliminada = TRUE, migración 0013). ANTES: esta consulta no existía en
+ * ningún router -se podía ELIMINAR una orden (eliminada = TRUE) y hasta
+ * restaurarla desde el archivo (PATCH /:id/restaurar, que en realidad
+ * deshace un ARCHIVADO, no una eliminación), pero nunca listarla de vuelta
+ * ni revertir la eliminación: la "Papelera" de la UI (TrashOrdersView) no
+ * tenía ninguna fuente de datos real y permanecía vacía para siempre,
+ * aunque el registro siguiera vivo y recuperable en Postgres. Mismo
+ * segmento fijo que /pendientes-validacion y /resultados-criticos:
+ * registrada ANTES de GET /:id para no ser interpretada como un id.
+ */
+ordenesRouter.get('/papelera', requirePermission('admision_crear_ordenes'), asyncHandler(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT o.id_orden, o.numero_orden, o.fecha_registro, o.estado, o.total_cobrado, o.sede,
+            o.archivada, o.fecha_archivo, o.id_carpeta,
+            o.prioridad, o.estado_flujo, o.metodo_pago, o.saldo_pendiente, o.promo_aplicada,
+            o.sede_cama, o.es_alto_riesgo, o.biometria_autorizada, o.datos_biometricos,
+            o.fecha_eliminacion, o.motivo_eliminacion, u.nombre_completo AS eliminado_por,
+            p.id_paciente, p.nombre_completo AS paciente_nombre
+     FROM orden o
+     JOIN paciente p ON p.id_paciente = o.id_paciente
+     LEFT JOIN usuario u ON u.id_usuario = o.id_usuario_eliminacion
+     WHERE o.eliminada = TRUE
+     ORDER BY o.fecha_eliminacion DESC
+     LIMIT 500`
+  );
+  return res.json(rows);
+}));
+
 ordenesRouter.get('/:id', asyncHandler(async (req, res) => {
   const idOrden = Number(req.params.id);
   const { rows: ordenRows } = await pool.query(
@@ -221,6 +251,26 @@ ordenesRouter.patch('/:id/restaurar', requirePermission('admision_crear_ordenes'
   return res.json(rows[0]);
 }));
 
+/**
+ * PATCH /:id/restaurar-papelera — contraparte real de DELETE /:id: revierte
+ * `eliminada = TRUE` y limpia los metadatos de eliminación. No existía
+ * ninguna ruta que hiciera esto -ver el comentario de GET /papelera arriba-,
+ * así que hasta ahora una orden eliminada quedaba eliminada para siempre
+ * desde el punto de vista de la API, aunque la fila siguiera en la tabla.
+ */
+ordenesRouter.patch('/:id/restaurar-papelera', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const idOrden = Number(req.params.id);
+  const { rows } = await pool.query(
+    `UPDATE orden
+     SET eliminada = FALSE, fecha_eliminacion = NULL, id_usuario_eliminacion = NULL, motivo_eliminacion = NULL
+     WHERE id_orden = $1 AND eliminada = TRUE
+     RETURNING id_orden, eliminada`,
+    [idOrden]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: 'Orden no encontrada o no estaba en la papelera.' });
+  return res.json(rows[0]);
+}));
+
 ordenesRouter.delete('/:id', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
   const idOrden = Number(req.params.id);
   const { motivo } = req.body || {};
@@ -273,6 +323,21 @@ ordenesRouter.patch('/eliminar-varias', requirePermission('admision_crear_ordene
          motivo_eliminacion = $2
      WHERE id_orden = ANY($3::int[]) AND eliminada = FALSE`,
     [req.staffUser!.idUsuario, (motivo && String(motivo).trim()) || null, idsOrdenes.map(Number)]
+  );
+  return res.json({ ok: true, actualizadas: rowCount });
+}));
+
+// Contraparte masiva de /:id/restaurar-papelera -ver ese comentario arriba.
+ordenesRouter.patch('/restaurar-varias-papelera', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const { idsOrdenes } = req.body || {};
+  if (!Array.isArray(idsOrdenes) || idsOrdenes.length === 0) {
+    return res.status(400).json({ error: 'idsOrdenes (arreglo no vacío) es obligatorio.' });
+  }
+  const { rowCount } = await pool.query(
+    `UPDATE orden
+     SET eliminada = FALSE, fecha_eliminacion = NULL, id_usuario_eliminacion = NULL, motivo_eliminacion = NULL
+     WHERE id_orden = ANY($1::int[]) AND eliminada = TRUE`,
+    [idsOrdenes.map(Number)]
   );
   return res.json({ ok: true, actualizadas: rowCount });
 }));

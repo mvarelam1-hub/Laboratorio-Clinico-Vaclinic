@@ -464,3 +464,61 @@ describe('GET /api/ordenes/pendientes-validacion y /resultados-criticos', () => 
     expect(res.status).toBe(403);
   });
 });
+
+describe('Papelera de órdenes (GET /papelera, PATCH /:id/restaurar-papelera, PATCH /restaurar-varias-papelera)', () => {
+  it('GET /api/ordenes/papelera devuelve solo las órdenes con eliminada = TRUE, con quién y por qué se eliminaron', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ id_orden: 9, numero_orden: 'ORD-0009', eliminado_por: 'Recepcionista Demo', motivo_eliminacion: 'Duplicada' }]
+    });
+    const app = await buildApp();
+    const res = await request(app).get('/api/ordenes/papelera');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([{ id_orden: 9, numero_orden: 'ORD-0009', eliminado_por: 'Recepcionista Demo', motivo_eliminacion: 'Duplicada' }]);
+    const [sql] = queryMock.mock.calls[0];
+    expect(sql).toMatch(/WHERE o\.eliminada = TRUE/);
+  });
+
+  it('PATCH /:id/restaurar-papelera revierte eliminada = TRUE y limpia los metadatos de eliminación', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id_orden: 9, eliminada: false }] });
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/9/restaurar-papelera');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id_orden: 9, eliminada: false });
+    const [sql] = queryMock.mock.calls[0];
+    expect(sql).toMatch(/SET eliminada = FALSE/);
+    expect(sql).toMatch(/AND eliminada = TRUE/);
+  });
+
+  it('PATCH /:id/restaurar-papelera devuelve 404 si la orden no estaba en la papelera', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/999/restaurar-papelera');
+    expect(res.status).toBe(404);
+  });
+
+  it('PATCH /restaurar-varias-papelera restaura varias a la vez', async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 3 });
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/restaurar-varias-papelera').send({ idsOrdenes: [1, 2, 3] });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, actualizadas: 3 });
+  });
+
+  it('PATCH /restaurar-varias-papelera rechaza con 400 si falta idsOrdenes', async () => {
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/restaurar-varias-papelera').send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('no intercepta /papelera ni /restaurar-varias-papelera con las rutas genéricas /:id (orden de registro)', async () => {
+    // Misma razón que la prueba equivalente de archivar-varias/restaurar-varias/
+    // eliminar-varias: todas estas rutas de segmento fijo deben quedar
+    // registradas ANTES que '/:id' y 'PATCH /:id' para no ser interpretadas
+    // como un id numérico inválido.
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    const app = await buildApp();
+    const res = await request(app).get('/api/ordenes/papelera');
+    expect(res.status).toBe(200);
+    expect(queryMock.mock.calls[0][0]).toMatch(/WHERE o\.eliminada = TRUE/);
+  });
+});

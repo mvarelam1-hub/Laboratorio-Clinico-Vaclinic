@@ -83,6 +83,9 @@ import {
   restaurarVariasOrdenesRemoto,
   eliminarVariasOrdenesRemoto,
   actualizarOrdenRemota,
+  obtenerPapeleraRemota,
+  restaurarDesdeLaPapeleraRemota,
+  restaurarVariasDesdeLaPapeleraRemoto,
   OrdenesApiError
 } from '../services/ordenesApiService';
 import {
@@ -337,6 +340,8 @@ interface ClinicContextType {
   bulkArchiveOrders: (ids: string[]) => Promise<void>;
   bulkRestoreOrders: (ids: string[]) => Promise<void>;
   bulkDeleteOrders: (ids: string[], motivo?: string) => Promise<void>;
+  restoreOrderFromTrash: (id: string) => Promise<void>;
+  bulkRestoreOrdersFromTrash: (ids: string[]) => Promise<void>;
   moveOrderToFolder: (orderId: string, folderId: string) => Promise<void>;
   bulkMoveOrdersToFolder: (orderIds: string[], folderId: string) => Promise<void>;
   createOrderFolder: (name: string, color: string, description?: string) => Promise<OrderFolder>;
@@ -1250,6 +1255,44 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
     syncLabSettings();
+  }, [isEffectiveOnline]);
+
+  /**
+   * Papelera: al cargar, confirma contra el servidor cuáles órdenes están
+   * realmente eliminadas (GET /api/ordenes/papelera) y corrige los
+   * metadatos locales (quién la eliminó, cuándo, por qué) con el dato real
+   * de Postgres en vez del que se guardó de forma optimista en el momento
+   * del clic. Nota de alcance: `orders` no tiene todavía una carga completa
+   * desde el backend al iniciar sesión (solo se crea/actualiza contra la
+   * API, ver addOrder/updateOrder más arriba), así que esto solo corrige
+   * las órdenes que YA están en el arreglo local -no reconstruye desde cero
+   * una orden eliminada en otra sesión/navegador que nunca llegó a esta
+   * copia local-. Deliberadamente no bloqueante: si falla, la Papelera
+   * simplemente sigue mostrando lo último que se marcó localmente.
+   */
+  useEffect(() => {
+    const syncPapelera = async () => {
+      if (!isEffectiveOnline || !getStaffSessionToken()) return;
+      try {
+        const filasPapelera = await obtenerPapeleraRemota();
+        if (filasPapelera.length === 0) return;
+        const porRemoteId = new Map(filasPapelera.map(f => [f.id_orden, f]));
+        setOrders(prev => prev.map(o => {
+          const fila = o.remoteId ? porRemoteId.get(o.remoteId) : undefined;
+          if (!fila) return o;
+          return {
+            ...o,
+            isDeleted: true,
+            deletedAt: fila.fecha_eliminacion,
+            deletedBy: fila.eliminado_por || o.deletedBy,
+            deleteReason: fila.motivo_eliminacion || o.deleteReason
+          };
+        }));
+      } catch (error) {
+        console.error('Error fetching papelera from backend:', error);
+      }
+    };
+    syncPapelera();
   }, [isEffectiveOnline]);
 
   const queuePendingAction = (actionData: Omit<OfflinePendingAction, 'id' | 'timestamp' | 'status' | 'retryCount'>): OfflinePendingAction => {
@@ -3220,12 +3263,16 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   /**
    * ANTES: borrado físico del arreglo local (`setOrders(prev =>
-   * prev.filter(...))`), sin ninguna llamada a la API -de haber existido
-   * sincronización, habría significado perder la orden para siempre,
-   * justo lo que el informe técnico (sección 4.3) advierte evitar-. AHORA:
-   * si la orden tiene remoteId (ya existe de verdad en Postgres), se
-   * elimina lógicamente vía DELETE /api/ordenes/:id (migración 0013 -
-   * marca `eliminada`, nunca borra la fila); mismo patrón de resiliencia
+   * prev.filter(...))`) en cuanto se llamaba a esta función -el backend sí
+   * marcaba `eliminada = TRUE` (migración 0013, recuperable de verdad en
+   * Postgres), pero la orden desaparecía por completo de la UI al mismo
+   * tiempo, así que la Papelera (TrashOrdersView) nunca tenía nada que
+   * mostrar y no existía ninguna forma de deshacer un "Eliminar" desde la
+   * pantalla. AHORA: se conserva en `orders` marcada `isDeleted: true`
+   * (mismo patrón que `isArchived`), así que puede volver a
+   * aparecer -en la Papelera- y restaurarse con restoreOrderFromTrash. Si
+   * la orden tiene remoteId (ya existe de verdad en Postgres), se elimina
+   * lógicamente vía DELETE /api/ordenes/:id; mismo patrón de resiliencia
    * que updateReagent/deleteReagent: si la llamada remota falla, se avisa
    * y se sigue aplicando el cambio local para no bloquear al usuario.
    */
@@ -3240,8 +3287,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         showNotification(`No se pudo eliminar la orden en el servidor (${mensaje}). Se eliminó solo localmente.`, 'warning');
       }
     }
-    setOrders(prev => prev.filter(o => o.id !== id));
-    showNotification('Orden eliminada del sistema', 'info');
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      return {
+        ...o,
+        isDeleted: true,
+        deletedAt: new Date().toISOString(),
+        deletedBy: currentStaffUser?.fullName || 'Administrador VACLINIC',
+        deleteReason: motivo
+      };
+    }));
+    showNotification('Orden enviada a la Papelera. Puedes restaurarla desde ahí.', 'info');
   };
 
   const archiveOrder = async (id: string): Promise<void> => {
@@ -3348,6 +3404,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showNotification(`${ids.length} orden(es) restauradas a activas`, 'success');
   };
 
+  // Mismo cambio que deleteOrder (ver su comentario): ANTES filtraba las
+  // órdenes fuera de `orders` por completo; AHORA las conserva marcadas
+  // `isDeleted: true` para que aparezcan en la Papelera y se puedan
+  // restaurar con bulkRestoreOrdersFromTrash.
   const bulkDeleteOrders = async (ids: string[], motivo?: string): Promise<void> => {
     const idsRemotos = orders.filter(o => ids.includes(o.id) && o.remoteId).map(o => o.remoteId!) as number[];
     if (isEffectiveOnline && idsRemotos.length > 0) {
@@ -3359,8 +3419,56 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         showNotification(`No se pudo sincronizar la eliminación masiva con el servidor (${mensaje}). Se eliminaron solo localmente.`, 'warning');
       }
     }
-    setOrders(prev => prev.filter(o => !ids.includes(o.id)));
-    showNotification(`${ids.length} orden(es) eliminadas`, 'info');
+    const now = new Date().toISOString();
+    setOrders(prev => prev.map(o => {
+      if (!ids.includes(o.id)) return o;
+      return { ...o, isDeleted: true, deletedAt: now, deletedBy: currentStaffUser?.fullName || 'Administrador VACLINIC', deleteReason: motivo };
+    }));
+    showNotification(`${ids.length} orden(es) enviadas a la Papelera`, 'info');
+  };
+
+  /**
+   * Papelera (contraparte de deleteOrder/bulkDeleteOrders). ANTES no
+   * existía ninguna forma de deshacer un "Eliminar": ni la ruta
+   * /:id/restaurar-papelera existía en el backend, ni el frontend conservaba
+   * la orden eliminada en memoria para poder mostrarla. AHORA sí: limpia
+   * `isDeleted` localmente y, si la orden tiene remoteId, llama a
+   * PATCH /:id/restaurar-papelera (o la variante masiva).
+   */
+  const restoreOrderFromTrash = async (id: string): Promise<void> => {
+    const target = orders.find(o => o.id === id);
+    if (isEffectiveOnline && target?.remoteId) {
+      try {
+        await restaurarDesdeLaPapeleraRemota(target.remoteId);
+      } catch (err) {
+        const mensaje = err instanceof OrdenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo restaurar la orden desde la papelera en el servidor:', err);
+        showNotification(`No se pudo sincronizar la restauración con el servidor (${mensaje}). Se restauró solo localmente.`, 'warning');
+      }
+    }
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
+      return { ...o, isDeleted: false, deletedAt: undefined, deletedBy: undefined, deleteReason: undefined };
+    }));
+    showNotification('Orden restaurada desde la Papelera', 'success');
+  };
+
+  const bulkRestoreOrdersFromTrash = async (ids: string[]): Promise<void> => {
+    const idsRemotos = orders.filter(o => ids.includes(o.id) && o.remoteId).map(o => o.remoteId!) as number[];
+    if (isEffectiveOnline && idsRemotos.length > 0) {
+      try {
+        await restaurarVariasDesdeLaPapeleraRemoto(idsRemotos);
+      } catch (err) {
+        const mensaje = err instanceof OrdenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudieron restaurar las órdenes desde la papelera en el servidor:', err);
+        showNotification(`No se pudo sincronizar la restauración masiva con el servidor (${mensaje}). Se restauraron solo localmente.`, 'warning');
+      }
+    }
+    setOrders(prev => prev.map(o => {
+      if (!ids.includes(o.id)) return o;
+      return { ...o, isDeleted: false, deletedAt: undefined, deletedBy: undefined, deleteReason: undefined };
+    }));
+    showNotification(`${ids.length} orden(es) restauradas desde la Papelera`, 'success');
   };
 
   // Las 5 funciones de carpetas siguen el mismo patrón de resiliencia que
@@ -4184,6 +4292,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         bulkArchiveOrders,
         bulkRestoreOrders,
         bulkDeleteOrders,
+        restoreOrderFromTrash,
+        bulkRestoreOrdersFromTrash,
         moveOrderToFolder,
         bulkMoveOrdersToFolder,
         createOrderFolder,

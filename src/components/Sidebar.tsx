@@ -52,17 +52,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   setIsCollapsed
 }) => {
-  const { 
-    staffActiveTab, 
-    setStaffActiveTab, 
-    episodes, 
-    patients, 
+  const {
+    staffActiveTab,
+    setStaffActiveTab,
+    episodes,
+    patients,
+    orders,
     showNotification,
     unreadChatCount,
     currentStaffUser,
     logoutStaff,
     reagentsBelowMinThreshold
   } = useClinic();
+
+  // Órdenes Archivadas / Papelera: antes eran números fijos en el código
+  // ("34" y "0") que nunca reflejaban el arreglo `orders` real -ver
+  // OrdersMasterManager.tsx/TrashOrdersView.tsx para el mismo arreglo que
+  // ahora alimenta estos contadores de verdad.
+  const ordenesArchivadasCount = orders.filter(o => o.isArchived && !o.isDeleted).length;
+  const ordenesEnPapeleraCount = orders.filter(o => o.isDeleted).length;
 
   // Accordion collapsed state for groups
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -446,7 +454,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   `}
                 >
                   <Archive className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Órdenes Archivadas (34)</span>}
+                  {(!isCollapsed || isMobileOpen) && <span>Órdenes Archivadas ({ordenesArchivadasCount})</span>}
                 </button>
 
                 <button
@@ -478,7 +486,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   `}
                 >
                   <Trash2 className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Papelera (0)</span>}
+                  {(!isCollapsed || isMobileOpen) && <span>Papelera ({ordenesEnPapeleraCount})</span>}
                 </button>
               </div>
             )}
