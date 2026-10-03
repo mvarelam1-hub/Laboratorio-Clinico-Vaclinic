@@ -67,7 +67,13 @@ import {
   PacientesApiError,
   type CrearPacienteInput
 } from '../services/pacientesApiService';
-import { resolverCodigosAIdsExamen, ExamenesApiError } from '../services/examenesApiService';
+import {
+  resolverCodigosAIdsExamen,
+  crearExamenRemoto,
+  actualizarExamenRemoto,
+  fromExamenApiRow,
+  ExamenesApiError
+} from '../services/examenesApiService';
 import {
   createOrdenRemote,
   archivarOrdenRemota,
@@ -257,10 +263,10 @@ interface ClinicContextType {
   // Lab Catalog & Profiles State & Actions
   catalogTests: LabCatalogItem[];
   customProfiles: LabCustomProfile[];
-  addCatalogTest: (test: Omit<LabCatalogItem, 'id'>) => LabCatalogItem;
-  updateCatalogTest: (id: string, updates: Partial<LabCatalogItem>) => void;
+  addCatalogTest: (test: Omit<LabCatalogItem, 'id'>) => Promise<LabCatalogItem>;
+  updateCatalogTest: (id: string, updates: Partial<LabCatalogItem>) => Promise<void>;
   bulkUpdateCatalogTests: (updatedTests: LabCatalogItem[]) => void;
-  deleteCatalogTest: (id: string) => void;
+  deleteCatalogTest: (id: string) => Promise<void>;
   addCustomProfile: (profile: Omit<LabCustomProfile, 'id' | 'createdAt'>) => Promise<LabCustomProfile>;
   updateCustomProfile: (id: string, updates: Partial<LabCustomProfile>) => Promise<void>;
   deleteCustomProfile: (id: string) => Promise<void>;
@@ -2241,18 +2247,44 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Lab Catalog Methods
-  const addCatalogTest = (testData: Omit<LabCatalogItem, 'id'>): LabCatalogItem => {
-    const newTest: LabCatalogItem = {
+  /**
+   * ANTES (Fase 1 - Persistencia, hasta la migración 0017):
+   * addCatalogTest/updateCatalogTest/deleteCatalogTest mutaban
+   * LabCatalogItem 100% en localStorage -nunca llegaba a la tabla `examen`
+   * real-. Riesgo de negocio real, no solo un hueco técnico: POST
+   * /api/ordenes calcula total_cobrado leyendo examen.precio (migración
+   * 0016), así que "actualizar" un precio solo en la UI dejaba la orden
+   * real facturándose con el precio viejo que seguía en Postgres. AHORA:
+   * mismo patrón de resiliencia que addOrder/updateOrder -aplica
+   * localmente siempre, sincroniza con el backend si hay conexión,
+   * avisa sin bloquear si esa llamada falla-.
+   */
+  const addCatalogTest = async (testData: Omit<LabCatalogItem, 'id'>): Promise<LabCatalogItem> => {
+    let newTest: LabCatalogItem = {
       ...testData,
       id: `t-cust-${Date.now()}`,
       priceFormatted: `Q${testData.price}`
     };
+
+    if (isEffectiveOnline && getStaffSessionToken()) {
+      try {
+        const fila = await crearExamenRemoto(newTest);
+        newTest = { ...newTest, ...fromExamenApiRow(fila) };
+      } catch (err) {
+        const mensaje = err instanceof ExamenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo crear el examen en el servidor:', err);
+        showNotification(`No se pudo registrar la prueba en el servidor (${mensaje}). Se guardó solo localmente.`, 'warning');
+      }
+    }
+
     setCatalogTests(prev => [newTest, ...prev]);
     showNotification(`Prueba "${newTest.name}" agregada al catálogo`, 'success');
     return newTest;
   };
 
-  const updateCatalogTest = (id: string, updates: Partial<LabCatalogItem>) => {
+  const updateCatalogTest = async (id: string, updates: Partial<LabCatalogItem>): Promise<void> => {
+    const target = catalogTests.find(t => t.id === id);
+
     setCatalogTests(prev =>
       prev.map(t => {
         if (t.id === id) {
@@ -2267,6 +2299,16 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       })
     );
     showNotification('Prueba del catálogo actualizada', 'info');
+
+    if (isEffectiveOnline && target?.remoteId) {
+      try {
+        await actualizarExamenRemoto(target.remoteId, updates);
+      } catch (err) {
+        const mensaje = err instanceof ExamenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo actualizar el examen en el servidor:', err);
+        showNotification(`No se pudo sincronizar la prueba con el servidor (${mensaje}). Se aplicó solo localmente.`, 'warning');
+      }
+    }
   };
 
   const bulkUpdateCatalogTests = (updatedTests: LabCatalogItem[]) => {
@@ -2274,9 +2316,28 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showNotification(`Se han guardado y sincronizado ${updatedTests.length} pruebas en el catálogo`, 'success');
   };
 
-  const deleteCatalogTest = (id: string) => {
+  /**
+   * El backend NUNCA borra físicamente un examen del catálogo (migración
+   * 0017: detalle_orden.id_examen tiene ON DELETE RESTRICT, y un examen ya
+   * usado en alguna orden real no podría borrarse de todas formas). Un
+   * examen con remoteId se desactiva (`estado: 'Inactivo'`) en el servidor
+   * en vez de eliminarse; localmente sigue quitándose del arreglo visible,
+   * igual que antes, para no cambiar la experiencia de uso.
+   */
+  const deleteCatalogTest = async (id: string): Promise<void> => {
+    const target = catalogTests.find(t => t.id === id);
     setCatalogTests(prev => prev.filter(t => t.id !== id));
     showNotification('Prueba eliminada del catálogo', 'warning');
+
+    if (isEffectiveOnline && target?.remoteId) {
+      try {
+        await actualizarExamenRemoto(target.remoteId, { status: 'Inactivo' });
+      } catch (err) {
+        const mensaje = err instanceof ExamenesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo desactivar el examen en el servidor:', err);
+        showNotification(`No se pudo sincronizar la eliminación con el servidor (${mensaje}). Se eliminó solo localmente.`, 'warning');
+      }
+    }
   };
 
   const resetCatalogToFactory = () => {

@@ -499,6 +499,11 @@ export interface LabCatalogItem {
   includedParameters?: string[];
   clinicalSignificance?: string;
   isFactory?: boolean;
+  // Presente solo si este examen ya existe de verdad en Postgres (tabla
+  // `examen`, migración 0017) — mismo patrón que LabOrder.remoteId /
+  // LabCustomProfile.remoteId. Ausente mientras el ítem es 100% local
+  // (p.ej. todavía no se pudo sincronizar por estar offline).
+  remoteId?: number;
 }
 
 export interface ProfileTestAgeGenderRange {
