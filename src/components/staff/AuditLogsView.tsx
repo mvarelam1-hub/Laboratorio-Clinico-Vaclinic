@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { AuditPdfExportModal } from './AuditPdfExportModal';
 import { AuditExportService } from '../../services/auditExportService';
-import { 
+import { fetchAuditoriaReal } from '../../services/auditoriaApiService';
+import type { LabAuditLog } from '../../types';
+import {
   ShieldCheck, 
   Search, 
   Download, 
@@ -21,18 +23,53 @@ import {
 } from 'lucide-react';
 
 export const AuditLogsView: React.FC = () => {
-  const { auditLogs, showNotification, setStaffActiveTab } = useClinic();
+  const { auditLogs, showNotification, setStaffActiveTab, isOnline } = useClinic();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSeverity, setSelectedSeverity] = useState<'all' | 'critical' | 'warning' | 'info'>('all');
   const [selectedModule, setSelectedModule] = useState<string>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'today' | 'week' | 'month'>('all');
-  
+
   // State for PDF Export Modal
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
+  // Bitácora REAL (historial_auditoria, vía GET /api/auditoria -ver
+  // auditoriaApiService.ts). ANTES: esta vista leía exclusivamente
+  // `auditLogs` (100% localStorage); ahora se trae también lo que el
+  // backend ya escribe de verdad como efecto secundario de acciones
+  // autorizadas (login, autorización biométrica, cambios de precio -ver
+  // server/bitacora.ts). Si el rol actual no tiene admin_bitacora_auditoria,
+  // el backend responde 403 y simplemente se deja remoteLogs vacío: esta
+  // pestaña sigue siendo útil con solo los eventos locales, no bloquea nada.
+  const [remoteLogs, setRemoteLogs] = useState<LabAuditLog[]>([]);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+
+  const cargarBitacoraReal = useCallback(() => {
+    if (!isOnline) return;
+    setIsLoadingRemote(true);
+    fetchAuditoriaReal()
+      .then(setRemoteLogs)
+      .catch((err) => {
+        console.error('No se pudo cargar la bitácora real del servidor:', err);
+      })
+      .finally(() => setIsLoadingRemote(false));
+  }, [isOnline]);
+
+  useEffect(() => {
+    cargarBitacoraReal();
+  }, [cargarBitacoraReal]);
+
+  // Combina ambos orígenes -los eventos del servidor (certificados,
+  // `source: 'servidor'`) y los que por ahora solo existen en este
+  // navegador- en una sola línea de tiempo, más reciente primero.
+  const combinedLogs = useMemo(() => {
+    return [...remoteLogs, ...auditLogs].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }, [remoteLogs, auditLogs]);
+
   // Filter logic
   const filteredLogs = useMemo(() => {
-    return auditLogs.filter(l => {
+    return combinedLogs.filter(l => {
       // Search term
       const matchesSearch = 
         l.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -71,7 +108,7 @@ export const AuditLogsView: React.FC = () => {
 
       return true;
     });
-  }, [auditLogs, searchTerm, selectedSeverity, selectedModule, selectedPeriod]);
+  }, [combinedLogs, searchTerm, selectedSeverity, selectedModule, selectedPeriod]);
 
   // Executive metrics
   const totalCount = filteredLogs.length;
@@ -129,6 +166,16 @@ export const AuditLogsView: React.FC = () => {
         </div>
 
         <div className="flex items-center flex-wrap gap-2">
+          <button
+            onClick={cargarBitacoraReal}
+            disabled={!isOnline || isLoadingRemote}
+            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            title={isOnline ? 'Actualizar con la bitácora certificada del servidor (historial_auditoria)' : 'Sin conexión: no se puede consultar la bitácora del servidor'}
+          >
+            <RefreshCw className={`w-4 h-4 text-teal-600 ${isLoadingRemote ? 'animate-spin' : ''}`} />
+            <span>Actualizar</span>
+          </button>
+
           <button
             onClick={() => setStaffActiveTab('usuarios')}
             className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-xs font-bold text-amber-900 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
@@ -320,7 +367,14 @@ export const AuditLogsView: React.FC = () => {
                 filteredLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap font-mono text-[11px]">
-                      {new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })}
+                      <div className="flex items-center gap-1.5">
+                        {log.source === 'servidor' && (
+                          <span title="Registro certificado en el servidor (historial_auditoria) -inmutable">
+                            <Lock className="w-3 h-3 text-teal-600 flex-shrink-0" />
+                          </span>
+                        )}
+                        {new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] border ${

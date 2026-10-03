@@ -655,6 +655,14 @@ export interface LabAuditLog {
   details: string;
   ipAddress?: string;
   severity: 'info' | 'warning' | 'critical';
+  /**
+   * 'servidor' -> proviene de la bitácora REAL (historial_auditoria vía
+   * GET /api/auditoria, ver auditoriaApiService.ts), inmutable y certificada.
+   * 'local' (u omitido) -> solo existe en localStorage de este navegador
+   * (logAuditEvent en ClinicContext.tsx), nunca llegó al backend. AuditLogsView
+   * lo usa para distinguir visualmente ambos orígenes mientras conviven.
+   */
+  source?: 'local' | 'servidor';
 }
 
 // ==========================================

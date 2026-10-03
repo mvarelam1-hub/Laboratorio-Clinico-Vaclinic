@@ -159,6 +159,7 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
       userRole: activeUser.roleName,
       action: 'Inicio de Sesión en Terminal LIS',
       module: 'autenticacion',
+      severity: 'info',
       details: `Acceso autorizado vía autenticación propia (${cleanEmail}).`
     });
 

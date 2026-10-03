@@ -5,6 +5,7 @@ import { requirePermission } from '../permissions-middleware';
 import { hasPermission } from '../../src/shared/permissions';
 import { getEffectiveRolesConfig } from '../rolePermissionsCache';
 import { asyncHandler } from '../asyncHandler';
+import { registrarBitacora } from '../bitacora';
 
 /**
  * Catálogo de exámenes (tabla `examen`, real desde la migración 0001;
@@ -107,7 +108,26 @@ examenesRouter.post('/', requirePermission('catalogo_tarifas_editar'), asyncHand
         JSON.stringify(datosAdicionales), req.staffUser!.idUsuario
       ]
     );
-    return res.status(201).json(rows[0]);
+    const examenCreado = rows[0];
+
+    // Bitácora REAL -efecto secundario de esta creación ya autorizada por
+    // requirePermission('catalogo_tarifas_editar') arriba (ver el comentario
+    // de diseño en server/bitacora.ts: nunca un endpoint de bitácora
+    // expuesto directamente). Toda fila nueva fija un precio, así que toda
+    // creación es, por definición, un evento de catálogo/tarifas.
+    try {
+      await registrarBitacora({
+        idUsuario: req.staffUser!.idUsuario,
+        accion: 'Examen creado en catálogo',
+        modulo: 'catalogo',
+        severidad: 'info',
+        valorNuevo: `${examenCreado.nombre_examen} (precio: ${examenCreado.precio})`
+      });
+    } catch (err) {
+      console.error('No se pudo registrar la creación del examen en la bitácora de auditoría:', err);
+    }
+
+    return res.status(201).json(examenCreado);
   } catch (err: any) {
     if (err.code === '23505') { // unique_violation (codigo_examen)
       return res.status(409).json({ error: `El código de examen "${codigo}" ya existe en el catálogo.` });
@@ -203,7 +223,27 @@ examenesRouter.patch('/:id', asyncHandler(async (req, res) => {
       params
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Examen no encontrado.' });
-    return res.json(rows[0]);
+    const examenActualizado = rows[0];
+
+    // Bitácora REAL -solo cuando el PATCH toca precio (ya revalidado arriba
+    // con catalogo_tarifas_editar): un cambio de tarifa es el evento de
+    // catálogo con mayor impacto de negocio (afecta total_cobrado de toda
+    // orden nueva), a diferencia de un cambio de nombre/categoría/estado.
+    if (tocaPrecio) {
+      try {
+        await registrarBitacora({
+          idUsuario: req.staffUser!.idUsuario,
+          accion: 'Precio de examen modificado',
+          modulo: 'catalogo',
+          severidad: 'warning',
+          valorNuevo: `${examenActualizado.nombre_examen}: ${examenActualizado.precio}`
+        });
+      } catch (err) {
+        console.error('No se pudo registrar el cambio de precio en la bitácora de auditoría:', err);
+      }
+    }
+
+    return res.json(examenActualizado);
   } catch (err: any) {
     if (err.code === '23505') {
       return res.status(409).json({ error: `El código de examen "${codigo}" ya existe en el catálogo.` });

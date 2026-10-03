@@ -31,6 +31,29 @@ import { hashPassword, verifyPassword } from '../password';
 import { createSession, revokeSession, createLoginTicket, verifyLoginTicket, verifySessionToken } from '../session';
 import { generateTotpSecret, totpAuthUri, verifyTotpToken, isTotpMandatoryForRole } from '../totp';
 import { encryptSecret, decryptSecret } from '../crypto-aes';
+import { registrarBitacora } from '../bitacora';
+
+/**
+ * Registra el inicio de sesión exitoso en la bitácora REAL
+ * (historial_auditoria, vía registrarBitacora() — ver server/bitacora.ts).
+ * Efecto secundario de "best effort": si la escritura de auditoría falla
+ * (ej. la base de datos está momentáneamente ocupada), NUNCA debe tumbar
+ * el login en sí -ya se emitió la sesión, es demasiado tarde para fallar
+ * la petición completa por un problema de bitácora-.
+ */
+async function registrarLoginExitoso(idUsuario: number, rol: string, detalleExtra?: string): Promise<void> {
+  try {
+    await registrarBitacora({
+      idUsuario,
+      accion: 'Inicio de sesión exitoso',
+      modulo: 'autenticacion',
+      severidad: 'info',
+      detalles: `Rol: ${rol}${detalleExtra ? ` (${detalleExtra})` : ''}`
+    });
+  } catch (err) {
+    console.error('No se pudo registrar el inicio de sesión en la bitácora de auditoría:', err);
+  }
+}
 
 export const authRouter = Router();
 
@@ -71,6 +94,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     mustChangePassword: usuario.must_change_password,
     userAgent: req.headers['user-agent'] || null
   });
+  await registrarLoginExitoso(usuario.id_usuario, usuario.rol);
   return res.json({
     requiresTotp: false,
     token,
@@ -116,6 +140,7 @@ authRouter.post('/verify-totp', asyncHandler(async (req, res) => {
     mustChangePassword: usuario.must_change_password,
     userAgent: req.headers['user-agent'] || null
   });
+  await registrarLoginExitoso(usuario.id_usuario, usuario.rol, 'segundo factor verificado');
   return res.json({
     token,
     mustChangePassword: usuario.must_change_password,

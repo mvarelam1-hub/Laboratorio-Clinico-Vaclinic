@@ -74,12 +74,18 @@ describe('POST /api/auth/login', () => {
     });
     queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO sesion_personal
 
+    queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO historial_auditoria (bitácora, migración 0011/convergencia)
+
     const app = await buildApp();
     const res = await request(app).post('/api/auth/login').send({ correo: 'demo@vaclinic.test', contrasena: 'Demo12345!' });
 
     expect(res.status).toBe(200);
     expect(res.body.requiresTotp).toBe(false);
     expect(res.body.token.startsWith('vc1.')).toBe(true);
+    const [sqlBitacora, paramsBitacora] = queryMock.mock.calls[2];
+    expect(sqlBitacora).toMatch(/INSERT INTO historial_auditoria/);
+    expect(paramsBitacora[0]).toBe(1);
+    expect(paramsBitacora[2]).toBe('autenticacion');
   });
 
   it('con TOTP habilitado, NO emite sesión: devuelve requiresTotp + loginTicket', async () => {
@@ -154,12 +160,15 @@ describe('POST /api/auth/verify-totp', () => {
       }]
     });
     queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO sesion_personal
+    queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO historial_auditoria (bitácora)
 
     const app = await buildApp();
     const res = await request(app).post('/api/auth/verify-totp').send({ loginTicket, code: generateTotpToken(secret) });
 
     expect(res.status).toBe(200);
     expect(res.body.token.startsWith('vc1.')).toBe(true);
+    const [sqlBitacora] = queryMock.mock.calls[2];
+    expect(sqlBitacora).toMatch(/INSERT INTO historial_auditoria/);
   });
 
   it('con un código TOTP incorrecto responde 401', async () => {

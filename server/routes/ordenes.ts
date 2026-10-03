@@ -3,6 +3,7 @@ import { pool } from '../db';
 import { requireStaffAuth } from '../auth-staff';
 import { requirePermission } from '../permissions-middleware';
 import { asyncHandler } from '../asyncHandler';
+import { registrarBitacora } from '../bitacora';
 
 export const ordenesRouter = Router();
 ordenesRouter.use(requireStaffAuth);
@@ -349,5 +350,28 @@ ordenesRouter.patch('/:id', requirePermission('admision_crear_ordenes'), asyncHa
     params
   );
   if (rows.length === 0) return res.status(404).json({ error: 'Orden no encontrada o eliminada.' });
+
+  // Bitácora REAL (historial_auditoria) -efecto secundario "best effort" de
+  // una acción ya autorizada por requirePermission('admision_crear_ordenes')
+  // de arriba, nunca un endpoint de bitácora expuesto directamente (ver el
+  // comentario de diseño en server/bitacora.ts). Solo se registra cuando el
+  // PATCH toca banderas de riesgo/autorización biométrica -el resto de
+  // campos (estado_flujo, metodoPago, etc.) son operativos de rutina, no
+  // eventos de seguridad.
+  if (biometriaAutorizada !== undefined || esAltoRiesgo !== undefined) {
+    try {
+      await registrarBitacora({
+        idUsuario: req.staffUser!.idUsuario,
+        accion: 'Actualización de riesgo/autorización biométrica en orden',
+        modulo: 'seguridad',
+        severidad: (rows[0].es_alto_riesgo || rows[0].biometria_autorizada) ? 'warning' : 'info',
+        detalles: `Orden ${rows[0].numero_orden}`,
+        valorNuevo: `esAltoRiesgo=${rows[0].es_alto_riesgo}, biometriaAutorizada=${rows[0].biometria_autorizada}`
+      });
+    } catch (err) {
+      console.error('No se pudo registrar la actualización biométrica en la bitácora de auditoría:', err);
+    }
+  }
+
   return res.json(rows[0]);
 }));

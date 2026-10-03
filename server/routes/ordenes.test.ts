@@ -410,6 +410,28 @@ describe('PATCH /api/ordenes/:id — edición general (migración 0016)', () => 
     expect(res.status).toBe(403);
   });
 
+  it('registra en la bitácora real (historial_auditoria) cuando el PATCH toca biometriaAutorizada/esAltoRiesgo', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ id_orden: 1, numero_orden: 'ORD-1', es_alto_riesgo: true, biometria_autorizada: true }]
+    });
+    queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO historial_auditoria
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/1').send({ biometriaAutorizada: true, esAltoRiesgo: true });
+    expect(res.status).toBe(200);
+    const [sqlBitacora, paramsBitacora] = queryMock.mock.calls[1];
+    expect(sqlBitacora).toMatch(/INSERT INTO historial_auditoria/);
+    expect(paramsBitacora[2]).toBe('seguridad');
+    expect(paramsBitacora[3]).toBe('warning');
+  });
+
+  it('NO toca la bitácora cuando el PATCH no incluye campos de riesgo/biometría', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id_orden: 1, numero_orden: 'ORD-1', estado_flujo: 'En Proceso' }] });
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/1').send({ status: 'En Proceso' });
+    expect(res.status).toBe(200);
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
   it('no intercepta /archivar-varias, /restaurar-varias ni /eliminar-varias (orden de registro de rutas)', async () => {
     // Esta prueba existe porque PATCH /:id se registró DELIBERADAMENTE al
     // final del router — de haberse registrado antes, estas tres rutas de

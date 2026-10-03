@@ -79,6 +79,7 @@ describe('POST /api/examenes (migración 0017)', () => {
     queryMock.mockResolvedValueOnce({
       rows: [{ id_examen: 50, codigo_examen: 'NEW-01', nombre_examen: 'Prueba Nueva', precio: 75, estado: 'Activo' }]
     });
+    queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO historial_auditoria (bitácora)
     const app = await buildApp();
     const res = await request(app).post('/api/examenes').send({
       codigo: 'NEW-01',
@@ -97,6 +98,9 @@ describe('POST /api/examenes (migración 0017)', () => {
     const datosAdicionales = JSON.parse(params[15]);
     expect(datosAdicionales.description).toBe('Una prueba de ejemplo');
     expect(datosAdicionales.referenceRange).toBe('10-20');
+    const [sqlBitacora, paramsBitacora] = queryMock.mock.calls[1];
+    expect(sqlBitacora).toMatch(/INSERT INTO historial_auditoria/);
+    expect(paramsBitacora[2]).toBe('catalogo');
   });
 
   it('rechaza con 403 a un rol sin catalogo_tarifas_editar (recepcionista)', async () => {
@@ -136,6 +140,7 @@ describe('PATCH /api/examenes/:id (migración 0017)', () => {
   it('actualiza columnas reales y fusiona datos_adicionales con || cuando el rol tiene catalogo_tarifas_editar (precio)', async () => {
     currentStaffUser = { idUsuario: 7, roleId: 'administrador_ti', status: 'activo', nombreCompleto: 'Admin Demo' };
     queryMock.mockResolvedValueOnce({ rows: [{ id_examen: 1, precio: 99.5, nombre_examen: 'Glucosa' }] });
+    queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO historial_auditoria (bitácora, cambio de precio)
     const app = await buildApp();
     const res = await request(app).patch('/api/examenes/1').send({ precio: 99.5, description: 'Actualizada' });
     expect(res.status).toBe(200);
@@ -145,6 +150,9 @@ describe('PATCH /api/examenes/:id (migración 0017)', () => {
     expect(sql).toMatch(/datos_adicionales = datos_adicionales \|\|/);
     expect(sql).toMatch(/fecha_actualizacion = NOW\(\)/);
     expect(params).toContain(99.5);
+    const [sqlBitacora, paramsBitacora] = queryMock.mock.calls[1];
+    expect(sqlBitacora).toMatch(/INSERT INTO historial_auditoria/);
+    expect(paramsBitacora[3]).toBe('warning');
   });
 
   it('rechaza con 403 cuando se intenta cambiar precio sin catalogo_tarifas_editar (bioanalista_senior solo tiene rangos)', async () => {

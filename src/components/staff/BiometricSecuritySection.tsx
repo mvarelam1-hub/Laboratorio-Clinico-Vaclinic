@@ -91,6 +91,7 @@ export const BiometricSecuritySection: React.FC = () => {
       userRole: currentStaffUser?.roleName || 'Director Técnico',
       action: 'Registro de Huella Dactilar WebAuthn',
       module: 'seguridad',
+      severity: 'info',
       details: `Huella dactilar (${newCred.fingerLabel} - ${newCred.name}) registrada exitosamente mediante WebAuthn FIDO2 para ${updatedUser.fullName}.`
     });
 
@@ -114,6 +115,7 @@ export const BiometricSecuritySection: React.FC = () => {
         userRole: currentStaffUser?.roleName || 'Director Técnico',
         action: 'Revocación de Huella Dactilar',
         module: 'seguridad',
+        severity: 'warning',
         details: `Credencial biométrica revocada para ${user.fullName}.`
       });
 
@@ -190,6 +192,7 @@ export const BiometricSecuritySection: React.FC = () => {
       userRole: authResult.userRole,
       action: 'Autorización Biométrica de Orden',
       module: 'seguridad',
+      severity: 'warning',
       details: `Orden ${orderId} autorizada con método ${authResult.method} (ID Credencial: ${authResult.credentialId}).`
     });
 
@@ -209,6 +212,7 @@ export const BiometricSecuritySection: React.FC = () => {
         userRole: currentStaffUser?.roleName || 'Usuario',
         action: 'Revocación de Sello Biométrico',
         module: 'seguridad',
+        severity: 'warning',
         details: `Sello biométrico revocado para orden ${order.orderNumber}.`
       });
 
@@ -848,6 +852,7 @@ export const BiometricSecuritySection: React.FC = () => {
               userRole: verifyModalUser.roleName,
               action: 'Prueba de Verificación WebAuthn',
               module: 'seguridad',
+              severity: 'info',
               details: `Desafío WebAuthn superado con éxito (${(result.confidenceScore * 100).toFixed(1)}% de coincidencia).`
             });
             showNotification(`¡Identidad biométrica dactilar verificada con éxito para ${verifyModalUser.fullName}!`, 'success');
