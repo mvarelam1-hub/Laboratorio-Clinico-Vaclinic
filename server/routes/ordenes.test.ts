@@ -271,6 +271,41 @@ describe('GET /api/ordenes (listado) y GET /api/ordenes/:id (detalle)', () => {
     expect(res.status).toBe(200);
     expect(queryMock.mock.calls[0][0]).toMatch(/vw_ordenes_pendientes_validacion/);
   });
+
+  // Fase 5 (sincronización real): el listado ahora trae todo lo necesario
+  // para reconstruir una orden completa en el frontend sin llamadas
+  // adicionales (ver ClinicContext.tsx `syncOrdersFromServer`) — antes solo
+  // traía id/numero/nombre del paciente, insuficiente para hidratar
+  // testsList, codigoConsulta, reportStatus, contacto del paciente, etc.
+  it('el listado incluye dni/teléfono/correo del paciente, código de consulta, estado del informe y el detalle de exámenes agregado', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{
+        id_orden: 1,
+        numero_orden: 'ORD-1',
+        paciente_nombre: 'María López',
+        paciente_dni: '1234567890101',
+        paciente_telefono: '+50212345678',
+        paciente_correo: 'maria@example.com',
+        codigo_consulta: 'ABC123',
+        informe_estado: 'revision',
+        examenes: [{ idDetalle: 10, idExamen: 2, codigoExamen: 'PAN-01', nombreExamen: 'Perfil Lipídico' }]
+      }]
+    });
+    const app = await buildApp();
+    const res = await request(app).get('/api/ordenes');
+    expect(res.status).toBe(200);
+    expect(res.body[0].paciente_dni).toBe('1234567890101');
+    expect(res.body[0].codigo_consulta).toBe('ABC123');
+    expect(res.body[0].informe_estado).toBe('revision');
+    expect(res.body[0].examenes).toHaveLength(1);
+    expect(res.body[0].examenes[0].nombreExamen).toBe('Perfil Lipídico');
+    // La consulta debe apoyarse en detalle_orden/examen, codigo_consulta e
+    // informe_clinico para poder devolver esos campos.
+    const sql = queryMock.mock.calls[0][0];
+    expect(sql).toMatch(/detalle_orden/);
+    expect(sql).toMatch(/codigo_consulta/);
+    expect(sql).toMatch(/informe_clinico/);
+  });
 });
 
 describe('Ciclo de vida de la orden: archivar / restaurar / eliminar (migración 0013)', () => {

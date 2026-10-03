@@ -168,6 +168,52 @@ export async function restaurarVariasDesdeLaPapeleraRemoto(idsOrdenes: number[])
 }
 
 /**
+ * Listado general de órdenes (server/routes/ordenes.ts, GET /). Contraparte
+ * de la hidratación que faltaba: ANTES ningún componente llamaba a esta
+ * ruta y `orders` en ClinicContext.tsx solo existía en memoria del
+ * navegador que creó/editó cada orden -una orden creada en otra
+ * computadora era invisible hasta que algo la tocara localmente-. Ver
+ * ClinicContext.tsx `syncOrdersFromServer` para cómo se usa esto: reconcilia
+ * las órdenes ya presentes localmente (por remoteId) y agrega como nuevas
+ * las que existen en el servidor pero nunca llegaron a esta copia local.
+ */
+export interface OrdenListaApiRow {
+  id_orden: number;
+  numero_orden: string;
+  fecha_registro: string;
+  estado: string;
+  estado_flujo: 'Pendiente' | 'En Proceso' | 'Listo' | 'Entregado';
+  total_cobrado: string | number;
+  sede: string | null;
+  archivada: boolean;
+  fecha_archivo: string | null;
+  id_carpeta: number | null;
+  prioridad: 'rutina' | 'urgente' | 'stat_panico';
+  metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro' | 'por_cobrar' | null;
+  saldo_pendiente: string | number | null;
+  promo_aplicada: string | null;
+  sede_cama: string | null;
+  es_alto_riesgo: boolean;
+  biometria_autorizada: boolean;
+  datos_biometricos: Record<string, unknown> | null;
+  id_paciente: number;
+  paciente_nombre: string;
+  paciente_dni: string | null;
+  paciente_telefono: string | null;
+  paciente_correo: string | null;
+  codigo_consulta: string | null;
+  informe_estado: 'borrador' | 'revision' | 'publicado' | 'entregado' | null;
+  examenes: Array<{ idDetalle: number; idExamen: number; codigoExamen: string | null; nombreExamen: string }>;
+  [key: string]: unknown;
+}
+
+export async function obtenerOrdenesRemotas(limite = 500): Promise<OrdenListaApiRow[]> {
+  const res = await authFetch(`/api/ordenes?limite=${limite}`);
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+/**
  * Edición general de la orden (server/routes/ordenes.ts, migración 0016,
  * PATCH /api/ordenes/:id): estado operativo (status), prioridad, método de
  * pago, saldo pendiente, promoción, cama/sede y autorización biométrica.

@@ -86,6 +86,7 @@ import {
   obtenerPapeleraRemota,
   restaurarDesdeLaPapeleraRemota,
   restaurarVariasDesdeLaPapeleraRemoto,
+  obtenerOrdenesRemotas,
   OrdenesApiError
 } from '../services/ordenesApiService';
 import {
@@ -1262,13 +1263,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
    * realmente eliminadas (GET /api/ordenes/papelera) y corrige los
    * metadatos locales (quién la eliminó, cuándo, por qué) con el dato real
    * de Postgres en vez del que se guardó de forma optimista en el momento
-   * del clic. Nota de alcance: `orders` no tiene todavía una carga completa
-   * desde el backend al iniciar sesión (solo se crea/actualiza contra la
-   * API, ver addOrder/updateOrder más arriba), así que esto solo corrige
-   * las órdenes que YA están en el arreglo local -no reconstruye desde cero
-   * una orden eliminada en otra sesión/navegador que nunca llegó a esta
-   * copia local-. Deliberadamente no bloqueante: si falla, la Papelera
-   * simplemente sigue mostrando lo último que se marcó localmente.
+   * del clic. Esta corrección solo toca órdenes que YA están en el arreglo
+   * local; `syncOrdersFromServer` (justo abajo) es quien además agrega las
+   * que faltan por completo -incluida una eliminada en otra sesión/
+   * navegador que nunca llegó aquí-. Deliberadamente no bloqueante: si
+   * falla, la Papelera simplemente sigue mostrando lo último que se marcó
+   * localmente.
    */
   useEffect(() => {
     const syncPapelera = async () => {
@@ -1293,6 +1293,139 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
     syncPapelera();
+  }, [isEffectiveOnline]);
+
+  /**
+   * Fase 5 (sincronización real de órdenes): convierte una fila de
+   * GET /api/ordenes (ver OrdenListaApiRow en ordenesApiService.ts) en un
+   * LabOrder completo, para las órdenes que existen en Postgres pero nunca
+   * llegaron a esta copia local (creadas desde otra computadora/navegador).
+   * Los campos que ese listado no puede dar todavía quedan con un valor
+   * neutro razonable en vez de undefined: reportStatus se deriva del
+   * estado del informe más reciente si existe (o "Sin Informe" si no hay
+   * ninguno); patientCode queda vacío a propósito porque la propia UI ya
+   * cae de vuelta al DNI cuando falta (ver OrdersMasterManager.tsx, columna
+   * de paciente).
+   */
+  const mapOrdenApiRowToLabOrder = (
+    fila: Awaited<ReturnType<typeof obtenerOrdenesRemotas>>[number],
+    seqNumber: number
+  ): LabOrder => {
+    const fecha = new Date(fila.fecha_registro);
+    const fechaValida = !isNaN(fecha.getTime());
+    const examenes = Array.isArray(fila.examenes) ? fila.examenes : [];
+    const estadoInformeToReportStatus: Record<string, LabOrder['reportStatus']> = {
+      borrador: 'Borrador',
+      revision: 'En Revisión',
+      publicado: 'Validado',
+      entregado: 'Validado'
+    };
+    return {
+      id: `ord-${fila.id_orden}`,
+      remoteId: fila.id_orden,
+      seqNumber,
+      orderNumber: fila.numero_orden,
+      patientId: String(fila.id_paciente),
+      patientName: fila.paciente_nombre,
+      patientCode: '',
+      nationalId: fila.paciente_dni || '',
+      phone: fila.paciente_telefono || undefined,
+      email: fila.paciente_correo || undefined,
+      date: fechaValida ? fecha.toISOString().slice(0, 10) : '',
+      time: fechaValida ? fecha.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' }) : undefined,
+      createdAt: fechaValida ? fecha.toISOString() : undefined,
+      year: fechaValida ? fecha.getFullYear() : new Date().getFullYear(),
+      month: fechaValida ? fecha.getMonth() + 1 : new Date().getMonth() + 1,
+      testsCount: examenes.length,
+      testsList: examenes.map(e => e.nombreExamen).filter(Boolean),
+      totalPrice: `Q${Number(fila.total_cobrado || 0).toFixed(2)}`,
+      status: fila.estado_flujo || 'Pendiente',
+      reportStatus: (fila.informe_estado && estadoInformeToReportStatus[fila.informe_estado]) || 'Sin Informe',
+      isArchived: !!fila.archivada,
+      archivedAt: fila.fecha_archivo || undefined,
+      isDeleted: false,
+      folderId: fila.id_carpeta != null ? String(fila.id_carpeta) : undefined,
+      priority: fila.prioridad || 'rutina',
+      paymentMethod: fila.metodo_pago || undefined,
+      pendingBalance: fila.saldo_pendiente != null ? Number(fila.saldo_pendiente) : undefined,
+      appliedPromo: fila.promo_aplicada || undefined,
+      bedRoom: fila.sede_cama || undefined,
+      isHighRisk: !!fila.es_alto_riesgo,
+      biometricAuthorized: !!fila.biometria_autorizada,
+      biometricAuthData: (fila.datos_biometricos as LabOrder['biometricAuthData']) || undefined,
+      codigoConsulta: fila.codigo_consulta || undefined,
+      examCodes: examenes.map(e => e.codigoExamen).filter((c): c is string => !!c),
+      detalleRemoto: examenes.map(e => ({ idDetalle: e.idDetalle, idExamen: e.idExamen, codigoExamen: e.codigoExamen }))
+    };
+  };
+
+  /**
+   * Fase 5 (sincronización real de órdenes): ANTES, `orders` nunca se
+   * hidrataba desde el backend al cargar la página -solo se creaba/
+   * actualizaba contra la API desde addOrder/updateOrder más arriba-, así
+   * que una orden creada en otra computadora o navegador era invisible en
+   * esta copia local hasta que alguien la tocara aquí mismo. Esto es un
+   * problema real con pacientes reales y varias estaciones de trabajo
+   * (recepción, laboratorio, archivo) usando el sistema a la vez. AHORA, al
+   * iniciar sesión (y cada vez que se recupera la conexión), se trae el
+   * listado real de Postgres (GET /api/ordenes) y:
+   *   1. Para las órdenes que YA existen localmente (match por remoteId),
+   *      sincroniza los campos mutables que vienen del servidor (estado,
+   *      archivado, prioridad, pago, saldo, promoción, cama, biometría,
+   *      código de consulta) sin pisar datos locales que ese listado no
+   *      puede dar (p. ej. notes, tubeBarcodes).
+   *   2. Para las órdenes que existen en el servidor pero NUNCA llegaron a
+   *      esta copia local, las reconstruye por completo con
+   *      `mapOrdenApiRowToLabOrder` y las agrega -esto es lo que resuelve
+   *      la brecha real de sincronización-.
+   * No bloqueante: si falla, el usuario sigue viendo lo que ya tenía en
+   * memoria/localStorage, igual que antes de este cambio.
+   */
+  useEffect(() => {
+    const syncOrdersFromServer = async () => {
+      if (!isEffectiveOnline || !getStaffSessionToken()) return;
+      try {
+        const filas = await obtenerOrdenesRemotas();
+        if (filas.length === 0) return;
+        setOrders(prev => {
+          const filasPorRemoteId = new Map(filas.map(f => [f.id_orden, f]));
+          const maxSeqLocal = prev.reduce((max, o) => Math.max(max, o.seqNumber || 0), 198);
+          let siguienteSeq = maxSeqLocal + 1;
+
+          const actualizadas = prev.map(o => {
+            const fila = o.remoteId ? filasPorRemoteId.get(o.remoteId) : undefined;
+            if (!fila) return o;
+            return {
+              ...o,
+              status: fila.estado_flujo || o.status,
+              isArchived: !!fila.archivada,
+              archivedAt: fila.fecha_archivo || o.archivedAt,
+              priority: fila.prioridad || o.priority,
+              paymentMethod: fila.metodo_pago || o.paymentMethod,
+              pendingBalance: fila.saldo_pendiente != null ? Number(fila.saldo_pendiente) : o.pendingBalance,
+              appliedPromo: fila.promo_aplicada || o.appliedPromo,
+              bedRoom: fila.sede_cama || o.bedRoom,
+              isHighRisk: fila.es_alto_riesgo != null ? !!fila.es_alto_riesgo : o.isHighRisk,
+              biometricAuthorized: fila.biometria_autorizada != null ? !!fila.biometria_autorizada : o.biometricAuthorized,
+              codigoConsulta: fila.codigo_consulta || o.codigoConsulta
+            };
+          });
+
+          const remoteIdsLocales = new Set(prev.filter(o => o.remoteId != null).map(o => o.remoteId));
+          const nuevas: LabOrder[] = [];
+          for (const fila of filas) {
+            if (remoteIdsLocales.has(fila.id_orden)) continue;
+            nuevas.push(mapOrdenApiRowToLabOrder(fila, siguienteSeq));
+            siguienteSeq += 1;
+          }
+          if (nuevas.length === 0) return actualizadas;
+          return [...nuevas, ...actualizadas];
+        });
+      } catch (error) {
+        console.error('Error fetching orders list from backend:', error);
+      }
+    };
+    syncOrdersFromServer();
   }, [isEffectiveOnline]);
 
   const queuePendingAction = (actionData: Omit<OfflinePendingAction, 'id' | 'timestamp' | 'status' | 'retryCount'>): OfflinePendingAction => {

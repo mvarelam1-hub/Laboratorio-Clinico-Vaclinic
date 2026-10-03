@@ -112,6 +112,23 @@ ordenesRouter.post('/', requirePermission('admision_crear_ordenes'), asyncHandle
 // pareciendo definitivo desde la UI, igual que antes de esta migración-,
 // pero el registro permanece en la base de datos para auditoría y se puede
 // seguir consultando por id (GET /:id más abajo, que no filtra por esto).
+//
+// ANTES: ningún componente del frontend llamaba a esta ruta -`orders` en
+// ClinicContext.tsx solo se poblaba al crear/editar una orden en esa misma
+// sesión del navegador (addOrder/updateOrder), nunca se hidrataba desde
+// Postgres al cargar la página-, así que una orden creada en otra
+// computadora o navegador era invisible hasta que alguien la tocara
+// localmente. AHORA: el SELECT trae todo lo necesario para reconstruir un
+// LabOrder completo sin round-trips adicionales (ver
+// ClinicContext.tsx `syncOrdersFromServer` y
+// ordenesApiService.ts `obtenerOrdenesRemotas`):
+//   - dni/teléfono/correo del paciente (antes solo se traía el nombre)
+//   - el código de consulta pública (tabla codigo_consulta)
+//   - el estado del informe clínico más reciente de la orden (si existe),
+//     para poder derivar `reportStatus` sin una segunda llamada
+//   - el detalle de exámenes de la orden (detalle_orden + examen) como un
+//     arreglo JSON agregado, para poder reconstruir testsList/testsCount/
+//     detalleRemoto/examCodes
 ordenesRouter.get('/', asyncHandler(async (req, res) => {
   const limite = Math.min(Number(req.query.limite) || 100, 500);
   const { rows } = await pool.query(
@@ -119,9 +136,29 @@ ordenesRouter.get('/', asyncHandler(async (req, res) => {
             o.archivada, o.fecha_archivo, o.id_carpeta,
             o.prioridad, o.estado_flujo, o.metodo_pago, o.saldo_pendiente, o.promo_aplicada,
             o.sede_cama, o.es_alto_riesgo, o.biometria_autorizada, o.datos_biometricos,
-            p.id_paciente, p.nombre_completo AS paciente_nombre
+            p.id_paciente, p.nombre_completo AS paciente_nombre, p.dni AS paciente_dni,
+            p.telefono_whatsapp AS paciente_telefono, p.correo AS paciente_correo,
+            cc.codigo AS codigo_consulta,
+            ic.estado AS informe_estado,
+            COALESCE(
+              (SELECT json_agg(json_build_object(
+                 'idDetalle', d.id_detalle, 'idExamen', d.id_examen,
+                 'codigoExamen', e.codigo_examen, 'nombreExamen', e.nombre_examen
+               ) ORDER BY d.id_detalle)
+               FROM detalle_orden d
+               JOIN examen e ON e.id_examen = d.id_examen
+               WHERE d.id_orden = o.id_orden),
+              '[]'::json
+            ) AS examenes
      FROM orden o
      JOIN paciente p ON p.id_paciente = o.id_paciente
+     LEFT JOIN codigo_consulta cc ON cc.id_orden = o.id_orden
+     LEFT JOIN LATERAL (
+       SELECT estado FROM informe_clinico ic2
+       WHERE ic2.id_orden = o.id_orden
+       ORDER BY ic2.fecha_creacion DESC
+       LIMIT 1
+     ) ic ON true
      WHERE o.eliminada = FALSE
      ORDER BY o.fecha_registro DESC
      LIMIT $1`,
