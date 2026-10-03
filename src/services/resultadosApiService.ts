@@ -12,7 +12,7 @@
  * separación de roles de captura/validación/publicación que exige la tesis.
  */
 
-import { getFirebaseAuth } from './firebaseConfig';
+import { getStaffSessionToken } from './staffSessionToken';
 
 export class ResultadosApiError extends Error {
   constructor(message: string, public status?: number) {
@@ -22,16 +22,15 @@ export class ResultadosApiError extends Error {
 }
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) {
-    throw new ResultadosApiError('No hay una sesión de personal activa (Firebase) para llamar a la API.');
+  const token = getStaffSessionToken();
+  if (!token) {
+    throw new ResultadosApiError('No hay una sesión de personal activa para llamar a la API.');
   }
-  const idToken = await user.getIdToken();
   return fetch(path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${idToken}`,
+      Authorization: `Bearer ${token}`,
       ...(options.headers || {})
     }
   });

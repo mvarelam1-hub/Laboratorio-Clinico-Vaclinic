@@ -11,7 +11,7 @@
  * (que sigue leyendo del catálogo local, ya rico y ya usado en producción).
  */
 
-import { getFirebaseAuth } from './firebaseConfig';
+import { getStaffSessionToken } from './staffSessionToken';
 
 export class ExamenesApiError extends Error {
   constructor(message: string, public status?: number) {
@@ -30,12 +30,11 @@ export interface ExamenApiRow {
 }
 
 async function authFetch(path: string): Promise<Response> {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) {
-    throw new ExamenesApiError('No hay una sesión de personal activa (Firebase) para llamar a la API.');
+  const token = getStaffSessionToken();
+  if (!token) {
+    throw new ExamenesApiError('No hay una sesión de personal activa para llamar a la API.');
   }
-  const idToken = await user.getIdToken();
-  return fetch(path, { headers: { Authorization: `Bearer ${idToken}` } });
+  return fetch(path, { headers: { Authorization: `Bearer ${token}` } });
 }
 
 let cacheCodigoAId: Map<string, number> | null = null;

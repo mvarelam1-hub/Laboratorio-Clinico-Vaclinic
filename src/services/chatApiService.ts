@@ -9,7 +9,7 @@
  * funciones no aceptan ni envían un "senderId": no tendría ningún efecto
  * y sería engañoso simularlo aquí.
  */
-import { getFirebaseAuth } from './firebaseConfig';
+import { getStaffSessionToken } from './staffSessionToken';
 
 export class ChatApiError extends Error {
   constructor(message: string, public status?: number) {
@@ -19,14 +19,13 @@ export class ChatApiError extends Error {
 }
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) {
-    throw new ChatApiError('No hay una sesión de personal activa (Firebase) para llamar a la API.');
+  const token = getStaffSessionToken();
+  if (!token) {
+    throw new ChatApiError('No hay una sesión de personal activa para llamar a la API.');
   }
-  const idToken = await user.getIdToken();
   return fetch(path, {
     ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}`, ...(options.headers || {}) }
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(options.headers || {}) }
   });
 }
 

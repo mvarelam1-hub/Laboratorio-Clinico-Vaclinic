@@ -15,7 +15,7 @@
  * ClinicContext.tsx junto a `addPatient`/`updatePatient`.
  */
 
-import { getFirebaseAuth } from './firebaseConfig';
+import { getStaffSessionToken } from './staffSessionToken';
 import { Patient } from '../types';
 
 export class PacientesApiError extends Error {
@@ -26,16 +26,15 @@ export class PacientesApiError extends Error {
 }
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) {
-    throw new PacientesApiError('No hay una sesión de personal activa (Firebase) para llamar a la API.');
+  const token = getStaffSessionToken();
+  if (!token) {
+    throw new PacientesApiError('No hay una sesión de personal activa para llamar a la API.');
   }
-  const idToken = await user.getIdToken();
   return fetch(path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${idToken}`,
+      Authorization: `Bearer ${token}`,
       ...(options.headers || {})
     }
   });

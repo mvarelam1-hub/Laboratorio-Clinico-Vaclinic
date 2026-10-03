@@ -397,7 +397,16 @@ const LAST_BACKUP_TIME_STORAGE_KEY = 'vaclinic_last_backup_time_v1';
 // guardaba su propia sesión internamente vía el SDK): el token firmado que
 // emite POST /api/auth/login o /api/auth/verify-totp (ver
 // server/session.ts) se guarda aquí para sobrevivir un refresh de página.
-export const STAFF_SESSION_TOKEN_STORAGE_KEY = 'vaclinic_session_token';
+// La constante vive en services/staffSessionToken.ts (no aquí) y se
+// re-exporta con el mismo nombre para no romper a quien ya la importaba
+// desde este archivo (StaffLoginView.tsx, TotpEnrollmentSection.tsx,
+// ForcedPasswordChangeView.tsx) — así los *ApiService.ts de services/
+// pueden leer la misma clave sin crear un import circular con este archivo.
+// (import + export, no solo re-export: este archivo también usa el
+// nombre localmente más abajo, y un `export {...} from` no lo trae al
+// alcance local, solo lo reenvía a quien importe desde aquí.)
+import { STAFF_SESSION_TOKEN_STORAGE_KEY } from '../services/staffSessionToken';
+export { STAFF_SESSION_TOKEN_STORAGE_KEY };
 
 export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Etapa 3 (seguridad): antes 'personal' + `true` por defecto significaba

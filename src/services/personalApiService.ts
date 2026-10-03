@@ -4,7 +4,7 @@
  * tabla real `usuario` (ver nota de alcance en personal.ts sobre el
  * colapso de UserStatus a un booleano y sobre `firebaseUid`).
  */
-import { getFirebaseAuth } from './firebaseConfig';
+import { getStaffSessionToken } from './staffSessionToken';
 import type { LabStaffRole, UserStatus } from '../types';
 
 export class PersonalApiError extends Error {
@@ -15,14 +15,13 @@ export class PersonalApiError extends Error {
 }
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) {
-    throw new PersonalApiError('No hay una sesión de personal activa (Firebase) para llamar a la API.');
+  const token = getStaffSessionToken();
+  if (!token) {
+    throw new PersonalApiError('No hay una sesión de personal activa para llamar a la API.');
   }
-  const idToken = await user.getIdToken();
   return fetch(path, {
     ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}`, ...(options.headers || {}) }
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(options.headers || {}) }
   });
 }
 

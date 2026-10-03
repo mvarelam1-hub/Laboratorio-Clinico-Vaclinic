@@ -6,7 +6,7 @@
  * (TEXT PRIMARY KEY, generado siempre por el frontend), así que
  * `guardarPlantillaRemota` es un upsert real por ese mismo id.
  */
-import { getFirebaseAuth } from './firebaseConfig';
+import { getStaffSessionToken } from './staffSessionToken';
 import type { ReportTemplate } from '../types';
 
 export class PlantillasApiError extends Error {
@@ -17,14 +17,13 @@ export class PlantillasApiError extends Error {
 }
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) {
-    throw new PlantillasApiError('No hay una sesión de personal activa (Firebase) para llamar a la API.');
+  const token = getStaffSessionToken();
+  if (!token) {
+    throw new PlantillasApiError('No hay una sesión de personal activa para llamar a la API.');
   }
-  const idToken = await user.getIdToken();
   return fetch(path, {
     ...options,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}`, ...(options.headers || {}) }
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(options.headers || {}) }
   });
 }
 

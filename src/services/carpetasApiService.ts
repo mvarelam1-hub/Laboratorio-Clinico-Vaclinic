@@ -3,7 +3,7 @@
  * primer módulo de los 9 que hasta esta migración solo existían en
  * localStorage (ver db/migrations/0011_modulos_restantes.sql).
  */
-import { getFirebaseAuth } from './firebaseConfig';
+import { getStaffSessionToken } from './staffSessionToken';
 
 export class CarpetasApiError extends Error {
   constructor(message: string, public status?: number) {
@@ -13,16 +13,15 @@ export class CarpetasApiError extends Error {
 }
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) {
-    throw new CarpetasApiError('No hay una sesión de personal activa (Firebase) para llamar a la API.');
+  const token = getStaffSessionToken();
+  if (!token) {
+    throw new CarpetasApiError('No hay una sesión de personal activa para llamar a la API.');
   }
-  const idToken = await user.getIdToken();
   return fetch(path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${idToken}`,
+      Authorization: `Bearer ${token}`,
       ...(options.headers || {})
     }
   });

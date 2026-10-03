@@ -6,7 +6,7 @@
  * para el mismo patrón aplicado a pacientes.
  */
 
-import { getFirebaseAuth } from './firebaseConfig';
+import { getStaffSessionToken } from './staffSessionToken';
 
 export class OrdenesApiError extends Error {
   constructor(message: string, public status?: number) {
@@ -33,14 +33,13 @@ export interface OrdenApiResult {
 }
 
 export async function createOrdenRemote(idPaciente: number, examenesIds: number[]): Promise<OrdenApiResult> {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) {
-    throw new OrdenesApiError('No hay una sesión de personal activa (Firebase) para llamar a la API.');
+  const token = getStaffSessionToken();
+  if (!token) {
+    throw new OrdenesApiError('No hay una sesión de personal activa para llamar a la API.');
   }
-  const idToken = await user.getIdToken();
   const res = await fetch('/api/ordenes', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ idPaciente, examenesIds })
   });
   if (!res.ok) {
