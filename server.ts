@@ -35,12 +35,6 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "10mb" }));
 const PORT = 3000;
 
-// Etapa 3: API real de negocio (pacientes, órdenes, resultados, auditoría,
-// portal del paciente) con autenticación Firebase y permisos por rol
-// verificados en el servidor. Antes de esto, server.ts solo tenía
-// endpoints de IA y de mensajería — cero endpoints de negocio.
-app.use("/api", apiRouter);
-
 // Initialize Gemini Client
 const getGenAI = () => {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -1156,6 +1150,26 @@ Devuelve ESTRICTAMENTE un JSON con esta estructura exacta. Responde ÚNICAMENTE 
     res.status(500).json({ error: error.message || "Error al auditar plantilla con estándares internacionales" });
   }
 });
+
+// Etapa 3: API real de negocio (pacientes, órdenes, resultados, auditoría,
+// portal del paciente) con autenticación propia de personal y permisos por
+// rol verificados en el servidor (ver server/auth-staff.ts).
+//
+// Hallazgo real de producción (post-fusión #2, feature/auth-propio-sin-firebase):
+// este montaje vivía ANTES de las rutas /api/health, /api/notifications/* y
+// /api/ai/* de abajo. Como Express prueba app.use()/app.VERB() en el orden
+// en que se registran (nunca por especificidad), toda petición a esas rutas
+// pasaba primero por apiRouter — y, desde que routes/index.ts ganó el
+// middleware global `apiRouter.use(requireStaffAuth, ...)` (para
+// mustChangePassword/TOTP obligatorio), cualquier petición SIN sesión de
+// personal (como el propio chequeo de salud de Render, o de este mismo
+// pipeline de CI) se cortaba ahí con 401 antes de llegar siquiera a
+// app.get("/api/health", ...). Nunca fue un problema de rendimiento ni de
+// Vite en modo desarrollo (como se sospechó primero al ver fallar el CI) —
+// era este orden de montaje. Se corrige moviendo apiRouter hasta DESPUÉS de
+// las rutas públicas/de infraestructura de abajo, para que Express las
+// intente primero; apiRouter sigue intentándose antes del catch-all SPA.
+app.use("/api", apiRouter);
 
 // Middleware de error para /api/*: cualquier error que llegue aquí vía
 // next(err) (por ejemplo, desde asyncHandler) se responde con 500 sin
