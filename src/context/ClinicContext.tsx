@@ -79,6 +79,13 @@ import {
   OrdenesApiError
 } from '../services/ordenesApiService';
 import {
+  crearInformeRemoto,
+  actualizarInformeRemoto,
+  publicarInformeRemoto,
+  eliminarInformeRemoto,
+  InformesApiError
+} from '../services/informesApiService';
+import {
   crearResultadoRemoto,
   validarResultadoRemoto,
   publicarResultadoRemoto,
@@ -201,7 +208,7 @@ interface ClinicContextType {
   addSampleTransfer: (transferData: Omit<SampleTransferManifest, 'id' | 'manifestCode'>) => Promise<SampleTransferManifest>;
   addReport: (report: Omit<MedicalReport, 'id' | 'reportNumber' | 'qrVerificationCode'>) => Promise<MedicalReport>;
   updateReport: (id: string, updates: Partial<MedicalReport>) => Promise<void>;
-  deleteReport: (id: string) => void;
+  deleteReport: (id: string, motivo?: string) => Promise<void>;
   publishReport: (
     id: string,
     doctorName?: string,
@@ -1908,7 +1915,22 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Intenta crear en el backend real (Borrador) los resultados que se
     // puedan enlazar con la orden de origen (ver syncCapturaResultados).
     const resultadosRemotos = await syncCapturaResultados(draftReport);
-    const newReport: MedicalReport = resultadosRemotos ? { ...draftReport, resultadosRemotos } : draftReport;
+    let newReport: MedicalReport = resultadosRemotos ? { ...draftReport, resultadosRemotos } : draftReport;
+
+    // Crea el documento del informe en sí (migración 0014, informe_clinico)
+    // -antes de esto solo los valores por examen (arriba) llegaban al
+    // backend real, nunca el título/hallazgos/conclusiones/QR del informe.
+    if (isEffectiveOnline) {
+      try {
+        const idOrdenRemoto = newReport.orderId ? orders.find(o => o.id === newReport.orderId)?.remoteId ?? null : null;
+        const creado = await crearInformeRemoto(newReport, idOrdenRemoto);
+        newReport = { ...newReport, remoteId: creado.id_informe };
+      } catch (err) {
+        const mensaje = err instanceof InformesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo crear el informe en el servidor:', err);
+        showNotification(`No se pudo registrar el informe en el servidor (${mensaje}). Se guardó solo localmente.`, 'warning');
+      }
+    }
 
     setReports((prev) => [newReport, ...prev]);
 
@@ -1957,6 +1979,22 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const resultadosRemotos = merged ? await syncCapturaResultados(merged) : undefined;
     const finalUpdates: Partial<MedicalReport> = resultadosRemotos ? { ...updates, resultadosRemotos } : updates;
 
+    // Sincroniza el documento del informe (título/hallazgos/conclusiones/
+    // etc., migración 0014) solo si ya existe de verdad en el backend
+    // (remoteId) -igual que updateReagent/updateOrder: si la orden
+    // asociada tiene remoteId, se lo manda también para mantener el
+    // enlace id_orden al día.
+    if (isEffectiveOnline && existente?.remoteId) {
+      try {
+        const idOrdenRemoto = merged?.orderId ? orders.find(o => o.id === merged.orderId)?.remoteId ?? null : null;
+        await actualizarInformeRemoto(existente.remoteId, finalUpdates, idOrdenRemoto);
+      } catch (err) {
+        const mensaje = err instanceof InformesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo actualizar el informe en el servidor:', err);
+        showNotification(`No se pudo sincronizar el informe con el servidor (${mensaje}). Se actualizó solo localmente.`, 'warning');
+      }
+    }
+
     setReports((prev) =>
       prev.map((r) => {
         if (r.id === id) {
@@ -1999,7 +2037,24 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const deleteReport = (id: string) => {
+  /**
+   * ANTES: borrado físico local únicamente, sin ninguna llamada al backend
+   * -ni siquiera del lado de los resultados ya sincronizados-. AHORA: si el
+   * informe tiene remoteId, se elimina lógicamente vía DELETE
+   * /api/informes/:id (migración 0014, marca `eliminado`, nunca borra la
+   * fila), mismo patrón de resiliencia que deleteOrder.
+   */
+  const deleteReport = async (id: string, motivo?: string): Promise<void> => {
+    const target = reports.find((r) => r.id === id);
+    if (isEffectiveOnline && target?.remoteId) {
+      try {
+        await eliminarInformeRemoto(target.remoteId, motivo);
+      } catch (err) {
+        const mensaje = err instanceof InformesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo eliminar el informe en el servidor:', err);
+        showNotification(`No se pudo eliminar el informe en el servidor (${mensaje}). Se eliminó solo localmente.`, 'warning');
+      }
+    }
     setReports((prev) => prev.filter((r) => r.id !== id));
     showNotification('Informe eliminado', 'info');
   };
@@ -2014,6 +2069,16 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     bioanalystLicense = 'Col. Bioanálisis #4192 / MSPAS-8812'
   ): Promise<void> => {
     const hash = '0x' + Array.from({ length: 24 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    const signature: NonNullable<MedicalReport['signature']> = {
+      doctorName,
+      doctorSpecialty,
+      doctorLicense,
+      bioanalystName,
+      bioanalystSpecialty,
+      bioanalystLicense,
+      signedAt: new Date().toISOString(),
+      validationHash: hash
+    };
 
     // Esta es la única acción real de "publicar" (también se invoca
     // directamente desde StaffDashboard.tsx) — aquí, y solo aquí, se
@@ -2049,6 +2114,22 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
 
+    // Publica el DOCUMENTO del informe en sí (migración 0014,
+    // informe_clinico): lo anterior solo publicaba cada `resultado`
+    // individual, nunca el informe (título/hallazgos/conclusiones/firma)
+    // que los agrupa. Mismo honesto-si-falla que el bloque de arriba: un
+    // 403 (sin 'validacion_publicacion') se avisa pero no bloquea la vista
+    // local.
+    if (isEffectiveOnline && objetivo?.remoteId) {
+      try {
+        await publicarInformeRemoto(objetivo.remoteId, signature);
+      } catch (err) {
+        const mensaje = err instanceof InformesApiError ? err.message : 'Error de red desconocido.';
+        console.error('[ClinicContext] No se pudo publicar el informe en el servidor:', err);
+        showNotification(`No se pudo publicar el informe en el servidor (${mensaje}). Quedó "publicado" solo en esta pantalla.`, 'warning');
+      }
+    }
+
     let publishedRep: MedicalReport | null = null;
 
     setReports((prev) =>
@@ -2058,16 +2139,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             ...r,
             status: 'publicado',
             emissionDate: new Date().toISOString(),
-            signature: {
-              doctorName,
-              doctorSpecialty,
-              doctorLicense,
-              bioanalystName,
-              bioanalystSpecialty,
-              bioanalystLicense,
-              signedAt: new Date().toISOString(),
-              validationHash: hash
-            }
+            signature
           };
           return publishedRep;
         }

@@ -18,6 +18,7 @@ import { rolesRouter } from './roles';
 import { reactivosRouter } from './reactivos';
 import { plantillasRouter } from './plantillas';
 import { chatRouter } from './chat';
+import { informesRouter } from './informes';
 
 export const apiRouter = Router();
 
@@ -82,3 +83,4 @@ apiRouter.use('/roles', rolesRouter);
 apiRouter.use('/reactivos', reactivosRouter);
 apiRouter.use('/plantillas', plantillasRouter);
 apiRouter.use('/chat', chatRouter);
+apiRouter.use('/informes', informesRouter);

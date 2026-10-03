@@ -290,6 +290,10 @@ export interface MedicalReport {
   // (PATCH) en sincronizaciones posteriores. Rellenado por
   // ClinicContext.tsx `addReport`/`updateReport`.
   resultadosRemotos?: Record<string, number>;
+  // id_informe real de Postgres (server/routes/informes.ts, migración 0014)
+  // -misma convención que LabOrder.remoteId/ReagentInventoryItem.remoteId:
+  // presente solo si el informe llegó a crearse de verdad en el backend.
+  remoteId?: number;
 }
 
 export interface ReportTemplate {
