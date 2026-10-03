@@ -1,5 +1,19 @@
 # Etapa 3 — Backend de seguridad (VACLINIC)
 
+> **Nota (revisión de Fase 0 / Estabilización):** este documento es la
+> bitácora histórica de la Etapa 3, cuando el login de personal todavía
+> usaba Firebase Authentication (`server/auth-firebase.ts`,
+> `FIREBASE_ADMIN_CREDENTIALS_JSON`, `DEV_AUTH_BYPASS_UID`). Esa
+> autenticación fue **reemplazada por completo** en una etapa posterior por
+> `server/auth-staff.ts` + `server/routes/auth.ts` (contraseña propia con
+> scrypt, sesiones propias, TOTP) — ver `server/password.ts`,
+> `server/session.ts`, `server/totp.ts`, `server/crypto-aes.ts`. Las
+> variables reales hoy son `SESSION_SECRET`, `BACKUP_ENCRYPTION_KEY` y
+> `DEV_AUTH_BYPASS_ID_USUARIO` (ver `.env.example` y `README.md`, que están
+> al día). El contenido de abajo se conserva sin reescribir como registro
+> histórico de lo que se hizo y se probó en su momento; no lo sigas para
+> configurar el proyecto hoy.
+
 Este paquete agrega el backend que faltaba (Etapa 2) y las correcciones de seguridad
 de la Etapa 3, **probadas con peticiones HTTP reales**, no solo escritas.
 

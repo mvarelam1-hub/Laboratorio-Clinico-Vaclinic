@@ -13,7 +13,7 @@ Aseguramiento de la Calidad de Software (ACS) como aplicación bajo prueba
 
 ```bash
 npm install
-cp .env.example .env.local   # completar DATABASE_URL, FIREBASE_ADMIN_CREDENTIALS_JSON, PORTAL_TOKEN_SECRET
+cp .env.example .env.local   # completar DATABASE_URL, SESSION_SECRET, PORTAL_TOKEN_SECRET, BACKUP_ENCRYPTION_KEY
 ```
 
 Aplicar las migraciones contra una base PostgreSQL (con `DATABASE_URL` en el entorno):

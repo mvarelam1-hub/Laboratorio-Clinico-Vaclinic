@@ -33,7 +33,13 @@ app.disable("x-powered-by");
 // mismo hallazgo, no como "ya resuelto".
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "10mb" }));
-const PORT = 3000;
+// Antes: hardcodeado a 3000 sin leer el entorno en absoluto — PORT en
+// .env.example/.env.local no tenía ningún efecto real (hallazgo de Fase 0 /
+// Estabilización, confirmado arrancando el servidor con PORT distinto).
+// Ahora: configurable vía process.env.PORT, con el mismo valor por defecto
+// (3000) que ya usa producción, así que esto no cambia el puerto real en
+// Render a menos que se defina PORT explícitamente ahí.
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 // Initialize Gemini Client
 const getGenAI = () => {
