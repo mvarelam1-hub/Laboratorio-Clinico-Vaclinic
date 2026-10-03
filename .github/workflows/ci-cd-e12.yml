@@ -93,7 +93,6 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/vaclinic_ci
       PGSSLMODE: disable
       PORTAL_TOKEN_SECRET: clave-larga-de-prueba-para-ci-1234567890abcdef
-      DEV_AUTH_BYPASS_UID: ci-test-uid
       NODE_ENV: development
     steps:
       - name: Checkout del código
@@ -112,8 +111,36 @@ jobs:
         run: npm run migrate -- --seed
 
       - name: Mapear un usuario semilla al bypass de autenticación de CI
+        # Hallazgo real (run #12, commit 9a714b3): esta variable seguía llamándose
+        # DEV_AUTH_BYPASS_UID (de la era Firebase, donde el bypass se mapeaba a una
+        # cadena `uid`) y el paso anterior hacía `UPDATE usuario SET uid = ...`, pero
+        # server/auth-staff.ts (la autenticación propia que reemplazó a Firebase,
+        # PR #2) ya no lee `uid` en absoluto: exige `DEV_AUTH_BYPASS_ID_USUARIO` con
+        # el id_usuario NUMÉRICO (clave primaria) de un usuario sembrado. Al no
+        # existir esa variable, el bypass nunca aplicaba y toda petición con
+        # "Authorization: Bearer DEV_BYPASS" cortaba con 401 — exactamente lo que
+        # reprodujeron TC-08 y TC-10 en el run #12. Como id_usuario es un serial
+        # (no se conoce de antemano), se consulta aquí y se exporta a GITHUB_ENV
+        # para que esté disponible en los pasos siguientes del mismo job.
+        #
+        # Segundo hallazgo (verificado localmente antes de este commit, ver
+        # server/auth-staff.ts): una vez corregido lo anterior, TC-08 (whoami)
+        # ya pasaba, pero TC-10 (crear orden) seguía fallando — ya no con 401,
+        # sino con 403 TOTP_SETUP_REQUIRED. director_laboratorio exige TOTP
+        # obligatorio (server/totp.ts::MANDATORY_TOTP_ROLES) y el seed de
+        # 0099_seed_demo_ficticio.sql no trae totp_enabled=TRUE para esta
+        # cuenta demo (correcto para un alta real: el director debe enrolarse
+        # la primera vez). Para la suite de CI, que ejerce rutas de negocio ya
+        # autenticadas y no el flujo de enrolamiento de TOTP en sí, se marca
+        # aquí ese usuario de prueba como ya enrolado — equivalente a un
+        # director que ya completó su alta de TOTP antes de este caso de uso.
         run: |
-          psql "$DATABASE_URL" -c "UPDATE usuario SET uid = 'ci-test-uid' WHERE rol = 'director_laboratorio';"
+          ID_USUARIO=$(psql "$DATABASE_URL" -t -A -c "SELECT id_usuario FROM usuario WHERE rol = 'director_laboratorio' LIMIT 1;")
+          if [ -z "$ID_USUARIO" ]; then
+            echo "No se encontró ningún usuario semilla con rol director_laboratorio."; exit 1
+          fi
+          psql "$DATABASE_URL" -c "UPDATE usuario SET totp_enabled = TRUE WHERE id_usuario = $ID_USUARIO;"
+          echo "DEV_AUTH_BYPASS_ID_USUARIO=$ID_USUARIO" >> "$GITHUB_ENV"
 
       - name: Build
         run: npm run build
