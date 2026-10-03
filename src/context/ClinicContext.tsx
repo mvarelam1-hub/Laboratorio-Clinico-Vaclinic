@@ -76,6 +76,7 @@ import {
   archivarVariasOrdenesRemoto,
   restaurarVariasOrdenesRemoto,
   eliminarVariasOrdenesRemoto,
+  actualizarOrdenRemota,
   OrdenesApiError
 } from '../services/ordenesApiService';
 import {
@@ -323,7 +324,7 @@ interface ClinicContextType {
   orders: LabOrder[];
   orderFolders: OrderFolder[];
   addOrder: (order: Omit<LabOrder, 'id' | 'seqNumber'>) => Promise<LabOrder>;
-  updateOrder: (id: string, updates: Partial<LabOrder>) => void;
+  updateOrder: (id: string, updates: Partial<LabOrder>) => Promise<void>;
   deleteOrder: (id: string, motivo?: string) => Promise<void>;
   archiveOrder: (id: string) => Promise<void>;
   restoreOrder: (id: string) => Promise<void>;
@@ -426,7 +427,7 @@ const LAST_BACKUP_TIME_STORAGE_KEY = 'vaclinic_last_backup_time_v1';
 // (import + export, no solo re-export: este archivo también usa el
 // nombre localmente más abajo, y un `export {...} from` no lo trae al
 // alcance local, solo lo reenvía a quien importe desde aquí.)
-import { STAFF_SESSION_TOKEN_STORAGE_KEY } from '../services/staffSessionToken';
+import { STAFF_SESSION_TOKEN_STORAGE_KEY, getStaffSessionToken } from '../services/staffSessionToken';
 export { STAFF_SESSION_TOKEN_STORAGE_KEY };
 
 export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -2999,7 +3000,15 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             `Estos exámenes todavía no existen en el catálogo real del servidor: ${noEncontrados.join(', ')}.`
           );
         }
-        const resultado = await createOrdenRemote(idPacienteRemoto, ids);
+        const resultado = await createOrdenRemote(idPacienteRemoto, ids, {
+          prioridad: orderData.priority,
+          metodoPago: orderData.paymentMethod,
+          promoAplicada: orderData.appliedPromo,
+          sedeCama: orderData.bedRoom,
+          esAltoRiesgo: orderData.isHighRisk,
+          biometriaAutorizada: orderData.biometricAuthorized,
+          datosBiometricos: orderData.biometricAuthData
+        });
         const newOrder: LabOrder = {
           ...orderData,
           id: `ord-${resultado.id_orden}`,
@@ -3062,7 +3071,21 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
    * correspondencia arriesgaría grabar un estado clínico incorrecto en la
    * base de datos real; queda pendiente junto con esas columnas.
    */
-  const updateOrder = (id: string, updates: Partial<LabOrder>) => {
+  /**
+   * ANTES (Fase 1 - Persistencia, hasta la migración 0013): 100% local a
+   * propósito -el comentario original explicaba que el `status` operativo
+   * del frontend no correspondía al `estado` administrativo de la tabla
+   * `orden`, y que prioridad/pago/biometría ni siquiera existían como
+   * columnas-. AHORA (migración 0016): `estado_flujo` se agregó como
+   * columna separada exactamente para `status`, y el resto de columnas ya
+   * existen, así que se sincroniza con el mismo patrón de resiliencia que
+   * archiveOrder/deleteOrder -aplica localmente siempre, además llama al
+   * backend si la orden tiene remoteId y hay conexión, avisando pero sin
+   * bloquear si esa llamada falla-.
+   */
+  const updateOrder = async (id: string, updates: Partial<LabOrder>): Promise<void> => {
+    const target = orders.find(o => o.id === id);
+
     setOrders(prev => prev.map(o => {
       if (o.id === id) {
         const updated = { ...o, ...updates };
@@ -3107,6 +3130,30 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         description: `Actualización de orden ID ${id}`,
         payload: updates
       });
+      return;
+    }
+
+    if (target?.remoteId) {
+      const remoteUpdates: Record<string, unknown> = {};
+      if (updates.status !== undefined) remoteUpdates.status = updates.status;
+      if (updates.priority !== undefined) remoteUpdates.prioridad = updates.priority;
+      if (updates.paymentMethod !== undefined) remoteUpdates.metodoPago = updates.paymentMethod;
+      if (updates.pendingBalance !== undefined) remoteUpdates.saldoPendiente = updates.pendingBalance;
+      if (updates.appliedPromo !== undefined) remoteUpdates.promoAplicada = updates.appliedPromo;
+      if (updates.bedRoom !== undefined) remoteUpdates.sedeCama = updates.bedRoom;
+      if (updates.isHighRisk !== undefined) remoteUpdates.esAltoRiesgo = updates.isHighRisk;
+      if (updates.biometricAuthorized !== undefined) remoteUpdates.biometriaAutorizada = updates.biometricAuthorized;
+      if (updates.biometricAuthData !== undefined) remoteUpdates.datosBiometricos = updates.biometricAuthData;
+
+      if (Object.keys(remoteUpdates).length > 0) {
+        try {
+          await actualizarOrdenRemota(target.remoteId, remoteUpdates);
+        } catch (err) {
+          const mensaje = err instanceof OrdenesApiError ? err.message : 'Error de red desconocido.';
+          console.error('[ClinicContext] No se pudo actualizar la orden en el servidor:', err);
+          showNotification(`No se pudo sincronizar la actualización con el servidor (${mensaje}). Se aplicó solo localmente.`, 'warning');
+        }
+      }
     }
   };
 

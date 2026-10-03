@@ -7,41 +7,75 @@ import { asyncHandler } from '../asyncHandler';
 export const ordenesRouter = Router();
 ordenesRouter.use(requireStaffAuth);
 
+const PRIORIDADES_VALIDAS = ['rutina', 'urgente', 'stat_panico'];
+const METODOS_PAGO_VALIDOS = ['efectivo', 'tarjeta', 'transferencia', 'seguro', 'por_cobrar'];
+const ESTADOS_FLUJO_VALIDOS = ['Pendiente', 'En Proceso', 'Listo', 'Entregado'];
+
 ordenesRouter.post('/', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
-  const { idPaciente, examenesIds } = req.body || {};
+  const {
+    idPaciente, examenesIds,
+    // Metadata de pago/prioridad/biometría (migración 0016) — opcionales,
+    // todas tienen default en la propia tabla si no se envían.
+    prioridad, metodoPago, promoAplicada, sedeCama,
+    esAltoRiesgo, biometriaAutorizada, datosBiometricos
+  } = req.body || {};
   if (!idPaciente || !Array.isArray(examenesIds) || examenesIds.length === 0) {
     return res.status(400).json({ error: 'idPaciente y examenesIds (arreglo no vacío) son obligatorios.' });
+  }
+  if (prioridad !== undefined && !PRIORIDADES_VALIDAS.includes(prioridad)) {
+    return res.status(400).json({ error: `prioridad inválida. Valores permitidos: ${PRIORIDADES_VALIDAS.join(', ')}.` });
+  }
+  if (metodoPago !== undefined && metodoPago !== null && !METODOS_PAGO_VALIDOS.includes(metodoPago)) {
+    return res.status(400).json({ error: `metodoPago inválido. Valores permitidos: ${METODOS_PAGO_VALIDOS.join(', ')}.` });
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const numeroOrden = `ORD-${Date.now()}`;
-    const { rows: ordenRows } = await client.query(
-      `INSERT INTO orden (numero_orden, id_paciente, id_recepcionista, estado)
-       VALUES ($1, $2, $3, 'Registrada') RETURNING id_orden, numero_orden`,
-      [numeroOrden, idPaciente, req.staffUser!.idUsuario]
-    );
-    const idOrden = ordenRows[0].id_orden;
 
     // Se acumulan las filas de detalle_orden creadas (con su codigo_examen)
     // para devolverlas en la respuesta: el frontend las necesita para poder
     // enlazar después cada parámetro de un informe (por examCode) con el
     // id_detalle_orden exacto que exige POST /api/resultados (ver
     // ClinicContext.tsx `addOrder`/`addReport` y src/types.ts `LabOrder.detalleRemoto`).
-    const detalleCreado: Array<{ idDetalle: number; idExamen: number; codigoExamen: string | null }> = [];
+    // Se resuelven los precios ANTES del INSERT de `orden` para poder fijar
+    // total_cobrado de una vez (antes quedaba siempre en 0, el default de
+    // la columna — ninguna ruta lo escribía nunca).
+    const examenesResueltos: Array<{ idExamen: number; precio: number; codigoExamen: string | null }> = [];
     for (const idExamen of examenesIds) {
       const { rows: examRows } = await client.query('SELECT precio, codigo_examen FROM examen WHERE id_examen = $1', [idExamen]);
       if (examRows.length === 0) throw new Error(`Examen ${idExamen} no existe en el catálogo.`);
+      examenesResueltos.push({ idExamen, precio: Number(examRows[0].precio) || 0, codigoExamen: examRows[0].codigo_examen ?? null });
+    }
+    const totalCobrado = examenesResueltos.reduce((sum, e) => sum + e.precio, 0);
+
+    const { rows: ordenRows } = await client.query(
+      `INSERT INTO orden (
+         numero_orden, id_paciente, id_recepcionista, estado, total_cobrado,
+         prioridad, metodo_pago, saldo_pendiente, promo_aplicada, sede_cama,
+         es_alto_riesgo, biometria_autorizada, datos_biometricos
+       )
+       VALUES ($1, $2, $3, 'Registrada', $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
+       RETURNING id_orden, numero_orden`,
+      [
+        numeroOrden, idPaciente, req.staffUser!.idUsuario, totalCobrado,
+        prioridad || 'rutina', metodoPago || null,
+        metodoPago === 'por_cobrar' ? totalCobrado : 0,
+        promoAplicada || null, sedeCama || null,
+        esAltoRiesgo === true, biometriaAutorizada === true,
+        datosBiometricos ? JSON.stringify(datosBiometricos) : null
+      ]
+    );
+    const idOrden = ordenRows[0].id_orden;
+
+    const detalleCreado: Array<{ idDetalle: number; idExamen: number; codigoExamen: string | null }> = [];
+    for (const e of examenesResueltos) {
       const { rows: detalleRows } = await client.query(
         `INSERT INTO detalle_orden (id_orden, id_examen, precio_unitario) VALUES ($1, $2, $3) RETURNING id_detalle`,
-        [idOrden, idExamen, examRows[0].precio]
+        [idOrden, e.idExamen, e.precio]
       );
-      detalleCreado.push({
-        idDetalle: detalleRows[0].id_detalle,
-        idExamen,
-        codigoExamen: examRows[0].codigo_examen ?? null
-      });
+      detalleCreado.push({ idDetalle: detalleRows[0].id_detalle, idExamen: e.idExamen, codigoExamen: e.codigoExamen });
     }
 
     // Genera el código único de consulta pública de esta orden (único
@@ -82,6 +116,8 @@ ordenesRouter.get('/', asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT o.id_orden, o.numero_orden, o.fecha_registro, o.estado, o.total_cobrado, o.sede,
             o.archivada, o.fecha_archivo, o.id_carpeta,
+            o.prioridad, o.estado_flujo, o.metodo_pago, o.saldo_pendiente, o.promo_aplicada,
+            o.sede_cama, o.es_alto_riesgo, o.biometria_autorizada, o.datos_biometricos,
             p.id_paciente, p.nombre_completo AS paciente_nombre
      FROM orden o
      JOIN paciente p ON p.id_paciente = o.id_paciente
@@ -144,23 +180,19 @@ ordenesRouter.get('/:id', asyncHandler(async (req, res) => {
 // responsable; "eliminar" NUNCA borra la fila, solo la marca
 // `eliminada = TRUE` (eliminación lógica, informe técnico sección 4.3).
 //
-// updateOrder (edición general de campos como estado/sede/prioridad)
-// queda deliberadamente fuera de esta migración: el `estado` del
-// frontend (Pendiente/En Proceso/Listo/Entregado) no corresponde al
-// `estado` real de la tabla orden (Registrada/En proceso/Completada/
-// Cancelada, ver migración 0002), y columnas como prioridad, método de
-// pago o datos biométricos todavía no existen en `orden` -mapearlas
-// sin definir antes esa correspondencia arriesgaría introducir un
-// estado clínico incorrecto. Queda pendiente junto con el resto de
-// columnas de pago/prioridad/biometría ya señaladas como brecha en
-// esta fase.
-//
 // Se reutiliza el permiso 'admision_crear_ordenes' (igual que
 // carpetas.ts para mover/eliminar carpetas): no existe en el catálogo
 // un permiso más específico para archivar/eliminar órdenes, y crear uno
 // nuevo implicaría tocar el catálogo de roles/permisos (src/shared/
 // permissions.ts) y la migración de rol_permiso_default, fuera del
 // alcance de esta pieza.
+//
+// updateOrder (edición general: estado operativo/prioridad/pago/
+// biometría) SÍ se implementa, más abajo (PATCH /:id) -resuelto en la
+// migración 0016 agregando `estado_flujo` como columna separada de
+// `estado` (ver esa migración para el porqué de NO reutilizar `estado`:
+// son dos vocabularios distintos que no corresponden 1:1, y mezclarlos
+// habría arriesgado una transición clínica incorrecta).
 
 ordenesRouter.patch('/:id/archivar', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
   const idOrden = Number(req.params.id);
@@ -242,4 +274,80 @@ ordenesRouter.patch('/eliminar-varias', requirePermission('admision_crear_ordene
     [req.staffUser!.idUsuario, (motivo && String(motivo).trim()) || null, idsOrdenes.map(Number)]
   );
   return res.json({ ok: true, actualizadas: rowCount });
+}));
+
+/**
+ * PATCH /api/ordenes/:id — edición general de la orden (migración 0016):
+ * estado operativo (estado_flujo), prioridad, método de pago, saldo
+ * pendiente, promoción aplicada, cama/sede física, y la autorización
+ * biométrica de alto riesgo. Mismo patrón que informes.ts: solo
+ * actualiza las columnas presentes en el body, nunca pisa las demás.
+ *
+ * Registrada DELIBERADAMENTE al final del router -después de
+ * /archivar-varias, /restaurar-varias y /eliminar-varias- porque
+ * Express resuelve rutas en orden de registro y '/:id' coincide con
+ * cualquier segmento único: de ir antes, una petición a
+ * PATCH /archivar-varias habría caído aquí tratando "archivar-varias"
+ * como un id numérico inválido, nunca llegando a su ruta real.
+ *
+ * `datosBiometricos` se reemplaza entero si se envía (no es un merge
+ * JSONB parcial como datos_json de informe_clinico) — es el registro de
+ * auditoría de un único evento de autorización, no una estructura que se
+ * vaya completando con PATCHes sucesivos.
+ */
+ordenesRouter.patch('/:id', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const idOrden = Number(req.params.id);
+  const {
+    status, prioridad, metodoPago, saldoPendiente, promoAplicada, sedeCama,
+    esAltoRiesgo, biometriaAutorizada, datosBiometricos, sede
+  } = req.body || {};
+
+  if (status !== undefined && !ESTADOS_FLUJO_VALIDOS.includes(status)) {
+    return res.status(400).json({ error: `status inválido. Valores permitidos: ${ESTADOS_FLUJO_VALIDOS.join(', ')}.` });
+  }
+  if (prioridad !== undefined && !PRIORIDADES_VALIDAS.includes(prioridad)) {
+    return res.status(400).json({ error: `prioridad inválida. Valores permitidos: ${PRIORIDADES_VALIDAS.join(', ')}.` });
+  }
+  if (metodoPago !== undefined && metodoPago !== null && !METODOS_PAGO_VALIDOS.includes(metodoPago)) {
+    return res.status(400).json({ error: `metodoPago inválido. Valores permitidos: ${METODOS_PAGO_VALIDOS.join(', ')}.` });
+  }
+
+  const clauses: string[] = [];
+  const params: any[] = [];
+  let i = 1;
+
+  const addClause = (column: string, value: any, isJsonb = false) => {
+    clauses.push(`${column} = $${i}${isJsonb ? '::jsonb' : ''}`);
+    params.push(isJsonb ? JSON.stringify(value) : value);
+    i++;
+  };
+
+  if (status !== undefined) addClause('estado_flujo', status);
+  if (prioridad !== undefined) addClause('prioridad', prioridad);
+  if (metodoPago !== undefined) addClause('metodo_pago', metodoPago);
+  if (saldoPendiente !== undefined) addClause('saldo_pendiente', saldoPendiente);
+  if (promoAplicada !== undefined) addClause('promo_aplicada', promoAplicada);
+  if (sedeCama !== undefined) addClause('sede_cama', sedeCama);
+  if (sede !== undefined) addClause('sede', sede);
+  if (esAltoRiesgo !== undefined) addClause('es_alto_riesgo', esAltoRiesgo === true);
+  if (biometriaAutorizada !== undefined) addClause('biometria_autorizada', biometriaAutorizada === true);
+  if (datosBiometricos !== undefined) addClause('datos_biometricos', datosBiometricos, true);
+
+  if (clauses.length === 0) {
+    return res.status(400).json({ error: 'No se recibió ningún campo para actualizar.' });
+  }
+  if (!Number.isFinite(idOrden)) {
+    return res.status(404).json({ error: 'Orden no encontrada.' });
+  }
+
+  params.push(idOrden);
+  const { rows } = await pool.query(
+    `UPDATE orden SET ${clauses.join(', ')}
+     WHERE id_orden = $${i} AND eliminada = FALSE
+     RETURNING id_orden, numero_orden, estado_flujo, prioridad, metodo_pago, saldo_pendiente,
+               promo_aplicada, sede_cama, sede, es_alto_riesgo, biometria_autorizada, datos_biometricos`,
+    params
+  );
+  if (rows.length === 0) return res.status(404).json({ error: 'Orden no encontrada o eliminada.' });
+  return res.json(rows[0]);
 }));

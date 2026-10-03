@@ -162,8 +162,17 @@ function aBodyApi(settings: Partial<LabSettings>): Record<string, unknown> {
  * Convierte ConfigLabRow (backend) a LabSettings (frontend).
  * Reconstruye datos_adicionales desde JSONB.
  */
-function fromDbRow(row: ConfigLabRow): LabSettings {
-  const datosAdicionales = (row.datos_adicionales as any) || {};
+function fromDbRow(rowInput: ConfigLabRow): LabSettings {
+  // El resto de columnas reales de configuracion_laboratorio (nit_ruc,
+  // registro_sanitario, colores, tamaño_papel, etc.) no están declaradas
+  // una a una en ConfigLabRow -solo las 5 que el propio servicio ya
+  // necesita tipadas arriba-, así que llegan por el índice `[key: string]:
+  // unknown` de esa interfaz. Se castea una sola vez aquí (en vez de un
+  // `as any` por cada campo abajo) porque esta función SOLO lee: son
+  // valores crudos de fila de Postgres, no hay nada que el tipado de
+  // escritura deba proteger en este sentido.
+  const row = rowInput as any;
+  const datosAdicionales = row.datos_adicionales || {};
 
   return {
     // Columnas reales

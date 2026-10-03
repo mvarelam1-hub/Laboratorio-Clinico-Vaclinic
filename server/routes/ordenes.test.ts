@@ -155,6 +155,84 @@ describe('POST /api/ordenes (partición de equivalencia)', () => {
   });
 });
 
+describe('POST /api/ordenes — metadata de pago/prioridad/biometría (migración 0016)', () => {
+  it('calcula total_cobrado como la suma de los precios de los exámenes y guarda la metadata recibida', async () => {
+    const app = await buildApp();
+    const dbModule: any = await import('../db');
+    dbModule.pool.connect.mockImplementation(async () => {
+      lastClient = { query: vi.fn(), release: vi.fn() };
+      programClient(lastClient);
+      return lastClient;
+    });
+
+    const res = await request(app).post('/api/ordenes').send({
+      idPaciente: 1,
+      examenesIds: [1, 2], // precios 45.0 + 120.5 = 165.5
+      prioridad: 'urgente',
+      metodoPago: 'tarjeta',
+      sedeCama: 'Hab. 204',
+      esAltoRiesgo: true,
+      biometriaAutorizada: true,
+      datosBiometricos: { method: 'fingerprint', authorizedBy: 'Dra. Pérez', staffRole: 'bioanalista_senior', timestamp: '2026-01-01T10:00:00Z' }
+    });
+
+    expect(res.status).toBe(201);
+    const insertCall = lastClient!.query.mock.calls.find((c: any) => String(c[0]).includes('INSERT INTO orden'));
+    expect(insertCall).toBeDefined();
+    const [, params] = insertCall;
+    // numeroOrden, idPaciente, idRecepcionista, totalCobrado, prioridad, metodoPago, saldoPendiente, promoAplicada, sedeCama, esAltoRiesgo, biometriaAutorizada, datosBiometricos
+    expect(params[3]).toBe(165.5); // total_cobrado
+    expect(params[4]).toBe('urgente'); // prioridad
+    expect(params[5]).toBe('tarjeta'); // metodo_pago
+    expect(params[8]).toBe('Hab. 204'); // sede_cama
+    expect(params[9]).toBe(true); // es_alto_riesgo
+    expect(params[10]).toBe(true); // biometria_autorizada
+    expect(JSON.parse(params[11]).method).toBe('fingerprint');
+  });
+
+  it('usa prioridad "rutina" por defecto cuando no se envía', async () => {
+    const app = await buildApp();
+    const dbModule: any = await import('../db');
+    dbModule.pool.connect.mockImplementation(async () => {
+      lastClient = { query: vi.fn(), release: vi.fn() };
+      programClient(lastClient);
+      return lastClient;
+    });
+    const res = await request(app).post('/api/ordenes').send({ idPaciente: 1, examenesIds: [1] });
+    expect(res.status).toBe(201);
+    const insertCall = lastClient!.query.mock.calls.find((c: any) => String(c[0]).includes('INSERT INTO orden'));
+    expect(insertCall[1][4]).toBe('rutina');
+  });
+
+  it('fija saldo_pendiente = total_cobrado cuando metodoPago es "por_cobrar"', async () => {
+    const app = await buildApp();
+    const dbModule: any = await import('../db');
+    dbModule.pool.connect.mockImplementation(async () => {
+      lastClient = { query: vi.fn(), release: vi.fn() };
+      programClient(lastClient);
+      return lastClient;
+    });
+    const res = await request(app).post('/api/ordenes').send({ idPaciente: 1, examenesIds: [1], metodoPago: 'por_cobrar' });
+    expect(res.status).toBe(201);
+    const insertCall = lastClient!.query.mock.calls.find((c: any) => String(c[0]).includes('INSERT INTO orden'));
+    const params = insertCall[1];
+    expect(params[3]).toBe(45.0); // total_cobrado
+    expect(params[6]).toBe(45.0); // saldo_pendiente = total_cobrado
+  });
+
+  it('rechaza con 400 una prioridad fuera del enum permitido', async () => {
+    const app = await buildApp();
+    const res = await request(app).post('/api/ordenes').send({ idPaciente: 1, examenesIds: [1], prioridad: 'inventada' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rechaza con 400 un metodoPago fuera del enum permitido', async () => {
+    const app = await buildApp();
+    const res = await request(app).post('/api/ordenes').send({ idPaciente: 1, examenesIds: [1], metodoPago: 'bitcoin' });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('GET /api/ordenes (listado) y GET /api/ordenes/:id (detalle)', () => {
   it('lista órdenes recientes con el nombre del paciente ya resuelto (JOIN)', async () => {
     queryMock.mockResolvedValueOnce({ rows: [{ id_orden: 1, numero_orden: 'ORD-1', paciente_nombre: 'María López' }] });
@@ -275,6 +353,75 @@ describe('Ciclo de vida de la orden: archivar / restaurar / eliminar (migración
     const [sqlEliminar, paramsEliminar] = queryMock.mock.calls[2];
     expect(sqlEliminar).toMatch(/eliminada = TRUE/);
     expect(paramsEliminar).toEqual([1, 'Limpieza masiva de prueba', [1, 2]]);
+  });
+});
+
+describe('PATCH /api/ordenes/:id — edición general (migración 0016)', () => {
+  it('actualiza status, prioridad, metodoPago y datosBiometricos en una sola llamada', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{
+        id_orden: 1, numero_orden: 'ORD-1', estado_flujo: 'Listo', prioridad: 'stat_panico',
+        metodo_pago: 'efectivo', saldo_pendiente: 0, promo_aplicada: null, sede_cama: null,
+        sede: 'Sede Central', es_alto_riesgo: true, biometria_autorizada: true,
+        datos_biometricos: { method: 'facial', authorizedBy: 'Dr. Gómez' }
+      }]
+    });
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/1').send({
+      status: 'Listo',
+      prioridad: 'stat_panico',
+      esAltoRiesgo: true,
+      biometriaAutorizada: true,
+      datosBiometricos: { method: 'facial', authorizedBy: 'Dr. Gómez' }
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ estado_flujo: 'Listo', prioridad: 'stat_panico' });
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(sql).toMatch(/UPDATE orden SET/);
+    expect(sql).toMatch(/estado_flujo = \$1/);
+    expect(sql).toMatch(/datos_biometricos = \$\d+::jsonb/);
+    expect(sql).toMatch(/eliminada = FALSE/);
+    expect(JSON.parse(params[params.length - 2]).method).toBe('facial');
+  });
+
+  it('rechaza con 400 un status fuera del enum (Pendiente/En Proceso/Listo/Entregado)', async () => {
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/1').send({ status: 'Cancelada' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rechaza con 400 cuando no se envía ningún campo', async () => {
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/1').send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('devuelve 404 si la orden no existe o ya fue eliminada', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/999').send({ status: 'En Proceso' });
+    expect(res.status).toBe(404);
+  });
+
+  it('rechaza con 403 a un rol sin admision_crear_ordenes', async () => {
+    currentStaffUser = { idUsuario: 2, roleId: 'tecnico_flebotomista', status: 'activo', nombreCompleto: 'Técnico Demo' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/ordenes/1').send({ status: 'En Proceso' });
+    expect(res.status).toBe(403);
+  });
+
+  it('no intercepta /archivar-varias, /restaurar-varias ni /eliminar-varias (orden de registro de rutas)', async () => {
+    // Esta prueba existe porque PATCH /:id se registró DELIBERADAMENTE al
+    // final del router — de haberse registrado antes, estas tres rutas de
+    // segmento fijo habrían caído en /:id tratando su path como un id
+    // literal. Reutiliza el mismo escenario que ya cubre el bloque de
+    // ciclo de vida (archivar/restaurar/eliminar-varias) para confirmarlo
+    // también desde el lado de /:id.
+    const app = await buildApp();
+    queryMock.mockResolvedValueOnce({ rowCount: 1 });
+    const res = await request(app).patch('/api/ordenes/archivar-varias').send({ idsOrdenes: [1] });
+    expect(res.status).toBe(200);
+    expect(queryMock.mock.calls[0][0]).toMatch(/archivada = TRUE/);
   });
 });
 

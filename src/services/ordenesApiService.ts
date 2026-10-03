@@ -32,7 +32,20 @@ export interface OrdenApiResult {
   detalle?: OrdenDetalleApiRow[];
 }
 
-export async function createOrdenRemote(idPaciente: number, examenesIds: number[]): Promise<OrdenApiResult> {
+// Metadata de pago/prioridad/biometría opcional al crear la orden
+// (migración 0016) — ver LabOrder en src/types.ts para los campos
+// equivalentes del frontend.
+export interface OrdenMetadataInput {
+  prioridad?: 'rutina' | 'urgente' | 'stat_panico';
+  metodoPago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro' | 'por_cobrar';
+  promoAplicada?: string;
+  sedeCama?: string;
+  esAltoRiesgo?: boolean;
+  biometriaAutorizada?: boolean;
+  datosBiometricos?: Record<string, unknown>;
+}
+
+export async function createOrdenRemote(idPaciente: number, examenesIds: number[], metadata?: OrdenMetadataInput): Promise<OrdenApiResult> {
   const token = getStaffSessionToken();
   if (!token) {
     throw new OrdenesApiError('No hay una sesión de personal activa para llamar a la API.');
@@ -40,7 +53,7 @@ export async function createOrdenRemote(idPaciente: number, examenesIds: number[
   const res = await fetch('/api/ordenes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ idPaciente, examenesIds })
+    body: JSON.stringify({ idPaciente, examenesIds, ...metadata })
   });
   if (!res.ok) {
     let mensaje = `El servidor respondió ${res.status}.`;
@@ -117,6 +130,33 @@ export async function restaurarVariasOrdenesRemoto(idsOrdenes: number[]): Promis
 
 export async function eliminarVariasOrdenesRemoto(idsOrdenes: number[], motivo?: string): Promise<{ ok: boolean; actualizadas: number }> {
   const res = await authFetch('/api/ordenes/eliminar-varias', { method: 'PATCH', body: JSON.stringify({ idsOrdenes, motivo }) });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+/**
+ * Edición general de la orden (server/routes/ordenes.ts, migración 0016,
+ * PATCH /api/ordenes/:id): estado operativo (status), prioridad, método de
+ * pago, saldo pendiente, promoción, cama/sede y autorización biométrica.
+ * Ver ClinicContext.tsx `updateOrder` para el patrón de resiliencia
+ * (actualiza localmente siempre, sincroniza con el backend si hay
+ * remoteId y la sesión está online).
+ */
+export interface OrdenUpdateInput {
+  status?: 'Pendiente' | 'En Proceso' | 'Listo' | 'Entregado';
+  prioridad?: 'rutina' | 'urgente' | 'stat_panico';
+  metodoPago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro' | 'por_cobrar' | null;
+  saldoPendiente?: number;
+  promoAplicada?: string;
+  sedeCama?: string;
+  sede?: string;
+  esAltoRiesgo?: boolean;
+  biometriaAutorizada?: boolean;
+  datosBiometricos?: Record<string, unknown>;
+}
+
+export async function actualizarOrdenRemota(idOrden: number, updates: OrdenUpdateInput): Promise<Record<string, unknown>> {
+  const res = await authFetch(`/api/ordenes/${idOrden}`, { method: 'PATCH', body: JSON.stringify(updates) });
   if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
   return res.json();
 }
