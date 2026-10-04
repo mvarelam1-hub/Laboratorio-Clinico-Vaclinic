@@ -109,6 +109,18 @@ export async function publicarInformeRemoto(idInforme: number, signature?: Medic
   return res.json();
 }
 
+/**
+ * PDF OFICIAL generado por el servidor (GET /api/informes/:id/pdf, migración
+ * 0019): contenido, firmantes y QR salen de la base de datos, no del
+ * navegador. Un 409 (INFORME_MODIFICADO / INFORME_SIN_SELLO) significa que el
+ * informe publicado ya no coincide con su sello y hay que volver a publicarlo.
+ */
+export async function descargarInformePdfOficial(idInforme: number): Promise<Blob> {
+  const res = await authFetch(`/api/informes/${idInforme}/pdf`, { headers: { Accept: 'application/pdf' } });
+  if (!res.ok) throw new InformesApiError(await parseErrorBody(res), res.status);
+  return res.blob();
+}
+
 export async function eliminarInformeRemoto(idInforme: number, motivo?: string): Promise<void> {
   const res = await authFetch(`/api/informes/${idInforme}`, { method: 'DELETE', body: JSON.stringify({ motivo }) });
   if (!res.ok) throw new InformesApiError(await parseErrorBody(res), res.status);

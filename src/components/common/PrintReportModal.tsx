@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { PdfReportService } from '../../services/pdfReportService';
 import { VaclinicOfficialReportSheet } from './VaclinicOfficialReportSheet';
+import { buildVerificationUrl } from '../../services/verificacionInforme';
 import { AiSummaryModeModal } from './AiSummaryModeModal';
 import { 
   X, 
@@ -92,7 +93,8 @@ export const PrintReportModal: React.FC = () => {
   
   const previousReport = previousReports.length > 0 ? previousReports[0] : null;
 
-  const validationHash = report.signature?.validationHash || '0x79f2c84a' + report.id.replace(/[^a-f0-9]/gi, '').padEnd(32, 'a').substring(0, 32);
+  // Solo existe para informes sellados por el servidor (migración 0019).
+  const verificationUrl = buildVerificationUrl(report);
 
   const sampleDateFormatted = new Date(report.sampleDate).toLocaleDateString('es-ES', {
     day: '2-digit',
@@ -198,14 +200,14 @@ export const PrintReportModal: React.FC = () => {
   };
 
   const handleCopyLink = () => {
-    const link = `https://vaclinic.laboratorio.gt/valida?doc=${report.reportNumber}&hash=${validationHash.substring(0, 10)}`;
-    navigator.clipboard.writeText(link);
+    if (!verificationUrl) return;
+    navigator.clipboard.writeText(verificationUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 3000);
   };
 
   const handleShareWhatsApp = () => {
-    const text = `Hola, adjunto el informe oficial de laboratorio VACLINIC para ${report.patientName}. Folio: ${report.reportNumber}. Verificación en: https://vaclinic.laboratorio.gt/valida?doc=${report.reportNumber}`;
+    const text = `Hola, adjunto el informe oficial de laboratorio VACLINIC para ${report.patientName}. Folio: ${report.reportNumber}.${verificationUrl ? ` Verificación en: ${verificationUrl}` : ''}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -500,7 +502,9 @@ export const PrintReportModal: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={handleCopyLink}
-              className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              disabled={!verificationUrl}
+              title={verificationUrl ? undefined : 'Este informe aún no tiene sello de verificación del servidor.'}
+              className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedLink ? '¡Enlace Copiado!' : 'Copiar Enlace de Verificación'}</span>

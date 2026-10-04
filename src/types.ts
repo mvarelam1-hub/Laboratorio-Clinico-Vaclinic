@@ -162,7 +162,7 @@ export interface DigitalSignature {
   bioanalystSpecialty?: string;
   bioanalystLicense?: string;
   signedAt: string;
-  validationHash: string;
+  validationHash?: string; // opcional desde la migración 0019: el sello real lo emite el servidor
   digitalSealUrl?: string;
 }
 
@@ -276,6 +276,11 @@ export interface MedicalReport {
   urgentAlert?: boolean;
   signature?: DigitalSignature;
   qrVerificationCode: string;
+  // Sello emitido por el SERVIDOR al publicar (migración 0019): código público
+  // del QR y huella SHA-256 del contenido. Nunca los decide el navegador; sin
+  // ellos el informe no es verificable en línea.
+  verificationCode?: string;
+  verificationHash?: string;
   notesToStaff?: string;
   episodeId?: string;
   branchId?: BranchSiteId;

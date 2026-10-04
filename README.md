@@ -66,3 +66,7 @@ del equipo para ese curso.
 - `server.ts` — punto de entrada del servidor, monta las rutas de `server/routes/` y expone endpoints de notificaciones push (Firebase Cloud Messaging) y de asistencia con IA (Gemini)
 - `db/migrations/` — esquema PostgreSQL versionado (tablas, restricciones, funciones, disparadores, procedimientos, vistas)
 - `src/shared/permissions.ts` — catálogo único de roles y permisos, compartido entre frontend y backend
+
+## Informe verificable
+
+Sello de integridad, verificación pública por QR y PDF oficial generado en el servidor: ver [docs/INFORME_VERIFICABLE.md](docs/INFORME_VERIFICABLE.md).

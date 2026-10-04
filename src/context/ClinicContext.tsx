@@ -2273,7 +2273,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     bioanalystSpecialty = 'Licenciada en Bioanálisis Clínico & Microbiología',
     bioanalystLicense = 'Col. Bioanálisis #4192 / MSPAS-8812'
   ): Promise<void> => {
-    const hash = '0x' + Array.from({ length: 24 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    // Ya NO se inventa un hash en el navegador (antes: 24 hex con
+    // Math.random(), imposible de verificar). El único sello válido lo emite
+    // el servidor al publicar (`selloServidor`, abajo); si no hay servidor el
+    // informe queda publicado solo en pantalla y sin sello verificable.
     const signature: NonNullable<MedicalReport['signature']> = {
       doctorName,
       doctorSpecialty,
@@ -2281,9 +2284,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       bioanalystName,
       bioanalystSpecialty,
       bioanalystLicense,
-      signedAt: new Date().toISOString(),
-      validationHash: hash
+      signedAt: new Date().toISOString()
     };
+    let selloServidor: { codigo: string; hash: string } | null = null;
 
     // Esta es la única acción real de "publicar" (también se invoca
     // directamente desde StaffDashboard.tsx) — aquí, y solo aquí, se
@@ -2345,7 +2348,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // local.
     if (isEffectiveOnline && objetivo?.remoteId) {
       try {
-        await publicarInformeRemoto(objetivo.remoteId, signature);
+        const filaPublicada = await publicarInformeRemoto(objetivo.remoteId, signature);
+        const codigo = filaPublicada.codigo_verificacion;
+        const huella = filaPublicada.hash_contenido;
+        if (typeof codigo === 'string' && typeof huella === 'string') selloServidor = { codigo, hash: huella };
       } catch (err) {
         const mensaje = err instanceof InformesApiError ? err.message : 'Error de red desconocido.';
         console.error('[ClinicContext] No se pudo publicar el informe en el servidor:', err);
@@ -2362,7 +2368,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             ...r,
             status: 'publicado',
             emissionDate: new Date().toISOString(),
-            signature
+            signature: selloServidor ? { ...signature, validationHash: selloServidor.hash } : signature,
+            ...(selloServidor ? { verificationCode: selloServidor.codigo, verificationHash: selloServidor.hash } : {})
           };
           return publishedRep;
         }

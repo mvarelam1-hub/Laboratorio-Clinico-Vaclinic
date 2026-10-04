@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { apiRouter } from "./server/routes/index";
+import { verificarPaginaRouter } from "./server/routes/verificar";
 import { pool } from "./server/db";
 import { loadRolePermissionOverrides, startRolePermissionsCacheRefresh } from "./server/rolePermissionsCache";
 
@@ -16,6 +17,10 @@ const app = express();
 // framework usado y facilitando a un atacante enfocar exploits conocidos de
 // Express. Se corrige aquí, antes de montar cualquier ruta.
 app.disable("x-powered-by");
+// Detrás del proxy de Render/Neon-style hosting hay UN salto: sin esto req.ip
+// es la IP del proxy y TODOS los visitantes comparten el mismo cupo de los
+// límites de tasa por IP (portal del paciente y verificación de informes).
+app.set("trust proxy", 1);
 // Endurecimiento de cabeceras HTTP (mejora de estructura profesional,
 // rama feature/mejoras-estructura-profesional): antes de esto, lo único
 // que corregía una cabecera de seguridad era el disable("x-powered-by")
@@ -1176,6 +1181,10 @@ Devuelve ESTRICTAMENTE un JSON con esta estructura exacta. Responde ÚNICAMENTE 
 // las rutas públicas/de infraestructura de abajo, para que Express las
 // intente primero; apiRouter sigue intentándose antes del catch-all SPA.
 app.use("/api", apiRouter);
+// Página pública de verificación de informes (destino del QR del PDF,
+// migración 0019). Render en servidor, sin sesión; debe ir ANTES del
+// catch-all SPA que se monta en startServer().
+app.use("/verificar", verificarPaginaRouter);
 
 // Middleware de error para /api/*: cualquier error que llegue aquí vía
 // next(err) (por ejemplo, desde asyncHandler) se responde con 500 sin

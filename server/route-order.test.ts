@@ -54,3 +54,29 @@ describe('orden de montaje de rutas en server.ts', () => {
     }
   });
 });
+
+/**
+ * Verificación pública de informes (migración 0019): el QR del PDF lo
+ * escanea cualquiera, sin sesión. Si `/verificar` se montara DESPUÉS del
+ * middleware global requireStaffAuth (API) o del catch-all del SPA (página),
+ * el QR devolvería 401 o la pantalla de login/React en vez de la verificación.
+ */
+describe('orden de montaje de la verificación pública', () => {
+  const indexSrc = readFileSync(path.resolve(__dirname, './routes/index.ts'), 'utf8');
+  const serverSrc = readFileSync(path.resolve(__dirname, '../server.ts'), 'utf8');
+
+  it('/api/verificar se monta ANTES de requireStaffAuth en routes/index.ts', () => {
+    const publica = indexSrc.search(/apiRouter\.use\(['"]\/verificar['"]/);
+    const protegida = indexSrc.search(/apiRouter\.use\(requireStaffAuth/);
+    expect(publica).toBeGreaterThanOrEqual(0);
+    expect(protegida).toBeGreaterThanOrEqual(0);
+    expect(publica).toBeLessThan(protegida);
+  });
+
+  it('la página /verificar se monta en server.ts antes del catch-all SPA (startServer)', () => {
+    const pagina = serverSrc.search(/app\.use\(["']\/verificar["']/);
+    const spa = serverSrc.search(/async function startServer\(/);
+    expect(pagina).toBeGreaterThanOrEqual(0);
+    expect(pagina).toBeLessThan(spa);
+  });
+});

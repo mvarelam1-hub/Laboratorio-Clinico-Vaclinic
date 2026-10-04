@@ -3,6 +3,8 @@ import { MedicalReport } from '../../types';
 import { useClinic } from '../../context/ClinicContext';
 import { PdfReportService } from '../../services/pdfReportService';
 import { VaclinicOfficialReportSheet } from '../common/VaclinicOfficialReportSheet';
+import { buildVerificationUrl, formatVerificationCode } from '../../services/verificacionInforme';
+import { descargarInformePdfOficial, InformesApiError } from '../../services/informesApiService';
 import { LabSettings } from '../../types/labSettings';
 import { 
   X, 
@@ -51,7 +53,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
     license: 'CMP-649102 / RNE-28491'
   }
 }) => {
-  const { labSettings, updateLabSettings } = useClinic();
+  const { labSettings, updateLabSettings, showNotification } = useClinic();
   const printAreaRef = useRef<HTMLDivElement>(null);
 
   // Export & customization settings
@@ -95,11 +97,14 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   const [doctorLicense, setDoctorLicense] = useState(report?.signature?.doctorLicense || defaultDoctor.license);
 
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isOfficialPdfLoading, setIsOfficialPdfLoading] = useState(false);
 
   if (!isOpen || !report) return null;
 
-  const validationHash = report.signature?.validationHash || 
-    ('0x' + Array.from({ length: 24 }, () => Math.floor(Math.random() * 16).toString(16)).join(''));
+  // Sello del SERVIDOR (migración 0019). Sin sello no hay enlace verificable y
+  // tampoco se inventa un hash: el informe sigue imprimible, solo que sin QR.
+  const verificationUrl = buildVerificationUrl(report);
+  const validationHash = report.verificationHash || report.signature?.validationHash || '';
 
   // Quick margin preset handler
   const applyPreset = (preset: 'estrecho' | 'estandar' | 'oficial') => {
@@ -161,10 +166,36 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
     window.print();
   };
 
+  // PDF oficial del SERVIDOR (migración 0019): vectorial, con firmantes reales
+  // y QR verificable. Es el documento que debe entregarse; la vista de arriba
+  // es la maqueta de impresión del navegador.
+  const handleOfficialPdf = async () => {
+    if (!report.remoteId) return;
+    setIsOfficialPdfLoading(true);
+    try {
+      const blob = await descargarInformePdfOficial(report.remoteId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Informe-${report.reportNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      showNotification(
+        err instanceof InformesApiError ? err.message : 'No se pudo generar el PDF oficial. Revisa tu conexión.',
+        'warning'
+      );
+    } finally {
+      setIsOfficialPdfLoading(false);
+    }
+  };
+
   // Copy verification link
   const handleCopyLink = () => {
-    const link = `https://vaclinic.laboratorio.gt/valida?doc=${report.reportNumber}&hash=${validationHash.substring(0, 10)}`;
-    navigator.clipboard.writeText(link);
+    if (!verificationUrl) return;
+    navigator.clipboard.writeText(verificationUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 3000);
   };
@@ -246,6 +277,17 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             </button>
 
             {/* Direct PDF Download Button */}
+            {report.remoteId && (
+              <button
+                onClick={handleOfficialPdf}
+                disabled={isOfficialPdfLoading}
+                title="PDF generado por el servidor con firmantes reales y código QR verificable"
+                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-1.5 rounded-xl font-bold transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isOfficialPdfLoading ? 'Generando…' : 'PDF oficial (servidor)'}
+              </button>
+            )}
+
             <button
               onClick={handleDownloadPdf}
               disabled={isGeneratingPdf}
@@ -731,13 +773,19 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
         <div className="bg-slate-900 border-t border-slate-800 px-5 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 print:hidden">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Documento generado con sello criptográfico SHA-256</span>
+            <span>
+              {verificationUrl
+                ? `Sellado por el servidor · Código ${formatVerificationCode(report.verificationCode)}`
+                : 'Sin sello de verificación del servidor (se emite al publicar el informe)'}
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={handleCopyLink}
-              className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              disabled={!verificationUrl}
+              title={verificationUrl ? undefined : 'Este informe aún no tiene sello de verificación del servidor.'}
+              className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedLink ? '¡Enlace Copiado!' : 'Copiar Enlace de Verificación'}</span>

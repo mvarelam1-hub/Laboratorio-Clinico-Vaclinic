@@ -4,6 +4,7 @@ import { requireStaffAuth } from '../auth-staff';
 import { authRouter } from './auth';
 import { portalRouter } from './portal';
 import { preferenciasRouter } from './preferencias';
+import { verificarApiRouter } from './verificar';
 import { pacientesRouter } from './pacientes';
 import { ordenesRouter } from './ordenes';
 import { resultadosRouter } from './resultados';
@@ -30,6 +31,11 @@ apiRouter.use('/portal', portalRouter);
 // Preferencias de notificación del paciente: igual que /portal, patient-facing,
 // sin requireStaffAuth — usa el mismo requirePortalToken (ver preferencias.ts).
 apiRouter.use('/preferencias', preferenciasRouter);
+
+// Verificación pública de autenticidad de un informe (QR del PDF, migración
+// 0019): SIN sesión, por eso va ANTES del middleware requireStaffAuth de abajo.
+// Expone solo datos mínimos (ver verificar.ts).
+apiRouter.use('/verificar', verificarApiRouter);
 
 // Login, cambio de contraseña, TOTP y whoami de personal (ver
 // server/routes/auth.ts). Cada endpoint de este router decide por sí mismo

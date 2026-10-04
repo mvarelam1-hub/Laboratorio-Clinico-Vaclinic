@@ -28,6 +28,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import { buildVerificationUrl, formatVerificationCode } from '../../services/verificacionInforme';
 import { groupParametersBySection, ParameterGroupSection } from '../../utils/labSectionOrganizer';
 import { OzelleCbcReportView } from '../laboratory/OzelleCbcReportView';
 import { useClinic } from '../../context/ClinicContext';
@@ -187,8 +188,17 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
 
   // Generate authentic QR code data URLs
   useEffect(() => {
-    const verifyUrl = `https://vaclinic.laboratorio.gt/valida?doc=${orderNumber}&pac=${patientCode}`;
-    
+    // Solo un informe sellado por el SERVIDOR tiene QR: apunta a
+    // /verificar/<código> (server/routes/verificar.ts), que recalcula la huella
+    // del contenido. Antes se imprimía siempre un QR a un dominio sin ruta
+    // (vaclinic.laboratorio.gt/valida), que parecía verificable y no lo era.
+    const verifyUrl = buildVerificationUrl(report);
+    if (!verifyUrl) {
+      setHeaderQrUrl('');
+      setFooterQrUrl('');
+      return;
+    }
+
     QRCode.toDataURL(verifyUrl, {
       margin: 1,
       width: 140,
@@ -202,7 +212,7 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
         setFooterQrUrl(url);
       }
     });
-  }, [orderNumber, patientCode]);
+  }, [report.verificationCode, report.verificationHash]);
 
   const renderSectionIcon = (iconType: string) => {
     const iconClass = "w-3.5 h-3.5";
@@ -898,7 +908,7 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
                   Documento oficial VACLINIC
                 </strong>
                 <span className="text-[7.5px] text-cyan-800 font-mono">
-                  Validado {emissionDateFormatted}
+                  {formatVerificationCode(report.verificationCode) ?? `Validado ${emissionDateFormatted}`}
                 </span>
               </div>
 

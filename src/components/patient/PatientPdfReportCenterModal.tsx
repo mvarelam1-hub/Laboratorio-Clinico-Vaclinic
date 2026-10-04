@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Patient, MedicalReport } from '../../types';
 import { useClinic } from '../../context/ClinicContext';
 import { PdfReportService } from '../../services/pdfReportService';
+import { buildVerificationUrl, formatVerificationCode } from '../../services/verificacionInforme';
 import { VaclinicOfficialReportSheet } from '../common/VaclinicOfficialReportSheet';
 import { 
   X, 
@@ -80,8 +81,10 @@ export const PatientPdfReportCenterModal: React.FC<PatientPdfReportCenterModalPr
 
   if (!isOpen) return null;
 
-  const validationHash = '0x' + (currentReport?.id ? currentReport.id.replace(/[^a-f0-9]/gi, '').padEnd(32, '9').substring(0, 32) : '7a9c84e1f0b4d6e8a2c1f9e8a7b6c5d4');
-  const verificationUrl = `https://vaclinic.laboratorio.gt/valida?doc=${currentReport?.reportNumber || '177-2026'}&hash=${validationHash.substring(0, 10)}`;
+  // Enlace/código REALES del sello que el servidor emitió al publicar
+  // (migración 0019); sin sello no se inventa ni hash ni enlace.
+  const verificationUrl = buildVerificationUrl(currentReport);
+  const verificationCodeLabel = formatVerificationCode(currentReport?.verificationCode);
 
   const handleDownloadPdf = async () => {
     if (!printSheetRef.current) return;
@@ -121,6 +124,7 @@ export const PatientPdfReportCenterModal: React.FC<PatientPdfReportCenterModalPr
   };
 
   const handleCopyVerificationLink = () => {
+    if (!verificationUrl) return;
     navigator.clipboard.writeText(verificationUrl);
     setCopiedLink(true);
     showNotification('Enlace de validación digital copiado al portapapeles', 'info');
@@ -128,7 +132,7 @@ export const PatientPdfReportCenterModal: React.FC<PatientPdfReportCenterModalPr
   };
 
   const handleShareWhatsApp = () => {
-    const text = `Hola, comparto el informe oficial de laboratorio clínico VACLINIC de ${patient.fullName}. Folio: ${currentReport?.reportNumber || 'LAB-2026'}. Verificación de autenticidad en: ${verificationUrl}`;
+    const text = `Hola, comparto el informe oficial de laboratorio clínico VACLINIC de ${patient.fullName}. Folio: ${currentReport?.reportNumber || 'LAB-2026'}. ${verificationUrl ? `Verificación de autenticidad en: ${verificationUrl}` : ''}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -336,7 +340,8 @@ export const PatientPdfReportCenterModal: React.FC<PatientPdfReportCenterModalPr
               <button
                 type="button"
                 onClick={handleCopyVerificationLink}
-                className="w-full mt-1 bg-slate-800 hover:bg-slate-700 text-teal-300 border border-slate-700 rounded-lg py-1 px-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                disabled={!verificationUrl}
+                className="w-full mt-1 bg-slate-800 hover:bg-slate-700 text-teal-300 border border-slate-700 rounded-lg py-1 px-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {copiedLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                 <span>{copiedLink ? 'Enlace Copiado' : 'Copiar Enlace de Validación'}</span>
@@ -453,7 +458,7 @@ export const PatientPdfReportCenterModal: React.FC<PatientPdfReportCenterModalPr
           </div>
 
           <div className="flex items-center gap-3 font-medium">
-            <span className="text-teal-400 font-mono text-[11px]">Validación: {validationHash.substring(0, 16)}...</span>
+            <span className="text-teal-400 font-mono text-[11px]">{verificationCodeLabel ? `Código de verificación: ${verificationCodeLabel}` : 'Sin sello de verificación'}</span>
             <button
               onClick={handleDownloadPdf}
               disabled={isExporting}
