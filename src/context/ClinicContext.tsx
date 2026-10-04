@@ -39,6 +39,7 @@ import {
 } from '../data/initialData';
 import { INITIAL_ORDERS, INITIAL_ORDER_FOLDERS } from '../data/ordersData';
 import { DEMO_MODE, soloEnDemo } from '../config/demoMode';
+import { numeroInformeNuevo } from '../utils/borradorInforme';
 import { limpiarDatosDeEjemplo } from '../utils/datosDeEjemplo';
 import { perfilDesdeServidor, USUARIO_SIN_SESION, esUsuarioSinSesion } from '../utils/staffProfile';
 import { FACTORY_CATALOG_TESTS, INITIAL_CUSTOM_PROFILES } from '../data/factoryCatalog';
@@ -1745,6 +1746,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Simulation generator for instant live demonstration
   const simulatePushNotification = (patientId?: string, type: PushNotificationType = 'report_ready') => {
+    if (!DEMO_MODE) return;
     const targetPatientId = patientId || selectedPatientId || 'pat-1';
     const targetPat = patients.find((p) => p.id === targetPatientId) || patients[0];
     const reportSeq = Math.floor(1000 + Math.random() * 9000);
@@ -2211,13 +2213,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const addReport = async (reportData: Omit<MedicalReport, 'id' | 'reportNumber' | 'qrVerificationCode'>): Promise<MedicalReport> => {
-    const reportSeq = Math.floor(1000 + Math.random() * 9000);
-    const reportNumber = `LAB-${new Date().getFullYear()}-${reportSeq}`;
+    // Número único y código de verificación vacío: el sello verificable
+    // real lo emite el servidor al publicar (nunca un código inventado aquí).
+    const reportNumber = (reportData as Partial<MedicalReport>).reportNumber || numeroInformeNuevo();
     const draftReport: MedicalReport = {
       ...reportData,
       id: `rep-${Date.now()}`,
       reportNumber,
-      qrVerificationCode: `VALID-SANRAFAEL-${reportNumber}`
+      qrVerificationCode: ''
     };
 
     // Intenta crear en el backend real (Borrador) los resultados que se
@@ -2255,8 +2258,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       showNotification(`Informe ${newReport.reportNumber} registrado en 4D LAB (${newReport.status.toUpperCase()})`);
     }
 
-    // If added directly as published, trigger push notification
-    if (newReport.status === 'publicado') {
+    // If added directly as published, trigger push notification (solo demo:
+    // en modo real no existe un canal push; el paciente entra con su código).
+    if (DEMO_MODE && newReport.status === 'publicado') {
       sendPushNotification({
         patientId: newReport.patientId,
         patientName: newReport.patientName,

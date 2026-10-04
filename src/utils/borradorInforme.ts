@@ -1,5 +1,5 @@
 import { MedicalReport, LabCatalogItem } from '../types';
-import { generateDemographicParametersForTests } from './referenceRangeEvaluator';
+import { parametrosDeExamenes } from './parametrosDeExamen';
 
 export interface DatosBorrador {
   /** Id de la orden (LabOrder.id) — vínculo real; undefined si la orden solo existe local. */
@@ -31,8 +31,8 @@ export interface DatosBorrador {
 export function construirBorradorDeOrden(d: DatosBorrador): MedicalReport {
   const edad = d.patientAge ?? 0;
   const esFemenino = (d.patientGender || '').toUpperCase().startsWith('F');
-  const parameters = generateDemographicParametersForTests(
-    d.testsList, edad, d.patientGender ?? 'M', d.catalogTests, d.examCodes
+  const parameters = parametrosDeExamenes(
+    d.testsList, d.patientAge, d.patientGender, d.catalogTests && d.catalogTests.length ? d.catalogTests : undefined, d.examCodes
   );
   return {
     id: `rep-ord-${Date.now()}`,

@@ -129,28 +129,28 @@ export const CLINICAL_DEMOGRAPHIC_STANDARDS: DemographicTestStandard[] = [
   // Leucocitos Totales
   {
     aliases: ['leucocitos', 'leucocitos totales', 'globulos blancos', 'wbc'],
-    unit: '/mm³',
+    unit: 'x10³/µL',
     isSexSpecific: false,
     isAgeSpecific: true,
     evaluate: (age) => {
       if (age <= 1) {
-        return { min: 9000, max: 30000, rangeText: '9000 - 30000 /mm³', panicMin: 3000, panicMax: 40000, demographicLabel: 'Lactante (0-1a)' };
+        return { min: 9, max: 30, rangeText: '9.0 - 30.0 x10³/µL', panicMin: 3, panicMax: 40, demographicLabel: 'Lactante (0-1a)' };
       }
       if (age < 13) {
-        return { min: 5000, max: 14500, rangeText: '5000 - 14500 /mm³', panicMin: 2500, panicMax: 30000, demographicLabel: `Pediátrico (${age}a)` };
+        return { min: 5, max: 14.5, rangeText: '5.0 - 14.5 x10³/µL', panicMin: 2.5, panicMax: 30, demographicLabel: `Pediátrico (${age}a)` };
       }
-      return { min: 4500, max: 10500, rangeText: '4500 - 10500 /mm³', panicMin: 2000, panicMax: 30000, demographicLabel: 'Adultos (General)' };
+      return { min: 4.5, max: 10.5, rangeText: '4.5 - 10.5 x10³/µL', panicMin: 2, panicMax: 30, demographicLabel: 'Adultos (General)' };
     }
   },
 
   // Plaquetas
   {
     aliases: ['plaquetas', 'recuento de plaquetas', 'plt'],
-    unit: '/mm³',
+    unit: 'x10³/µL',
     isSexSpecific: false,
     isAgeSpecific: false,
     evaluate: () => {
-      return { min: 150000, max: 450000, rangeText: '150000 - 450000 /mm³', panicMin: 40000, panicMax: 1000000, demographicLabel: 'Población General' };
+      return { min: 150, max: 450, rangeText: '150 - 450 x10³/µL', panicMin: 40, panicMax: 1000, demographicLabel: 'Población General' };
     }
   },
 
@@ -638,6 +638,31 @@ function findClinicalStandard(normName: string) {
   return best;
 }
 
+/**
+ * ¿El nombre del parámetro ES (no solo "contiene") uno de los analitos con norma
+ * por edad/sexo? Se ignora lo que va entre paréntesis ("Hemoglobina (Hb)" sí;
+ * "Hemoglobina Corpuscular Media (HCM)" y "Glucosa (Químico Orina)" no).
+ * Sirve para que un componente de panel no herede el rango de otro analito
+ * solo porque comparte una palabra.
+ */
+export function nombreTieneNormaDemografica(nombre: string): boolean {
+  const sinAcentos = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const alias = new Set<string>();
+  for (const std of CLINICAL_DEMOGRAPHIC_STANDARDS) std.aliases.forEach(a => alias.add(sinAcentos(a)));
+  alias.add('trombocitos');
+  const completo = sinAcentos(nombre);
+  if (!completo) return false;
+  if (alias.has(completo)) return true;
+  // "Hemoglobina (Hb)": se ignora el paréntesis solo si es una abreviatura corta
+  // o un sinónimo del propio analito. "Glucosa (Químico Orina)" NO es glucosa en sangre.
+  const m = completo.match(/^([^()]+?)\s*\(([^()]*)\)\s*$/);
+  if (!m) return false;
+  const base = m[1].trim();
+  const dentro = m[2].trim();
+  const esAbreviatura = dentro.length <= 6 && !dentro.includes(' ');
+  return alias.has(base) && (esAbreviatura || alias.has(dentro));
+}
+
 export function resolveAgeSexReferenceRange(
   parameterName: string,
   currentRange: string = '',
@@ -735,221 +760,6 @@ export function resolveAgeSexReferenceRange(
     demographicRuleApplied: 'Rango Estándar General',
     isCustomConfigured: false
   };
-}
-
-/**
- * Builds pre-calibrated report parameters for an array of requested test names,
- * automatically applying CLSI age and sex calibrated reference intervals.
- */
-export function generateDemographicParametersForTests(
-  testsList: string[],
-  patientAge: number = 35,
-  patientGender: 'M' | 'F' | 'Otro' | string = 'M',
-  catalogTests?: LabCatalogItem[],
-  // Códigos reales del catálogo (examen.codigo_examen, ej. "PAN-01"),
-  // paralelos a testsList por índice -mismo orden en el que
-  // NewOrderRegistration.tsx arma `selectedTests`/`examCodes` al crear la
-  // orden real. Al tenerlos, cada ReportParameter generado para un test
-  // queda etiquetado con el examCode que lo originó (ver el bucle de abajo),
-  // lo cual permite después agrupar los parámetros por examen real y
-  // mapearlos 1:1 a un id_detalle_orden/resultado del backend (ver
-  // ClinicContext.tsx `addReport` y `LabOrder.detalleRemoto`). Es opcional y
-  // retrocompatible: si no se pasa, o falta algún código, esos parámetros
-  // simplemente no quedan etiquetados (como antes de este cambio).
-  testCodes?: Array<string | undefined>
-): ReportParameter[] {
-  const params: ReportParameter[] = [];
-  let pId = 1;
-
-  testsList.forEach((tName, testIdx) => {
-    const lower = tName.toLowerCase();
-    const examCode = testCodes?.[testIdx];
-    // Índice donde empiezan los parámetros de ESTE test en particular -un
-    // test puede explotar en varios ReportParameter (ej. hemograma -> 5
-    // sub-parámetros); todos comparten el mismo examCode porque todos
-    // provienen del mismo examen/detalle_orden real.
-    const paramsStartIdx = params.length;
-
-    // Check if matching catalog item exists
-    const catalogMatch = catalogTests?.find(c =>
-      c.name.toLowerCase() === lower ||
-      c.code.toLowerCase() === lower ||
-      lower.includes(c.name.toLowerCase())
-    );
-
-    // Common Hemogram Profile
-    if (lower.includes('hemograma') || lower.includes('hematolog') || lower.includes('cbc') || lower.includes('biometria')) {
-      const hemoSub = [
-        { name: 'Leucocitos Totales', unit: '/mm³', sampleType: 'Sangre Total (EDTA)', method: 'Citometría de Flujo / Impedancia' },
-        { name: 'Hemoglobina', unit: 'g/dL', sampleType: 'Sangre Total (EDTA)', method: 'Fotometría SLS / Cianometahemoglobina' },
-        { name: 'Hematocrito', unit: '%', sampleType: 'Sangre Total (EDTA)', method: 'Impedancia / Cálculo Automatizado' },
-        { name: 'Eritrocitos (RBC)', unit: 'x10^6/µL', sampleType: 'Sangre Total (EDTA)', method: 'Conteo Óptico Focalizado' },
-        { name: 'Plaquetas', unit: '/mm³', sampleType: 'Sangre Total (EDTA)', method: 'Impedancia Eléctrica Apertura' }
-      ];
-
-      hemoSub.forEach(sub => {
-        const resolved = resolveAgeSexReferenceRange(sub.name, '', patientAge, patientGender, undefined, true);
-        params.push({
-          id: `p-${pId++}`,
-          name: sub.name,
-          value: '', // el resultado lo ingresa el personal: nunca se precarga un valor de ejemplo
-          unit: sub.unit,
-          referenceRange: resolved.effectiveRange,
-          minVal: resolved.min,
-          maxVal: resolved.max,
-          status: 'normal',
-          sampleType: sub.sampleType,
-          methodology: sub.method,
-          notes: resolved.demographicRuleApplied
-        });
-      });
-    } else if (lower.includes('lipid') || lower.includes('colest') || lower.includes('trigli')) {
-      const lipidSub = [
-        { name: 'Colesterol Total', unit: 'mg/dL', sampleType: 'Suero', method: 'CHOD-PAP Enzimático Colorimétrico' },
-        { name: 'Triglicéridos Séricos', unit: 'mg/dL', sampleType: 'Suero', method: 'GPO-PAP Enzimático' },
-        { name: 'Colesterol HDL (Protector)', unit: 'mg/dL', sampleType: 'Suero', method: 'Inmuno-inhibición Directa' },
-        { name: 'Colesterol LDL', unit: 'mg/dL', sampleType: 'Suero', method: 'Fórmula de Friedewald Modificada' }
-      ];
-
-      lipidSub.forEach(sub => {
-        const resolved = resolveAgeSexReferenceRange(sub.name, '', patientAge, patientGender, undefined, true);
-        params.push({
-          id: `p-${pId++}`,
-          name: sub.name,
-          value: '', // el resultado lo ingresa el personal: nunca se precarga un valor de ejemplo
-          unit: sub.unit,
-          referenceRange: resolved.effectiveRange,
-          minVal: resolved.min,
-          maxVal: resolved.max,
-          status: 'normal',
-          sampleType: sub.sampleType,
-          methodology: sub.method,
-          notes: resolved.demographicRuleApplied
-        });
-      });
-    } else if (lower.includes('creat') || lower.includes('urea') || lower.includes('renal') || lower.includes('bun')) {
-      const renalSub = [
-        { name: 'Creatinina en Suero', unit: 'mg/dL', sampleType: 'Suero', method: 'Cinética Jaffé Compensada IDMS' },
-        { name: 'Nitrógeno de Urea (BUN)', unit: 'mg/dL', sampleType: 'Suero', method: 'Ureasa / GLDH UV' },
-        { name: 'Ácido Úrico', unit: 'mg/dL', sampleType: 'Suero', method: 'Uricasa-PAP Enzimático' }
-      ];
-
-      renalSub.forEach(sub => {
-        const resolved = resolveAgeSexReferenceRange(sub.name, '', patientAge, patientGender, undefined, true);
-        params.push({
-          id: `p-${pId++}`,
-          name: sub.name,
-          value: '', // el resultado lo ingresa el personal: nunca se precarga un valor de ejemplo
-          unit: sub.unit,
-          referenceRange: resolved.effectiveRange,
-          minVal: resolved.min,
-          maxVal: resolved.max,
-          status: 'normal',
-          sampleType: sub.sampleType,
-          methodology: sub.method,
-          notes: resolved.demographicRuleApplied
-        });
-      });
-    } else if (lower.includes('glucosa') || lower.includes('glicemia') || lower.includes('azucar')) {
-      const resolved = resolveAgeSexReferenceRange('Glucosa en Ayunas', '', patientAge, patientGender, undefined, true);
-      params.push({
-        id: `p-${pId++}`,
-        name: 'Glucosa en Ayunas',
-        value: '',
-        unit: 'mg/dL',
-        referenceRange: resolved.effectiveRange,
-        minVal: resolved.min,
-        maxVal: resolved.max,
-        status: 'normal',
-        sampleType: 'Suero / Plasma Fluoruro',
-        methodology: 'Glucosa Oxidasa / Hexoquinasa',
-        notes: resolved.demographicRuleApplied
-      });
-    } else if (lower.includes('urin') || lower.includes('ego') || lower.includes('orina')) {
-      params.push(
-        {
-          id: `p-${pId++}`,
-          name: 'Aspecto y Color',
-          value: '',
-          unit: '-',
-          referenceRange: 'Transparente / Amarillo',
-          status: 'normal',
-          methodology: 'Examen Físico Macroscópico',
-          sampleType: 'Orina Espontánea'
-        },
-        {
-          id: `p-${pId++}`,
-          name: 'Densidad Específica',
-          value: '',
-          unit: '-',
-          referenceRange: '1.005 - 1.030',
-          minVal: 1.005,
-          maxVal: 1.030,
-          status: 'normal',
-          methodology: 'Refractometría / Tira Reactiva',
-          sampleType: 'Orina Espontánea'
-        },
-        {
-          id: `p-${pId++}`,
-          name: 'Proteínas y Glucosa en Orina',
-          value: '',
-          unit: 'mg/dL',
-          referenceRange: 'Negativo (< 15 mg/dL)',
-          status: 'normal',
-          methodology: 'Colorimetría / Tira Reactiva',
-          sampleType: 'Orina Espontánea'
-        },
-        {
-          id: `p-${pId++}`,
-          name: 'Sedimento Microscópico (Leucocitos)',
-          value: '',
-          unit: 'x campo 40x',
-          referenceRange: '0 - 3 por campo',
-          status: 'normal',
-          methodology: 'Microscopía Óptica',
-          sampleType: 'Orina Espontánea'
-        }
-      );
-    } else if (catalogMatch) {
-      const resolved = resolveAgeSexReferenceRange(catalogMatch.name, catalogMatch.referenceRange || '', patientAge, patientGender, undefined, true);
-      params.push({
-        id: `p-${pId++}`,
-        name: catalogMatch.name,
-        value: '',
-        unit: catalogMatch.unit || 'mg/dL',
-        referenceRange: resolved.effectiveRange,
-        minVal: resolved.min,
-        maxVal: resolved.max,
-        status: 'normal',
-        sampleType: catalogMatch.sampleType || 'Suero',
-        methodology: catalogMatch.methodology || 'Ensayo Clínico Automatizado',
-        notes: resolved.demographicRuleApplied
-      });
-    } else {
-      const resolved = resolveAgeSexReferenceRange(tName, '', patientAge, patientGender, undefined, true);
-      params.push({
-        id: `p-${pId++}`,
-        name: tName,
-        value: '',
-        unit: 'Resultado',
-        referenceRange: resolved.effectiveRange !== '—' ? resolved.effectiveRange : 'Valores de Referencia Estándar',
-        minVal: resolved.min,
-        maxVal: resolved.max,
-        status: 'normal',
-        sampleType: 'Suero / Muestra Biológica',
-        methodology: 'Metodología Estandarizada CLSI',
-        notes: resolved.demographicRuleApplied
-      });
-    }
-
-    if (examCode) {
-      for (let i = paramsStartIdx; i < params.length; i++) {
-        params[i].examCode = examCode;
-      }
-    }
-  });
-
-  return params;
 }
 
 /**
