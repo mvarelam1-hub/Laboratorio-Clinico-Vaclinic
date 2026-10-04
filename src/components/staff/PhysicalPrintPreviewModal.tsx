@@ -367,7 +367,7 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
           <section className="flex flex-col items-center print:w-full">
             
             {/* Sheet 1 Physical Badge & Cut Ruler */}
-            <div className="w-full flex items-center justify-between mb-2 px-2 text-xs text-slate-400 font-mono print:hidden">
+            <div data-export-hide className="w-full flex items-center justify-between mb-2 px-2 text-xs text-slate-400 font-mono print:hidden">
               <div className="flex items-center gap-2">
                 <span className="bg-slate-800 text-sky-300 font-bold px-2 py-0.5 rounded-md border border-slate-700 text-[11px]">
                   Hoja Física 1 {hasAnnex ? 'de 2' : 'de 1'}
@@ -404,19 +404,20 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
               {/* Optional Physical Surgical Staple / Clip in top-left */}
               {showPaperClips && (
                 <div 
-                  className="absolute top-3 left-4 w-7 h-1.5 bg-gradient-to-r from-slate-400 via-slate-200 to-slate-400 border border-slate-500 rounded-xs shadow-xs transform -rotate-45 pointer-events-none z-30 print:hidden"
+                  data-export-hide className="absolute top-3 left-4 w-7 h-1.5 bg-gradient-to-r from-slate-400 via-slate-200 to-slate-400 border border-slate-500 rounded-xs shadow-xs transform -rotate-45 pointer-events-none z-30 print:hidden"
                   title="Grapa metálica de archivo clínico"
                 />
               )}
 
               {/* Optional 3-Ring Binder Punch Hole Marks (Physical inspection) */}
-              <div className="absolute left-1.5 top-1/4 w-2 h-2 rounded-full border border-slate-300/60 bg-slate-200/40 pointer-events-none print:hidden" />
-              <div className="absolute left-1.5 top-2/4 w-2 h-2 rounded-full border border-slate-300/60 bg-slate-200/40 pointer-events-none print:hidden" />
-              <div className="absolute left-1.5 top-3/4 w-2 h-2 rounded-full border border-slate-300/60 bg-slate-200/40 pointer-events-none print:hidden" />
+              <div data-export-hide className="absolute left-1.5 top-1/4 w-2 h-2 rounded-full border border-slate-300/60 bg-slate-200/40 pointer-events-none print:hidden" />
+              <div data-export-hide className="absolute left-1.5 top-2/4 w-2 h-2 rounded-full border border-slate-300/60 bg-slate-200/40 pointer-events-none print:hidden" />
+              <div data-export-hide className="absolute left-1.5 top-3/4 w-2 h-2 rounded-full border border-slate-300/60 bg-slate-200/40 pointer-events-none print:hidden" />
 
               {/* Non-Printable Hardware Margin Guide (Dotted Green/Sky boundary) */}
               {showPrintMargins && (
                 <div 
+                  data-export-hide
                   className="absolute inset-[8mm] border border-dashed border-sky-400/40 pointer-events-none z-20 print:hidden rounded-xs"
                 >
                   <div className="absolute top-1 left-1.5 text-[8px] font-mono text-sky-600/70 font-bold uppercase tracking-wider bg-white/80 px-1 rounded">
@@ -448,7 +449,7 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
 
               {/* Footer Alignment Guide Indicator */}
               {showPrintMargins && pinFooterToBottom && (
-                <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-teal-900/90 text-teal-200 border border-teal-500/50 text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow-xs pointer-events-none z-20 print:hidden flex items-center gap-1">
+                <div data-export-hide className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-teal-900/90 text-teal-200 border border-teal-500/50 text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow-xs pointer-events-none z-20 print:hidden flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-teal-300" />
                   <span>Posición del Pie de Página: Anclado en base de hoja física</span>
                 </div>
@@ -462,7 +463,7 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
           {/* SIMULADOR DE SALTO DE PÁGINA FÍSICO (PAGE BREAK DIVIDER)                 */}
           {/* ========================================================================= */}
           {hasAnnex && separateAnnexSheet && (
-            <div className="w-full max-w-[850px] flex flex-col items-center my-2 print:break-before-page print:hidden">
+            <div data-export-hide className="w-full max-w-[850px] flex flex-col items-center my-2 print:break-before-page print:hidden">
               <div className="w-full flex items-center gap-3">
                 <div className="flex-1 border-t-2 border-dashed border-rose-500/70" />
                 <div className="bg-rose-950 text-rose-300 border border-rose-700/80 px-3.5 py-1 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg">
@@ -486,7 +487,7 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
             <section className="flex flex-col items-center print:w-full print:break-before-page">
               
               {/* Sheet 2 Badge */}
-              <div className="w-full flex items-center justify-between mb-2 px-2 text-xs text-slate-400 font-mono print:hidden">
+              <div data-export-hide className="w-full flex items-center justify-between mb-2 px-2 text-xs text-slate-400 font-mono print:hidden">
                 <div className="flex items-center gap-2">
                   <span className="bg-purple-900 text-purple-200 font-bold px-2 py-0.5 rounded-md border border-purple-700 text-[11px]">
                     Hoja Física 2 de 2

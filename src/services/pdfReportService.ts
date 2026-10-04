@@ -48,6 +48,17 @@ export class PdfReportService {
         logging: false,
         windowWidth: 1024,
         onclone: (clonedDoc) => {
+          // El PDF debe ser el informe limpio: sin sombras, filtros, texturas ni
+          // guías de la vista previa (html2canvas dibuja las sombras como manchas
+          // grises/negras alrededor de los bloques).
+          const limpio = clonedDoc.createElement('style');
+          limpio.textContent = `
+            * { box-shadow: none !important; text-shadow: none !important; filter: none !important; backdrop-filter: none !important; }
+            [data-export-hide], .print\\:hidden { display: none !important; }
+            #vaclinic-physical-print-stage, #vaclinic-physical-print-stage * { background-image: none !important; }
+            #vaclinic-physical-print-stage { transform: none !important; margin-bottom: 0 !important; }
+          `;
+          clonedDoc.head.appendChild(limpio);
           // Replace any unsupported oklch colors with standard hex/rgb
           const allEls = clonedDoc.querySelectorAll('*');
           allEls.forEach((el) => {

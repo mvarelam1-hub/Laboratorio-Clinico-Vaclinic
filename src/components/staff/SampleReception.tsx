@@ -596,7 +596,7 @@ export const SampleReception: React.FC = () => {
                         title="Pasar a redactar informe diagnóstico"
                         className="flex items-center gap-1 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer"
                       >
-                        <span>Cargar Resultados</span>
+                        <span>Ingresar resultados</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
 

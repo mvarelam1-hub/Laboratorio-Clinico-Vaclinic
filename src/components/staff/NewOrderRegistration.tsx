@@ -1902,12 +1902,40 @@ export const NewOrderRegistration: React.FC = () => {
               <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-slate-600">
                   <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                  <span className="font-bold uppercase text-[10px]">Rangos Pre-seleccionados:</span>
+                  <span className="font-bold uppercase text-[10px]">Rangos de referencia según:</span>
                 </div>
                 <span className="text-[11px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                  {createdOrderModal.patientAge} años • {createdOrderModal.patientGender} (Estándar CLSI C28-A3)
+                  {createdOrderModal.patientAge ? `${createdOrderModal.patientAge} años` : 'Edad no registrada'} • {/^(m|f)/i.test(createdOrderModal.patientGender || '') ? (/^m/i.test(createdOrderModal.patientGender) ? 'Masculino' : 'Femenino') : 'Sexo no registrado'}
                 </span>
               </div>
+            </div>
+
+            {/* Código de consulta: lo que el paciente necesita para ver sus resultados */}
+            <div className="mb-4 rounded-xl border-2 border-teal-600 bg-teal-50 p-3 text-center">
+              <div className="text-[10px] font-black uppercase tracking-wider text-teal-800">Código de consulta del paciente</div>
+              {createdOrderModal.accessCode ? (
+                <>
+                  <div className="my-1 font-mono text-3xl font-black tracking-[0.25em] text-slate-900 select-all">
+                    {createdOrderModal.accessCode}
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Entrégaselo al paciente: con este código ve sus resultados en {typeof window !== 'undefined' ? window.location.host : 'el sitio del laboratorio'} cuando el informe esté publicado.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { navigator.clipboard?.writeText(createdOrderModal.accessCode || ''); showNotification('Código copiado', 'success'); } catch { /* sin portapapeles */ }
+                    }}
+                    className="mt-1.5 text-[11px] font-bold text-teal-800 underline cursor-pointer"
+                  >
+                    Copiar código
+                  </button>
+                </>
+              ) : (
+                <p className="mt-1 text-[11px] font-semibold text-amber-800">
+                  Esta orden aún no tiene código de consulta porque no se pudo guardar en el servidor. Se generará al sincronizar.
+                </p>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -1917,10 +1945,10 @@ export const NewOrderRegistration: React.FC = () => {
                 id="btn-quick-load-results-preselected"
                 onClick={() => handleLoadResultsWithPreselectedRanges(createdOrderModal)}
                 className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-700 hover:from-teal-500 hover:to-emerald-600 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md shadow-teal-700/20 active:scale-98"
-                title="Abre directamente el Redactor de Informes con los rangos de referencia ajustados para la edad y sexo del paciente"
+                title="Abre el Redactor de Informes con los exámenes de esta orden para capturar los resultados"
               >
-                <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-                <span>⚡ Cargar Resultados con Rangos Pre-seleccionados</span>
+                <Zap className="w-4 h-4 text-white" />
+                <span>Ingresar resultados</span>
               </button>
 
               <button
@@ -1929,7 +1957,7 @@ export const NewOrderRegistration: React.FC = () => {
                 className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md shadow-emerald-600/30 active:scale-98"
               >
                 <MessageSquare className="w-4 h-4" />
-                <span>Enviar Comprobante & PIN por WhatsApp al Paciente</span>
+                <span>Enviar comprobante y código por WhatsApp</span>
               </button>
 
               <button

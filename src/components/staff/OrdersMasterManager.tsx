@@ -1220,6 +1220,14 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                             <span className="font-mono font-black text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200 text-sm">
                               {ord.orderNumber}
                             </span>
+                            {ord.codigoConsulta && (
+                              <span
+                                className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded-md border border-slate-300 text-xs select-all"
+                                title="Código de consulta: el paciente lo usa para ver sus resultados en línea"
+                              >
+                                Código: {ord.codigoConsulta}
+                              </span>
+                            )}
                             {ord.biometricAuthorized && (
                               <span 
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300"
@@ -1482,6 +1490,11 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                     <span className="font-mono font-bold text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
                       Expediente: {selectedOrderForDetail.patientCode || selectedOrderForDetail.nationalId}
                     </span>
+                    {selectedOrderForDetail.codigoConsulta && (
+                      <span className="font-mono font-bold text-xs bg-teal-50 text-teal-900 px-2 py-0.5 rounded-md border border-teal-300 select-all">
+                        Código de consulta: {selectedOrderForDetail.codigoConsulta}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Detalle clínico de admisión, exámenes cargados y opciones de impresión

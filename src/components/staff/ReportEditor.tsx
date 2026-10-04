@@ -75,6 +75,7 @@ import {
 export const ReportEditor: React.FC = () => {
   const { 
     patients, 
+    orders,
     templates, 
     catalogTests,
     customProfiles,
@@ -697,7 +698,7 @@ export const ReportEditor: React.FC = () => {
       await updateReport(activeReportToEdit.id, reportData);
       if (targetStatus === 'publicado') {
         await publishReport(activeReportToEdit.id);
-        showNotification('Informe firmado y publicado exitosamente con notificación push Firebase al paciente', 'success');
+        showNotification('Informe firmado y publicado. El paciente lo consulta con el código de su orden.', 'success');
       } else {
         showNotification('Informe actualizado correctamente', 'success');
       }
@@ -804,9 +805,19 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 {status}
               </span>
             </h1>
-            <p className="text-xs text-slate-500">
-              Modificación individual de pruebas, valores de referencia, unidades y parámetros analíticos
-            </p>
+            {(() => {
+              const ordenActual = activeReportToEdit?.orderId ? orders.find((o) => o.id === activeReportToEdit.orderId) : undefined;
+              return ordenActual ? (
+                <p className="text-xs text-slate-600">
+                  Orden <strong className="font-mono">{ordenActual.orderNumber}</strong> · {ordenActual.patientName}
+                  {ordenActual.codigoConsulta && (
+                    <> · Código de consulta del paciente: <strong className="font-mono select-all">{ordenActual.codigoConsulta}</strong></>
+                  )}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500">Captura los resultados de cada examen y revisa antes de publicar</p>
+              );
+            })()}
           </div>
         </div>
 
