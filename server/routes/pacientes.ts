@@ -118,7 +118,7 @@ pacientesRouter.get('/', requirePermission('admision_pacientes'), asyncHandler(a
   const limite = Math.min(Number(req.query.limite) || 50, 200);
   if (buscar) {
     const { rows } = await pool.query(
-      `SELECT id_paciente, nombre_completo, dni, fecha_nacimiento, telefono_whatsapp, correo, direccion
+      `SELECT id_paciente, nombre_completo, dni, fecha_nacimiento, fecha_nacimiento_estimada, genero, telefono_whatsapp, correo, direccion, es_menor_edad, nombre_encargado_legal, telefono_encargado_legal, fecha_registro
        FROM paciente
        WHERE nombre_completo ILIKE $1 OR dni ILIKE $1
        ORDER BY nombre_completo
@@ -128,7 +128,7 @@ pacientesRouter.get('/', requirePermission('admision_pacientes'), asyncHandler(a
     return res.json(rows);
   }
   const { rows } = await pool.query(
-    `SELECT id_paciente, nombre_completo, dni, fecha_nacimiento, telefono_whatsapp, correo, direccion
+    `SELECT id_paciente, nombre_completo, dni, fecha_nacimiento, fecha_nacimiento_estimada, genero, telefono_whatsapp, correo, direccion, es_menor_edad, nombre_encargado_legal, telefono_encargado_legal, fecha_registro
      FROM paciente ORDER BY id_paciente DESC LIMIT $1`,
     [limite]
   );

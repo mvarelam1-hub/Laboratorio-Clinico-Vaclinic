@@ -1,3 +1,4 @@
+import { firmantesPorDefecto } from '../../utils/firmantes';
 import React, { useRef, useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { PdfReportService } from '../../services/pdfReportService';
@@ -24,7 +25,7 @@ import {
 } from 'lucide-react';
 
 export const PrintReportModal: React.FC = () => {
-  const { activeReportToPrint, setActiveReportToPrint, reports, labSettings } = useClinic();
+  const { activeReportToPrint, setActiveReportToPrint, reports, labSettings, currentStaffUser } = useClinic();
   const printSheetRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -35,7 +36,7 @@ export const PrintReportModal: React.FC = () => {
   const [templateStyle, setTemplateStyle] = useState<'vaclinic' | 'compact'>('vaclinic');
   const [watermark, setWatermark] = useState<string>(labSettings.watermarkPreset);
   const [includeAiExplanation, setIncludeAiExplanation] = useState(
-    activeReportToPrint?.includeAiExplanationInReport ?? true
+    activeReportToPrint?.includeAiExplanationInReport ?? false
   );
   const [includeConclusions, setIncludeConclusions] = useState<boolean>(
     activeReportToPrint?.includeConclusionsInReport ?? Boolean(activeReportToPrint?.doctorConclusions)
@@ -55,27 +56,18 @@ export const PrintReportModal: React.FC = () => {
 
   // Custom Signers mapped from labSettings
   const activeSigners = labSettings.signers.filter(s => s.enabled);
+  // Nunca se inventan firmantes: si Ajustes no tiene, se usa el usuario con sesión
+  // (bioanalista) y el médico queda en blanco.
+  const firmantesIniciales = firmantesPorDefecto(labSettings, currentStaffUser);
   const primarySigner = activeSigners[0] || {
-    id: 's1',
-    name: 'Licda. Elena Morales Cruz',
-    roleTitle: 'Bioanalista Responsable',
-    specialty: 'Licenciada en Bioanálisis Clínico & Microbiología',
-    licenseNumber: 'Col. Bioanálisis #4192 / MSPAS-8812',
-    signatureType: 'crypto_generated',
-    showValidationHash: true,
-    showStamp: true,
-    enabled: true
+    name: firmantesIniciales.bioanalista.name,
+    specialty: firmantesIniciales.bioanalista.specialty,
+    licenseNumber: firmantesIniciales.bioanalista.license
   };
   const secondarySigner = activeSigners[1] || {
-    id: 's2',
-    name: 'Dr. Alejandro Valenzuela Morales',
-    roleTitle: 'Dirección Médica & Patología',
-    specialty: 'Médico Patólogo Clínico',
-    licenseNumber: 'CMP-649102 / RNE-28491',
-    signatureType: 'crypto_generated',
-    showValidationHash: true,
-    showStamp: true,
-    enabled: true
+    name: firmantesIniciales.medico.name,
+    specialty: firmantesIniciales.medico.specialty,
+    licenseNumber: firmantesIniciales.medico.license
   };
 
   const bioanalystName = report.signature?.bioanalystName || primarySigner.name;

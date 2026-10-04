@@ -15,6 +15,7 @@ import {
   Keyboard,
   Database
 } from 'lucide-react';
+import { DEMO_MODE } from '../config/demoMode';
 import { KeyboardShortcutsHelpModal } from './staff/KeyboardShortcutsHelpModal';
 import { ConnectionStatusIndicator, OfflineWarningBanner } from './common/ConnectionStatusIndicator';
 
@@ -174,7 +175,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
           {/* Right Action Area */}
           <div className="flex items-center gap-2">
             {/* Visual Connection Status Indicator & Offline Queue Trigger */}
-            <ConnectionStatusIndicator />
+            {(role === 'personal' || DEMO_MODE) && <ConnectionStatusIndicator />}
 
             {/* Active Branch indicator (Desktop) */}
             {role === 'personal' && (
@@ -195,8 +196,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
               </div>
             )}
 
-            {/* Notifications Bell Hub Button */}
-            <button
+            {/* Notifications Bell Hub Button (el portal real no tiene avisos push simulados) */}
+            {(role === 'personal' || DEMO_MODE) && <button
               onClick={() => setShowNotificationCenter(true)}
               className="relative p-2 rounded-xl text-slate-600 hover:text-cyan-700 hover:bg-cyan-50 border border-slate-200 transition-all cursor-pointer"
               title="Avisos y Notificaciones Push"
@@ -207,7 +208,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                   {unreadPushCount}
                 </span>
               )}
-            </button>
+            </button>}
 
             {/* Internal Staff Chat Button */}
             {role === 'personal' && (

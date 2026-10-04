@@ -57,10 +57,10 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
 
   // Construct message based on type and details
   useEffect(() => {
-    const labName = labSettings.name || 'Laboratorio Clínico VACLINIC';
-    const labPhone = labSettings.phone || '5612-5563';
-    const labAddress = labSettings.address || 'Entrada de Pineda Oratorio Santa Rosa km 79.5';
-    const portalUrl = 'https://vaclinic.laboratorio.gt';
+    const labName = labSettings.labName || 'Laboratorio Clínico VACLINIC';
+    const labPhone = labSettings.whatsappNumber || labSettings.phone || '';
+    const labAddress = labSettings.address || '';
+    const portalUrl = window.location.origin;
 
     let text = '';
 
@@ -69,13 +69,13 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         `Bienvenido(a) a *${labName}* 🏥🧪\n` +
         `_Precisión que diagnostica, confianza que cuida_\n\n` +
         `Hemos registrado su expediente clínico exitosamente:\n` +
-        `📋 *Código de Paciente:* ${patientCode || 'VAC-REGISTRADO'}\n` +
-        `🔑 *PIN de Acceso al Portal:* *${accessCode || 'Consulte en recepción'}*\n\n` +
+        `${patientCode ? `📋 *Código de Paciente:* ${patientCode}\n` : ''}` +
+        `🔑 *Código de consulta de resultados:* *${accessCode || 'solicítelo en recepción'}*\n\n` +
         `🌐 *Consulte sus resultados en línea desde su celular o computadora:*\n` +
         `${portalUrl}\n\n` +
-        `📍 *Ubicación:* ${labAddress}\n` +
-        `📞 *Teléfono / WhatsApp:* ${labPhone}\n` +
-        `🕒 *Horario:* Lunes a Sábado de 6:00 AM a 5:00 PM\n\n` +
+        `${labAddress ? `📍 *Ubicación:* ${labAddress}\n` : ''}` +
+        `${labPhone ? `📞 *Teléfono / WhatsApp:* ${labPhone}\n` : ''}` +
+        `\n` +
         `Le notificaremos en cuanto sus resultados estén listos y validados por nuestros profesionales.\n` +
         `¡Muchas gracias por su confianza! ✨`;
     } else if (type === 'comprobante_orden' && orderDetails) {
@@ -88,19 +88,19 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         `${testsPreview}\n\n` +
         `💰 *Total Liquidado:* Q${orderDetails.total.toFixed(2)}\n` +
         `${(orderDetails.pending && orderDetails.pending > 0) ? `⚠️ *Saldo Pendiente:* Q${orderDetails.pending.toFixed(2)}\n` : '✅ *Estado de Pago:* Totalmente Cancelado\n'}\n` +
-        `🔑 *Su PIN de Consulta:* *${accessCode || 'DU3HYB'}*\n` +
+        `🔑 *Su código de consulta:* *${accessCode || 'solicítelo en recepción'}*\n` +
         `🌐 *Consulte y descargue su informe oficial aquí:*\n` +
         `${portalUrl}\n\n` +
         `Recibirá un aviso cuando su informe esté validado y firmado electrónicamente.\n` +
-        `📞 *Dudas o consultas:* ${labPhone}\n` +
+        `${labPhone ? `📞 *Dudas o consultas:* ${labPhone}\n` : ''}` +
         `¡Gracias por cuidar su salud con nosotros!`;
     } else {
       text = `👋 Estimado(a) *${patientName.trim()}*,\n\n` +
         `Le informamos que sus resultados de *${labName}* se encuentran *LISTOS Y VALIDADOS* por nuestros profesionales de laboratorio 📄✅.\n\n` +
-        `🔑 *PIN de Acceso:* *${accessCode || 'DU3HYB'}*\n` +
+        `🔑 *Código de consulta:* *${accessCode || 'solicítelo en recepción'}*\n` +
         `🌐 *Ver y Descargar Reporte Oficial:* ${portalUrl}\n\n` +
         `También puede pasar a recoger su informe físico en recepción.\n` +
-        `📞 *Teléfono:* ${labPhone}`;
+        `${labPhone ? `📞 *Teléfono:* ${labPhone}` : ''}`;
     }
 
     setMessage(text);

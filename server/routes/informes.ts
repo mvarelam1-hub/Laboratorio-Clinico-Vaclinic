@@ -19,7 +19,7 @@ import { requireStaffAuth } from '../auth-staff';
 import { requirePermission } from '../permissions-middleware';
 import { asyncHandler } from '../asyncHandler';
 import { generarCodigoVerificacion, hashContenido, huellaCorta } from '../informeIntegridad';
-import { generarInformePdf, construirUrlVerificacion } from '../informePdf';
+import { emitirPdfInforme } from '../informeEmision';
 import { registrarBitacora } from '../bitacora';
 
 export const informesRouter = Router();
@@ -93,9 +93,10 @@ informesRouter.post('/', requirePermission('validacion_redaccion'), asyncHandler
 // el listado general, pero sigue consultable por id para auditoría.
 informesRouter.get('/', asyncHandler(async (req, res) => {
   const limite = Math.min(Number(req.query.limite) || 100, 500);
+  // Filas completas (incluye datos_json y sello): el personal necesita poder ver
+  // y reabrir los informes ya existentes desde cualquier equipo.
   const { rows } = await pool.query(
-    `SELECT id_informe, id_orden, numero_informe, categoria, titulo, estado,
-            fecha_muestra, fecha_emision, codigo_verificacion_qr, fecha_creacion, fecha_actualizacion
+    `SELECT *
      FROM informe_clinico
      WHERE eliminado = FALSE
      ORDER BY fecha_creacion DESC
@@ -262,99 +263,21 @@ informesRouter.patch('/:id/publicar', requirePermission('validacion_publicacion'
 // sigue siendo el sellado: así nunca sale un PDF con QR "válido" de un
 // contenido que ya no coincide.
 informesRouter.get('/:id/pdf', asyncHandler(async (req, res) => {
-  const idInforme = Number(req.params.id);
-  if (!Number.isInteger(idInforme) || idInforme <= 0) return res.status(400).json({ error: 'Id de informe inválido.' });
-
-  const { rows } = await pool.query(
-    `SELECT i.*, c.nombre_laboratorio, c.nombre_legal, c.nit_ruc, c.registro_sanitario, c.acreditacion_iso,
-            c.direccion AS lab_direccion, c.telefono AS lab_telefono, c.email AS lab_email,
-            c."tamaño_papel" AS lab_papel, c.color_primario, c.color_valor_critico
-     FROM informe_clinico i
-     LEFT JOIN configuracion_laboratorio c ON c.id_laboratorio = 1
-     WHERE i.id_informe = $1 AND i.eliminado = FALSE`,
-    [idInforme]
-  );
-  if (rows.length === 0) return res.status(404).json({ error: 'Informe no encontrado o ya eliminado.' });
-  const i = rows[0];
-  const publicado = i.estado === 'publicado' || i.estado === 'entregado';
-
-  if (publicado) {
-    if (!i.codigo_verificacion || !i.hash_contenido) {
-      return res.status(409).json({
-        error: 'Este informe se publicó antes de existir el sello de verificación. Vuelve a publicarlo para poder emitir el PDF oficial.',
-        code: 'INFORME_SIN_SELLO'
-      });
-    }
-    if (hashContenido(i) !== i.hash_contenido) {
-      return res.status(409).json({
-        error: 'El contenido de este informe cambió después de publicarse, por lo que su sello ya no es válido. Vuelve a publicarlo para emitir un PDF oficial.',
-        code: 'INFORME_MODIFICADO'
-      });
-    }
-  }
-
-  let validado: string[] = [];
-  let verificado: string[] = [];
-  if (i.id_orden) {
-    const { rows: firmantes } = await pool.query(
-      `SELECT r.validado_por_nombre, r.verificado_por_nombre
-       FROM resultado r JOIN detalle_orden d ON d.id_detalle = r.id_detalle
-       WHERE d.id_orden = $1`,
-      [i.id_orden]
-    );
-    const unicos = (xs: Array<string | null>) => [...new Set(xs.filter((x): x is string => !!x && x.trim() !== ''))];
-    validado = unicos(firmantes.map((f: any) => f.validado_por_nombre));
-    verificado = unicos(firmantes.map((f: any) => f.verificado_por_nombre));
-  }
-
-  const d = i.datos_json || {};
   const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
-  const pdf = await generarInformePdf({
-    numero_informe: i.numero_informe,
-    titulo: i.titulo,
-    estado: i.estado,
-    fecha_muestra: i.fecha_muestra,
-    fecha_emision: i.fecha_emision,
-    fecha_publicacion: i.fecha_publicacion,
-    hallazgos: i.hallazgos_clinicos,
-    conclusiones: i.conclusiones_medico,
-    explicacion: i.explicacion_paciente,
-    recomendaciones: i.recomendaciones || [],
-    incluirConclusiones: d.includeConclusionsInReport,
-    incluirRecomendaciones: d.includeRecommendationsInReport,
-    incluirExplicacion: d.includeAiExplanationInReport,
-    paciente: {
-      nombre: d.patientName, documento: d.patientNationalId, edad: d.patientAge, genero: d.patientGender,
-      medico: d.referringDoctor, muestra: d.sampleType
-    },
-    parametros: Array.isArray(d.parameters) ? d.parameters : [],
-    laboratorio: {
-      nombre: i.nombre_laboratorio || 'Laboratorio clínico', nombre_legal: i.nombre_legal, nit: i.nit_ruc,
-      registro_sanitario: i.registro_sanitario, acreditacion: i.acreditacion_iso, direccion: i.lab_direccion,
-      telefono: i.lab_telefono, email: i.lab_email, color_primario: i.color_primario,
-      color_critico: i.color_valor_critico, papel: i.lab_papel
-    },
-    firmas: {
-      publicado_por: i.publicado_por_nombre, colegiado: i.publicado_por_colegiado,
-      especialidad: i.publicado_por_especialidad, validado_por: validado, verificado_por: verificado
-    },
-    sello: publicado
-      ? { codigo: i.codigo_verificacion, hash: i.hash_contenido, url: construirUrlVerificacion(baseUrl, i.codigo_verificacion, i.hash_contenido) }
-      : undefined
-  });
+  const r = await emitirPdfInforme(Number(req.params.id), { baseUrl });
+  if (r.ok === false) return res.status(r.status).json(r.code ? { error: r.error, code: r.code } : { error: r.error });
 
   await registrarBitacora({
     idUsuario: req.staffUser!.idUsuario,
-    accion: publicado ? 'emitir_pdf_informe' : 'emitir_pdf_borrador',
+    accion: r.publicado ? 'emitir_pdf_informe' : 'emitir_pdf_borrador',
     modulo: 'reportes',
-    detalles: `PDF del informe ${i.numero_informe} (${publicado ? 'oficial' : 'borrador'}).`
+    detalles: `PDF del informe ${r.numeroInforme} (${r.publicado ? 'oficial' : 'borrador'}).`
   }).catch((err) => console.error('[informes] No se pudo registrar la emisión del PDF en la bitácora:', err?.message));
 
-  const nombreArchivo = `Informe-${String(i.numero_informe).replace(/[^A-Za-z0-9._-]/g, '_')}${publicado ? '' : '-BORRADOR'}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="${nombreArchivo}"`);
+  res.setHeader('Content-Disposition', `inline; filename="${r.nombreArchivo}"`);
   res.setHeader('Cache-Control', 'no-store');
-  return res.send(Buffer.from(pdf));
+  return res.send(Buffer.from(r.pdf as Uint8Array));
 }));
 
 // Eliminación lógica -nunca un DELETE real, igual que en órdenes (migración

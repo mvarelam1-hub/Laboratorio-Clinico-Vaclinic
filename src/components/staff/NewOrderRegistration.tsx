@@ -54,7 +54,7 @@ import {
   fechaDesdeEdadAproximada,
   validarDatosPaciente
 } from '../../services/validacionPaciente';
-import { generateDemographicParametersForTests } from '../../utils/referenceRangeEvaluator';
+import { construirBorradorDeOrden } from '../../utils/borradorInforme';
 
 export function getStaffFriendlyCapLabel(tube: TubeDefinition): string {
   if (tube.id === 'lila') return 'Tapa Morada (EDTA)';
@@ -743,59 +743,29 @@ export const NewOrderRegistration: React.FC = () => {
   // Expedited workflow: Load results into Report Editor with demographic pre-selected reference ranges
   const handleLoadResultsWithPreselectedRanges = (modalData: NonNullable<typeof createdOrderModal>) => {
     const patientObj = patients.find(p => p.id === modalData.patientId);
-    const effectiveAge = modalData.patientAge ?? patientObj?.age ?? 0;
-    const effectiveGender = modalData.patientGender ?? patientObj?.gender ?? 'M';
-    
-    // Generate demographic parameters pre-calibrated to this patient's age and sex.
-    // Se pasan los examCodes reales del catálogo (mismo orden que testsList)
-    // para que cada parámetro generado quede etiquetado con el examen que lo
-    // originó -así, al guardar el informe, ClinicContext.tsx `addReport`
-    // puede agrupar por examCode y enlazarlo con el id_detalle_orden real de
-    // esta orden (modalData.savedOrder.detalleRemoto).
-    const parameters = generateDemographicParametersForTests(
-      modalData.testsList,
-      effectiveAge,
-      effectiveGender,
-      catalogTests,
-      modalData.examCodes
-    );
-
-    const draftReport: MedicalReport = {
-      id: `rep-ord-${Date.now()}`,
-      reportNumber: `INF-${modalData.orderNumber.replace('#', '')}-${new Date().getFullYear()}`,
+        // Borrador SIN valores ni texto clínico precargado; cada parámetro queda
+    // etiquetado con el examCode real de la orden para poder enlazarlo con el
+    // id_detalle_orden al guardar (ver addReport en ClinicContext.tsx).
+    const draftReport = construirBorradorDeOrden({
+      orderId: modalData.savedOrder?.id,
+      orderNumber: modalData.orderNumber,
       patientId: modalData.patientId,
       patientName: modalData.patientName,
-      patientNationalId: modalData.nationalId,
-      patientAge: effectiveAge,
-      patientGender: effectiveGender.toUpperCase().startsWith('F') ? 'F' : 'M',
-      category: 'bioquimica',
-      title: modalData.testsList.join(' + ') || 'Análisis Clínico de Laboratorio',
+      nationalId: modalData.nationalId,
+      patientAge: modalData.patientAge ?? patientObj?.age,
+      patientGender: modalData.patientGender ?? patientObj?.gender,
+      testsList: modalData.testsList,
+      examCodes: modalData.examCodes,
+      catalogTests,
       sampleDate: modalData.orderDate,
-      emissionDate: new Date().toISOString(),
       laboratoryName: currentBranch?.name ? `VACLINIC - ${currentBranch.name}` : 'VACLINIC LABORATORIO CLÍNICO',
-      status: 'borrador',
-      sampleType: 'Muestras Biológicas Controladas',
-      tubeType: modalData.tubesRequired.map(t => t.label).join(', ') || 'Tubos Primarios con Código de Barras',
-      parameters: parameters,
-      clinicalFindings: `Calibración demográfica CLSI C28-A3 aplicada para paciente ${effectiveGender.toUpperCase().startsWith('F') ? 'femenino' : 'masculino'} de ${effectiveAge} años. Intervalos biológicos pre-calibrados automáticamente.`,
-      doctorConclusions: 'Resultados procesados según estándares de referencia por edad y sexo.',
-      patientExplanation: 'Tus análisis de laboratorio han sido calibrados según tu grupo de edad y sexo biológico.',
-      recommendations: [
-        'Correlacionar hallazgos con la evaluación clínica del médico tratante.'
-      ],
-      // El código de verificación real lo emite el servidor al publicar el informe (sello verificable).
-      qrVerificationCode: '',
-      // Vínculo real con la orden -solo se rellena si la orden se creó de
-      // verdad en el backend (savedOrder.id ya es el id real "ord-<n>"); si
-      // la orden quedó solo local (servidor caído), orderId queda undefined
-      // y `addReport` simplemente no podrá sincronizar resultados, tal como
-      // ya ocurre con pacientes/órdenes en ese mismo escenario.
-      orderId: modalData.savedOrder?.id
-    };
+      tubeType: modalData.tubesRequired.map(t => t.label).join(', ')
+    });
+    const parameters = draftReport.parameters;
 
     setActiveReportToEdit(draftReport);
     setStaffActiveTab('redactor');
-    showNotification(`✓ Orden ${modalData.orderNumber} cargada en Redactor con ${parameters.length} rangos pre-seleccionados (${effectiveAge}a, ${effectiveGender}).`, 'success');
+    showNotification(`Orden ${modalData.orderNumber} abierta en el Redactor: ${parameters.length} parámetros para capturar.`, 'success');
     setCreatedOrderModal(null);
   };
 

@@ -71,7 +71,7 @@ export const FourDimensionControlHub: React.FC = () => {
   const [newPatientType, setNewPatientType] = useState<PatientType>('ambulatorio');
   const [newProgram, setNewProgram] = useState<HealthProgram>('preventivo_360');
   const [newOrigin, setNewOrigin] = useState<OriginDepartment>('consulta_externa');
-  const [newDoctor, setNewDoctor] = useState('Dr. Alejandro Valenzuela');
+  const [newDoctor, setNewDoctor] = useState('');
   const [newPriority, setNewPriority] = useState<'rutina' | 'urgente' | 'stat_panico'>('rutina');
   const [newTests, setNewTests] = useState('Hemograma Completo, Perfil Lipídico, Glucosa Basal');
 

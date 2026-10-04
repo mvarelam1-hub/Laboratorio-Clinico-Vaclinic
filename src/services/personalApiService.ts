@@ -5,7 +5,7 @@
  * colapso de UserStatus a un booleano y sobre `firebaseUid`).
  */
 import { getStaffSessionToken } from './staffSessionToken';
-import type { LabStaffRole, UserStatus } from '../types';
+import type { LabStaffRole, LabStaffUser, UserStatus } from '../types';
 
 export class PersonalApiError extends Error {
   constructor(message: string, public status?: number) {
@@ -94,4 +94,46 @@ export async function reiniciarPinPersonalRemoto(idUsuario: number, pinCode: str
 export async function eliminarPersonalRemoto(idUsuario: number): Promise<void> {
   const res = await authFetch(`/api/personal/${idUsuario}`, { method: 'DELETE' });
   if (!res.ok) throw new PersonalApiError(await parseErrorBody(res), res.status);
+}
+
+/** Traduce una fila real de `usuario` al perfil de personal del frontend. */
+export function mapPersonalApiToStaffUser(row: PersonalApiRow, nombresDeRol: Record<string, string> = {}): LabStaffUser {
+  const r = row as Record<string, any>;
+  return {
+    id: `usr-remote-${row.id_usuario}`,
+    remoteId: row.id_usuario,
+    fullName: row.nombre_completo,
+    username: r.nombre_usuario || r.correo || '',
+    email: r.correo || '',
+    phone: r.telefono || '',
+    roleId: row.rol as LabStaffRole,
+    roleName: nombresDeRol[row.rol] || String(row.rol),
+    specialty: r.especialidad || '',
+    licenseNumber: r.numero_colegiado || '',
+    assignedBranch: (r.sede_asignada || 'todas') as LabStaffUser['assignedBranch'],
+    status: (row.estado ? 'activo' : 'inactivo') as UserStatus,
+    pinCode: row.pin_code || '',
+    customPermissions: r.permisos_personalizados && typeof r.permisos_personalizados === 'object' ? r.permisos_personalizados : undefined,
+    avatarColor: r.color_avatar || 'bg-teal-600',
+    createdAt: r.fecha_creacion ? new Date(r.fecha_creacion).toISOString() : new Date(0).toISOString(),
+    lastLogin: r.ultimo_login ? new Date(r.ultimo_login).toISOString() : undefined,
+    signatureStampText: r.texto_sello_firma || undefined,
+    signatureImageUrl: r.url_imagen_firma || undefined,
+    twoFactorEnabled: !!r.doble_factor_habilitado,
+    notes: r.notas || undefined
+  };
+}
+
+/** Los usuarios reales mandan; los que solo existen en este equipo (sin remoteId) se conservan. */
+export function combinarPersonalRemoto(locales: LabStaffUser[], filas: PersonalApiRow[], nombresDeRol: Record<string, string> = {}): LabStaffUser[] {
+  if (filas.length === 0) return locales;
+  const porRemoto = new Map(locales.filter((u) => u.remoteId != null).map((u) => [u.remoteId as number, u]));
+  const remotos = filas.map((f) => {
+    const nuevo = mapPersonalApiToStaffUser(f, nombresDeRol);
+    const previo = porRemoto.get(f.id_usuario);
+    // Se conservan los datos de perfil que la base no guarda (biometría, etc.).
+    return previo ? { ...previo, ...nuevo, biometricEnrolled: previo.biometricEnrolled, biometricCredentials: previo.biometricCredentials, biometricLastAuthAt: previo.biometricLastAuthAt } : nuevo;
+  });
+  const idsRemotos = new Set(filas.map((f) => f.id_usuario));
+  return [...remotos, ...locales.filter((u) => u.remoteId == null || !idsRemotos.has(u.remoteId))];
 }

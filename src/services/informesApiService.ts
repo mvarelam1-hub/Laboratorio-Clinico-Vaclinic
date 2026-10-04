@@ -125,3 +125,85 @@ export async function eliminarInformeRemoto(idInforme: number, motivo?: string):
   const res = await authFetch(`/api/informes/${idInforme}`, { method: 'DELETE', body: JSON.stringify({ motivo }) });
   if (!res.ok) throw new InformesApiError(await parseErrorBody(res), res.status);
 }
+
+export async function listarInformesRemotos(limite = 200): Promise<InformeApiRow[]> {
+  const res = await authFetch(`/api/informes?limite=${limite}`);
+  if (!res.ok) throw new InformesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+const aTexto = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
+const aIso = (v: unknown): string => {
+  if (!v) return '';
+  const d = new Date(v as string);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString();
+};
+
+/** Traduce una fila real de `informe_clinico` al `MedicalReport` del frontend. */
+export function mapInformeApiToReport(row: InformeApiRow, existing?: Partial<MedicalReport>): MedicalReport {
+  const r = row as Record<string, any>;
+  const d = (r.datos_json && typeof r.datos_json === 'object' ? r.datos_json : {}) as Record<string, any>;
+  const edad = Number.parseInt(String(d.patientAge ?? ''), 10);
+  return {
+    id: existing?.id || `rep-srv-${r.id_informe}`,
+    remoteId: r.id_informe,
+    reportNumber: aTexto(r.numero_informe),
+    patientId: aTexto(d.patientId),
+    patientName: aTexto(d.patientName),
+    patientNationalId: aTexto(d.patientNationalId),
+    patientAge: Number.isFinite(edad) ? edad : 0,
+    patientGender: d.patientGender === 'F' || d.patientGender === 'M' ? d.patientGender : 'Otro',
+    referringDoctor: d.referringDoctor || undefined,
+    company: d.company || undefined,
+    category: (r.categoria || 'laboratorio') as MedicalReport['category'],
+    title: aTexto(r.titulo),
+    sampleDate: aIso(r.fecha_muestra) || aIso(r.fecha_creacion),
+    emissionDate: aIso(r.fecha_emision) || aIso(r.fecha_creacion),
+    laboratoryName: aTexto(d.laboratoryName),
+    status: (r.estado || 'borrador') as MedicalReport['status'],
+    sampleType: d.sampleType || undefined,
+    tubeType: d.tubeType || undefined,
+    parameters: Array.isArray(d.parameters) ? d.parameters : [],
+    clinicalFindings: aTexto(r.hallazgos_clinicos),
+    doctorConclusions: aTexto(r.conclusiones_medico),
+    patientExplanation: aTexto(r.explicacion_paciente),
+    recommendations: Array.isArray(r.recomendaciones) ? r.recomendaciones.map(String) : [],
+    includeConclusionsInReport: d.includeConclusionsInReport,
+    includeRecommendationsInReport: d.includeRecommendationsInReport,
+    includeAiExplanationInReport: d.includeAiExplanationInReport,
+    urgentAlert: d.urgentAlert,
+    signature: d.signature || undefined,
+    qrVerificationCode: aTexto(r.codigo_verificacion_qr),
+    verificationCode: r.codigo_verificacion || undefined,
+    verificationHash: r.hash_contenido || undefined,
+    notesToStaff: d.notesToStaff || undefined,
+    episodeId: d.episodeId || undefined,
+    branchId: d.branchId || undefined,
+    attachedAnalyzerReport: d.attachedAnalyzerReport || undefined,
+    orderId: r.id_orden ? `ord-${r.id_orden}` : existing?.orderId,
+    resultadosRemotos: existing?.resultadosRemotos
+  };
+}
+
+/**
+ * Mezcla los informes reales con los del navegador. El servidor manda en los
+ * informes ya publicados/entregados (están sellados); un borrador o revisión
+ * que ya existe localmente se conserva tal cual para no pisar a quien lo está
+ * editando. Los informes que solo existen en este equipo se mantienen.
+ */
+export function combinarInformesRemotos(locales: MedicalReport[], filas: InformeApiRow[]): MedicalReport[] {
+  if (filas.length === 0) return locales;
+  const localPorRemoto = new Map(locales.filter((r) => r.remoteId != null).map((r) => [r.remoteId as number, r]));
+  const idsRemotosTratados = new Set<number>();
+  const resultado: MedicalReport[] = [];
+  const reemplazos = new Map<string, MedicalReport>();
+  for (const fila of filas) {
+    const local = localPorRemoto.get(fila.id_informe);
+    idsRemotosTratados.add(fila.id_informe);
+    const sellado = fila.estado === 'publicado' || fila.estado === 'entregado';
+    if (!local) resultado.push(mapInformeApiToReport(fila));
+    else if (sellado) reemplazos.set(local.id, mapInformeApiToReport(fila, local));
+  }
+  const conservados = locales.map((r) => reemplazos.get(r.id) ?? r);
+  return [...resultado, ...conservados];
+}

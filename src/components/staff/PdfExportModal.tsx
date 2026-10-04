@@ -1,3 +1,4 @@
+import { firmantesPorDefecto } from '../../utils/firmantes';
 import React, { useState, useRef } from 'react';
 import { MedicalReport } from '../../types';
 import { useClinic } from '../../context/ClinicContext';
@@ -42,18 +43,13 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   report,
   isOpen,
   onClose,
-  defaultBioanalyst = {
-    name: 'Licda. Elena Morales Cruz',
-    specialty: 'Licenciada en Bioanálisis Clínico & Microbiología',
-    license: 'Col. Bioanálisis #4192 / MSPAS-8812'
-  },
-  defaultDoctor = {
-    name: 'Dr. Alejandro Valenzuela Morales',
-    specialty: 'Médico Patólogo Clínico & Diagnóstico',
-    license: 'CMP-649102 / RNE-28491'
-  }
+  defaultBioanalyst,
+  defaultDoctor
 }) => {
-  const { labSettings, updateLabSettings, showNotification } = useClinic();
+  const { labSettings, updateLabSettings, showNotification, currentStaffUser } = useClinic();
+  const firmantesIniciales = firmantesPorDefecto(labSettings, currentStaffUser);
+  const bioInicial = defaultBioanalyst ?? firmantesIniciales.bioanalista;
+  const medicoInicial = defaultDoctor ?? firmantesIniciales.medico;
   const printAreaRef = useRef<HTMLDivElement>(null);
 
   // Export & customization settings
@@ -74,7 +70,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
 
   // Content options
   const [includeAiExplanation, setIncludeAiExplanation] = useState(
-    report?.includeAiExplanationInReport ?? true
+    report?.includeAiExplanationInReport ?? false
   );
   const [includeConclusions, setIncludeConclusions] = useState<boolean>(
     report?.includeConclusionsInReport ?? Boolean(report?.doctorConclusions)
@@ -88,13 +84,13 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   const [watermark, setWatermark] = useState<'none' | 'OFICIAL VALIDADO' | 'CONFIDENCIAL' | 'URGENTE'>('none');
   
   // Signatures data
-  const [bioanalystName, setBioanalystName] = useState(defaultBioanalyst.name);
-  const [bioanalystSpecialty, setBioanalystSpecialty] = useState(defaultBioanalyst.specialty);
-  const [bioanalystLicense, setBioanalystLicense] = useState(defaultBioanalyst.license);
+  const [bioanalystName, setBioanalystName] = useState(bioInicial.name);
+  const [bioanalystSpecialty, setBioanalystSpecialty] = useState(bioInicial.specialty);
+  const [bioanalystLicense, setBioanalystLicense] = useState(bioInicial.license);
 
-  const [doctorName, setDoctorName] = useState(report?.signature?.doctorName || defaultDoctor.name);
-  const [doctorSpecialty, setDoctorSpecialty] = useState(report?.signature?.doctorSpecialty || defaultDoctor.specialty);
-  const [doctorLicense, setDoctorLicense] = useState(report?.signature?.doctorLicense || defaultDoctor.license);
+  const [doctorName, setDoctorName] = useState(report?.signature?.doctorName || medicoInicial.name);
+  const [doctorSpecialty, setDoctorSpecialty] = useState(report?.signature?.doctorSpecialty || medicoInicial.specialty);
+  const [doctorLicense, setDoctorLicense] = useState(report?.signature?.doctorLicense || medicoInicial.license);
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [isOfficialPdfLoading, setIsOfficialPdfLoading] = useState(false);
@@ -218,9 +214,9 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
     attachedAnalyzerReport: (includeAttachedAnalyzer && report.attachedAnalyzerReport) ? report.attachedAnalyzerReport : undefined,
     signature: {
       ...report.signature,
-      doctorName: doctorName || report.signature?.doctorName || defaultDoctor.name,
-      doctorSpecialty: doctorSpecialty || report.signature?.doctorSpecialty || defaultDoctor.specialty,
-      doctorLicense: doctorLicense || report.signature?.doctorLicense || defaultDoctor.license,
+      doctorName: doctorName || report.signature?.doctorName || medicoInicial.name,
+      doctorSpecialty: doctorSpecialty || report.signature?.doctorSpecialty || medicoInicial.specialty,
+      doctorLicense: doctorLicense || report.signature?.doctorLicense || medicoInicial.license,
       validationHash: validationHash
     }
   };

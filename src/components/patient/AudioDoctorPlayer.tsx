@@ -10,7 +10,7 @@ interface AudioDoctorPlayerProps {
 }
 
 export const AudioDoctorPlayer: React.FC<AudioDoctorPlayerProps> = ({
-  doctorName = 'Dr. Alejandro Valenzuela Morales',
+  doctorName = 'el laboratorio',
   doctorSpecialty = 'Especialista en Diagnóstico Clínico',
   explanationText,
   recommendations = [],

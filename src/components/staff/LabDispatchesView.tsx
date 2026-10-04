@@ -1,108 +1,93 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
-import { 
-  Send, 
-  MessageSquare, 
-  Mail, 
-  CheckCheck, 
-  Clock, 
-  Search, 
-  Filter, 
-  RefreshCw,
-  ExternalLink,
-  Phone
-} from 'lucide-react';
+import { Send, Search } from 'lucide-react';
+import { enlaceWhatsApp, mensajeResultadosListos } from '../../utils/mensajeResultados';
 
+/**
+ * Entrega de resultados: informes YA PUBLICADOS, con el aviso al paciente por
+ * WhatsApp (se abre WhatsApp con el mensaje listo; el envío lo hace el
+ * personal). No hay bitácora de envíos de ejemplo ni estados de entrega
+ * inventados: el sistema no puede saber si el paciente leyó el mensaje.
+ */
 export const LabDispatchesView: React.FC = () => {
-  const { showNotification } = useClinic();
-  const [search, setSearch] = useState('');
+  const { reports, patients, orders, labSettings, showNotification } = useClinic();
+  const [busqueda, setBusqueda] = useState('');
 
-  const dispatches = [
-    { id: 'disp-1', patient: 'Carlos Mendoza Ramos', phone: '+502 5612-5563', channel: 'WhatsApp', reportNum: 'LAB-2026-8941', status: 'Entregado & Leído', time: '14:22', icon: MessageSquare, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-    { id: 'disp-2', patient: 'Lucía Fernández Morales', phone: '+502 4192-8831', channel: 'WhatsApp', reportNum: 'LAB-2026-8942', status: 'Entregado & Leído', time: '13:45', icon: MessageSquare, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-    { id: 'disp-3', patient: 'Roberto Gómez Suárez', email: 'roberto.gomez@gmail.com', channel: 'Correo Electrónico', reportNum: 'LAB-2026-8943', status: 'Enviado con Éxito', time: '12:10', icon: Mail, color: 'text-sky-600 bg-sky-50 border-sky-200' },
-    { id: 'disp-4', patient: 'Elena Soto Villalobos', phone: '+502 3341-9022', channel: 'SMS + WhatsApp', reportNum: 'LAB-2026-8944', status: 'Entregado', time: '11:05', icon: MessageSquare, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-    { id: 'disp-5', patient: 'Dr. Mario Morales (Médico Referente)', phone: '+502 5900-1122', channel: 'Portal Médico', reportNum: 'LAB-2026-8941', status: 'Consultado por Médico', time: '10:30', icon: Send, color: 'text-purple-600 bg-purple-50 border-purple-200' }
-  ];
+  const publicados = useMemo(
+    () => reports
+      .filter((r) => r.status === 'publicado' || r.status === 'entregado')
+      .filter((r) => !busqueda.trim() || `${r.patientName} ${r.reportNumber}`.toLowerCase().includes(busqueda.trim().toLowerCase()))
+      .sort((a, b) => new Date(b.emissionDate).getTime() - new Date(a.emissionDate).getTime()),
+    [reports, busqueda]
+  );
+
+  const mensajePara = (r: (typeof reports)[number]) => {
+    const orden = orders.find((o) => o.id === r.orderId);
+    return mensajeResultadosListos({
+      paciente: r.patientName,
+      codigoConsulta: orden?.codigoConsulta,
+      urlPortal: window.location.origin,
+      laboratorio: labSettings.labName || 'el laboratorio',
+      telefonoLab: labSettings.whatsappNumber || labSettings.phone
+    });
+  };
+
+  const avisar = (r: (typeof reports)[number]) => {
+    const telefono = patients.find((p) => p.id === r.patientId)?.phone;
+    const enlace = enlaceWhatsApp(telefono, mensajePara(r));
+    if (!enlace) { showNotification('Este paciente no tiene un teléfono válido registrado.', 'warning'); return; }
+    window.open(enlace, '_blank', 'noopener,noreferrer');
+  };
+
+  const copiar = async (r: (typeof reports)[number]) => {
+    try { await navigator.clipboard.writeText(mensajePara(r)); showNotification('Mensaje copiado.', 'success'); }
+    catch { showNotification('No se pudo copiar el mensaje.', 'error'); }
+  };
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 animate-fade-in text-slate-800">
-      
-      {/* Header */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="w-full max-w-5xl mx-auto space-y-5 text-slate-800">
+      <div className="flex items-center gap-3">
+        <Send className="w-6 h-6 text-slate-700" />
         <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-teal-50 text-teal-600 border border-teal-200">
-              <Send className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900">Envíos y Notificaciones a Pacientes (169)</h1>
-              <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                Bitácora de reportes enviados por WhatsApp, Correo Electrónico y Portal de Resultados.
-              </p>
-            </div>
-          </div>
+          <h1 className="text-xl font-bold text-slate-900">Entrega de resultados</h1>
+          <p className="text-xs text-slate-500">Informes publicados y aviso al paciente por WhatsApp.</p>
         </div>
-
-        <button
-          onClick={() => showNotification('Sincronizando estado de entrega con servidores de WhatsApp API...', 'info')}
-          className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-2 transition-all cursor-pointer"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Actualizar Estatus</span>
-        </button>
       </div>
 
-      {/* Dispatches List */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
-              <tr>
-                <th className="px-5 py-3.5">Destinatario</th>
-                <th className="px-5 py-3.5">Canal</th>
-                <th className="px-5 py-3.5">N° Informe</th>
-                <th className="px-5 py-3.5">Hora de Envío</th>
-                <th className="px-5 py-3.5">Estatus de Entrega</th>
-                <th className="px-5 py-3.5 text-right">Reenviar</th>
+      <div className="relative max-w-sm">
+        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar paciente o informe"
+          className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm" />
+      </div>
+
+      {publicados.length === 0 ? (
+        <div className="border border-slate-300 rounded-xl p-8 text-center text-sm text-slate-600 bg-white">
+          Todavía no hay informes publicados.
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-300 rounded-xl overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-slate-600 border-b border-slate-300">
+                <th className="px-4 py-2">Paciente</th><th className="px-4 py-2">Informe</th><th className="px-4 py-2">Fecha</th><th className="px-4 py-2 text-right">Aviso</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {dispatches.map((d) => (
-                <tr key={d.id} className="hover:bg-slate-50/70 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <div className="font-bold text-slate-900">{d.patient}</div>
-                    <div className="text-[11px] text-slate-400">{d.phone || d.email}</div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border ${d.color}`}>
-                      <d.icon className="w-3 h-3" />
-                      {d.channel}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 font-mono font-bold text-teal-700">{d.reportNum}</td>
-                  <td className="px-5 py-3.5 text-slate-500">{d.time}</td>
-                  <td className="px-5 py-3.5">
-                    <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-[11px]">
-                      <CheckCheck className="w-3.5 h-3.5" />
-                      {d.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <button
-                      onClick={() => showNotification(`Reenviando mensaje por WhatsApp a ${d.patient}...`, 'success')}
-                      className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-teal-50 hover:text-teal-700 text-slate-600 text-[11px] font-bold transition-all cursor-pointer"
-                    >
-                      Reenviar
-                    </button>
+            <tbody>
+              {publicados.map((r) => (
+                <tr key={r.id} className="border-b border-slate-200 last:border-0">
+                  <td className="px-4 py-2 font-semibold text-slate-900">{r.patientName || '—'}</td>
+                  <td className="px-4 py-2 text-slate-700">{r.reportNumber}<span className="block text-xs text-slate-500">{r.title}</span></td>
+                  <td className="px-4 py-2 text-slate-700">{new Date(r.emissionDate).toLocaleDateString('es-GT')}</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">
+                    <button onClick={() => avisar(r)} className="text-xs font-semibold bg-teal-700 text-white rounded-lg px-3 py-1.5 mr-2 cursor-pointer">WhatsApp</button>
+                    <button onClick={() => copiar(r)} className="text-xs font-semibold border border-slate-300 rounded-lg px-3 py-1.5 cursor-pointer">Copiar mensaje</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
-
+      )}
     </div>
   );
 };

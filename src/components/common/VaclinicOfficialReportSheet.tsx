@@ -64,7 +64,7 @@ export interface VaclinicOfficialReportSheetProps {
 export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetProps> = ({
   report,
   watermark = 'none',
-  includeAiExplanation = true,
+  includeAiExplanation = false,
   includeSignatures = true,
   includeConclusions = true,
   includeRecommendations = true,
@@ -153,7 +153,7 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
 
   const shouldShowAiExplanation = 
     includeAiExplanation && 
-    (report.includeAiExplanationInReport !== false) && 
+    (report.includeAiExplanationInReport === true) && 
     Boolean(report.patientExplanation && report.patientExplanation.trim().length > 0);
 
   const emissionDateFormatted = new Date(report.emissionDate || Date.now()).toLocaleDateString('es-ES', {
@@ -783,12 +783,12 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
 
         {/* Síntesis Explicativa de IA para el Paciente (Opcional) */}
         {shouldShowAiExplanation && (
-          <div className="bg-cyan-50/50 border border-cyan-200/80 rounded-lg p-2 text-[9px] text-cyan-950 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-cyan-900 uppercase tracking-wider text-[8.5px] mb-0.5">
-              <Sparkles className="w-3 h-3 text-cyan-600 flex-shrink-0" />
-              <span>Síntesis Explicativa para el Paciente</span>
+          <div className="border border-slate-400 rounded-lg p-2 text-[9px] text-slate-900">
+            <div className="font-bold uppercase tracking-wider text-[8.5px] mb-0.5">
+              <span>Texto de apoyo para el paciente</span>
+              <span className="font-normal normal-case tracking-normal"> — generado con IA y revisado por el laboratorio; no es un diagnóstico</span>
             </div>
-            <p className="leading-snug text-slate-700">
+            <p className="leading-snug">
               {report.patientExplanation}
             </p>
           </div>

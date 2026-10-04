@@ -62,7 +62,7 @@ async function toApiError(res: Response): Promise<PacientesApiError> {
 }
 
 /** Fila cruda tal como la devuelve server/routes/pacientes.ts (snake_case). */
-interface PacienteApiRow {
+export interface PacienteApiRow {
   id_paciente: number;
   nombre_completo: string;
   dni?: string | null;
@@ -118,6 +118,20 @@ export function mapPacienteApiToPatient(row: PacienteApiRow, existing?: Partial<
     },
     createdAt: row.fecha_registro || new Date().toISOString()
   };
+}
+
+/**
+ * Mezcla los pacientes reales del servidor con los que ya hay en el navegador:
+ * cada fila remota reemplaza a su par local (conservando solo datos que la base
+ * no guarda: tipo de sangre, alergias, etc.) y los pacientes que únicamente
+ * existen en este equipo (creados sin conexión) se conservan al final.
+ */
+export function combinarPacientesRemotos(locales: Patient[], filas: PacienteApiRow[]): Patient[] {
+  if (filas.length === 0) return locales;
+  const porId = new Map(locales.map((p) => [p.id, p]));
+  const remotos = filas.map((f) => mapPacienteApiToPatient(f, porId.get(String(f.id_paciente))));
+  const idsRemotos = new Set(remotos.map((p) => p.id));
+  return [...remotos, ...locales.filter((p) => !idsRemotos.has(p.id))];
 }
 
 function calcularEdad(fechaNacimiento: string): number {

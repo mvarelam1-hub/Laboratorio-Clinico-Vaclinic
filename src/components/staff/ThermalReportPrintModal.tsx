@@ -31,10 +31,10 @@ export const ThermalReportPrintModal: React.FC<ThermalReportPrintModalProps> = (
   isOpen,
   onClose,
   report,
-  bioanalystName = 'Licda. Elena Morales Cruz',
-  bioanalystLicense = 'Col. Bioanálisis #4192 / MSPAS-8812',
-  doctorName = 'Dr. Alejandro Valenzuela Morales',
-  doctorLicense = 'CMP-649102 / RNE-28491'
+  bioanalystName = '',
+  bioanalystLicense = '',
+  doctorName = '',
+  doctorLicense = ''
 }) => {
   const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
   const [fontSize, setFontSize] = useState<'normal' | 'condensed'>('normal');

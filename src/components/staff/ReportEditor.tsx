@@ -1,3 +1,5 @@
+import { firmantesPorDefecto } from '../../utils/firmantes';
+import { numeroInformeNuevo } from '../../utils/borradorInforme';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { 
@@ -83,8 +85,11 @@ export const ReportEditor: React.FC = () => {
     publishReport, 
     setStaffActiveTab,
     setActiveReportToPrint,
-    showNotification
+    showNotification,
+    labSettings,
+    currentStaffUser
   } = useClinic();
+  const firmantesIniciales = firmantesPorDefecto(labSettings, currentStaffUser);
 
   // Form states
   const [patientId, setPatientId] = useState<string>(activeReportToEdit?.patientId || '');
@@ -140,19 +145,19 @@ export const ReportEditor: React.FC = () => {
 
   // Bioanalyst Signature data
   const [bioanalystName, setBioanalystName] = useState(
-    activeReportToEdit?.signature?.bioanalystName || 'Licda. Elena Morales Cruz'
+    activeReportToEdit?.signature?.bioanalystName || firmantesIniciales.bioanalista.name
   );
   const [bioanalystSpecialty, setBioanalystSpecialty] = useState(
-    activeReportToEdit?.signature?.bioanalystSpecialty || 'Licenciada en Bioanálisis Clínico & Microbiología'
+    activeReportToEdit?.signature?.bioanalystSpecialty || firmantesIniciales.bioanalista.specialty
   );
   const [bioanalystLicense, setBioanalystLicense] = useState(
-    activeReportToEdit?.signature?.bioanalystLicense || 'Col. Bioanálisis #4192 / MSPAS-8812'
+    activeReportToEdit?.signature?.bioanalystLicense || firmantesIniciales.bioanalista.license
   );
 
   // Doctor Signature data
-  const [doctorName, setDoctorName] = useState(activeReportToEdit?.signature?.doctorName || 'Dr. Alejandro Valenzuela Morales');
-  const [doctorSpecialty, setDoctorSpecialty] = useState(activeReportToEdit?.signature?.doctorSpecialty || 'Médico Patólogo Clínico & Diagnóstico');
-  const [doctorLicense, setDoctorLicense] = useState(activeReportToEdit?.signature?.doctorLicense || 'CMP-649102 / RNE-28491');
+  const [doctorName, setDoctorName] = useState(activeReportToEdit?.signature?.doctorName || firmantesIniciales.medico.name);
+  const [doctorSpecialty, setDoctorSpecialty] = useState(activeReportToEdit?.signature?.doctorSpecialty || firmantesIniciales.medico.specialty);
+  const [doctorLicense, setDoctorLicense] = useState(activeReportToEdit?.signature?.doctorLicense || firmantesIniciales.medico.license);
 
   // AI loading state
   const [isAiGenerating, setIsAiGenerating] = useState<boolean>(false);
@@ -237,11 +242,11 @@ export const ReportEditor: React.FC = () => {
     const cleanRecommendations = recommendations.filter(r => r.trim().length > 0);
     return {
       id: activeReportToEdit?.id || `rep-${Date.now()}`,
-      reportNumber: activeReportToEdit?.reportNumber || `LAB-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      reportNumber: activeReportToEdit?.reportNumber || numeroInformeNuevo(),
       patientId: currentPatient?.id || '',
-      patientName: currentPatient?.fullName || 'Paciente',
-      patientNationalId: currentPatient?.nationalId || 'N/D',
-      patientAge: currentPatient?.age || 35,
+      patientName: currentPatient?.fullName || '',
+      patientNationalId: currentPatient?.nationalId || '',
+      patientAge: currentPatient?.age ?? 0,
       patientGender: currentPatient?.gender || 'M',
       category,
       title,
@@ -266,10 +271,10 @@ export const ReportEditor: React.FC = () => {
         bioanalystSpecialty,
         bioanalystLicense,
         signedAt: new Date().toISOString(),
-        validationHash: activeReportToEdit?.signature?.validationHash || 
-          ('0x' + Array.from({ length: 24 }, () => Math.floor(Math.random() * 16).toString(16)).join(''))
+        // El sello (huella y código verificable) lo emite SOLO el servidor al publicar.
+        validationHash: activeReportToEdit?.signature?.validationHash || ''
       },
-      qrVerificationCode: activeReportToEdit?.qrVerificationCode || `VC-AUTH-${Math.floor(100000 + Math.random() * 900000)}`
+      qrVerificationCode: activeReportToEdit?.qrVerificationCode || ''
     };
   };
 
@@ -646,11 +651,11 @@ export const ReportEditor: React.FC = () => {
 
     const reportData: MedicalReport = {
       id: activeReportToEdit?.id || `rep-${Date.now()}`,
-      reportNumber: activeReportToEdit?.reportNumber || `LAB-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      reportNumber: activeReportToEdit?.reportNumber || numeroInformeNuevo(),
       patientId: currentPatient?.id || '',
-      patientName: currentPatient?.fullName || 'Paciente',
+      patientName: currentPatient?.fullName || '',
       patientNationalId: currentPatient?.nationalId || '00000000',
-      patientAge: currentPatient?.age || 35,
+      patientAge: currentPatient?.age ?? 0,
       patientGender: currentPatient?.gender || 'M',
       category,
       title,
@@ -675,10 +680,10 @@ export const ReportEditor: React.FC = () => {
         bioanalystSpecialty,
         bioanalystLicense,
         signedAt: new Date().toISOString(),
-        validationHash: activeReportToEdit?.signature?.validationHash || 
-          ('0x' + Array.from({ length: 24 }, () => Math.floor(Math.random() * 16).toString(16)).join(''))
+        // El sello (huella y código verificable) lo emite SOLO el servidor al publicar.
+        validationHash: activeReportToEdit?.signature?.validationHash || ''
       },
-      qrVerificationCode: activeReportToEdit?.qrVerificationCode || `VC-AUTH-${Math.floor(100000 + Math.random() * 900000)}`,
+      qrVerificationCode: activeReportToEdit?.qrVerificationCode || '',
       // Vínculo real con la orden de origen (si este informe se cargó desde
       // "Cargar Resultados" en una orden real) y los resultados ya
       // sincronizados con el backend en un guardado anterior -sin esto,

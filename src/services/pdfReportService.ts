@@ -149,7 +149,6 @@ export class PdfReportService {
       const margin = 14;
       const contentWidth = pageWidth - margin * 2; // 182mm
 
-      const validationHash = '0x' + Array.from({ length: 24 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
       const emissionDate = new Date().toLocaleDateString('es-ES', { 
         day: '2-digit', 
         month: '2-digit', 
@@ -158,13 +157,13 @@ export class PdfReportService {
         minute: '2-digit'
       });
 
-      const bioanalyst = options?.bioanalystName || 'Licda. Elena Morales Cruz';
-      const bioanalystSpec = options?.bioanalystSpecialty || 'Bioanálisis Clínico & Microbiología';
-      const bioanalystCol = options?.bioanalystLicense || 'Col. Bioanálisis #4192 / MSPAS-8812';
+      const bioanalyst = options?.bioanalystName || '';
+      const bioanalystSpec = options?.bioanalystSpecialty || '';
+      const bioanalystCol = options?.bioanalystLicense || '';
 
-      const doctor = options?.doctorName || 'Dr. Alejandro Valenzuela Morales';
-      const doctorSpec = options?.doctorSpecialty || 'Médico Patólogo Clínico';
-      const doctorCol = options?.doctorLicense || 'CMP-649102 / RNE-28491';
+      const doctor = options?.doctorName || '';
+      const doctorSpec = options?.doctorSpecialty || '';
+      const doctorCol = options?.doctorLicense || '';
 
       // Global stats
       const totalAnalytes = patientReports.reduce((acc, r) => acc + (r.parameters?.length || 0), 0);
@@ -249,7 +248,7 @@ export class PdfReportService {
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(6);
         pdf.setTextColor(148, 163, 184);
-        pdf.text('Expediente Resumido Oficial emitido por VACLINIC • Trazabilidad Analítica ISO 15189 • vaclinic.laboratorio.gt', margin, footY);
+        pdf.text('Resumen informativo emitido por VACLINIC. No sustituye los informes oficiales firmados.', margin, footY);
         
         pdf.text(`Página ${pageNum}`, pageWidth - margin, footY, { align: 'right' });
       };
@@ -595,26 +594,18 @@ export class PdfReportService {
       // 3 Columns: Validation QR / Hash, Bioanalyst signature, Doctor signature
       const sigColW = contentWidth / 3;
 
-      // Col 1: Cryptographic Validation
-      pdf.setFillColor(15, 23, 42);
-      pdf.roundedRect(margin, y, 11, 11, 1.5, 1.5, 'F');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(5);
-      pdf.setTextColor(45, 212, 191);
-      pdf.text('CERT', margin + 2.5, y + 6);
-      pdf.text('QR', margin + 3.5, y + 9);
-
+      // Col 1: aviso (este resumen NO es un informe oficial ni lleva sello).
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(6);
       pdf.setTextColor(15, 23, 42);
-      pdf.text('VALIDACIÓN INSTITUCIONAL', margin + 14, y + 3.5);
+      pdf.text('RESUMEN INFORMATIVO', margin, y + 3.5);
 
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(5.5);
       pdf.setTextColor(100, 116, 139);
-      pdf.text(`Doc: VC-HIST-${patient.accessCode}`, margin + 14, y + 7);
-      pdf.text(`Hash: ${validationHash.substring(0, 18)}...`, margin + 14, y + 10.5);
-      pdf.text('vaclinic.laboratorio.gt/valida', margin + 14, y + 14);
+      pdf.text('No es un informe oficial. Los informes', margin, y + 7);
+      pdf.text('oficiales llevan código verificable en:', margin, y + 10.5);
+      pdf.text(`${typeof window !== 'undefined' ? window.location.origin : ''}/verificar`, margin, y + 14);
 
       // Col 2: Bioanalyst Signature
       const col2SigX = margin + sigColW + 5;

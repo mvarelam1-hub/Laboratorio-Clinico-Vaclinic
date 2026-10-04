@@ -1,3 +1,4 @@
+import { calcularAlertasReales } from '../utils/alertasReales';
 import React, { useState } from 'react';
 import { useClinic } from '../context/ClinicContext';
 import { StaffTabType } from '../context/ClinicContext';
@@ -62,8 +63,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     unreadChatCount,
     currentStaffUser,
     logoutStaff,
-    reagentsBelowMinThreshold
+    reagentsBelowMinThreshold,
+    reports,
+    reagents
   } = useClinic();
+  const totalAlertas = calcularAlertasReales(reports, reagents).length;
 
   // Órdenes Archivadas / Papelera: antes eran números fijos en el código
   // ("34" y "0") que nunca reflejaban el arreglo `orders` real -ver
@@ -189,16 +193,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </div>
 
-              {/* Notification Bell with 91 badge */}
+              {/* Campana: abre las alertas reales (con contador solo si hay alertas) */}
               <button
                 onClick={() => handleSelectTab('alertas')}
                 className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
-                title="Alertas (91)"
+                title={`Alertas (${totalAlertas})`}
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-[9px] font-black text-white">
-                  91
-                </span>
+                {totalAlertas > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-[9px] font-black text-white">
+                    {totalAlertas}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -287,28 +293,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}
                 </button>
 
-                <button
-                  id="btn-nav-solicitudes-precios"
-                  onClick={() => {
-                    handleSelectTab('catalogo_perfiles');
-                    showNotification('Módulo de Solicitudes de Precios / Cotizaciones', 'info');
-                  }}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left text-slate-300 hover:bg-slate-900/80 hover:text-white
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <FileSpreadsheet className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Solicitudes de Precios</span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400">
-                        0
-                      </span>
-                    </div>
-                  )}
-                </button>
+
               </div>
             )}
           </div>
@@ -559,7 +544,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   `}
                 >
                   <BadgePercent className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Promociones (2)</span>}
+                  {(!isCollapsed || isMobileOpen) && <span>Promociones</span>}
                 </button>
 
                 <button
@@ -636,7 +621,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   `}
                 >
                   <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-400" />
-                  {(!isCollapsed || isMobileOpen) && <span>Alertas (91)</span>}
+                  {(!isCollapsed || isMobileOpen) && <span>{totalAlertas > 0 ? `Alertas (${totalAlertas})` : 'Alertas'}</span>}
                 </button>
 
                 <button
@@ -686,7 +671,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   `}
                 >
                   <Send className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Envíos (169)</span>}
+                  {(!isCollapsed || isMobileOpen) && <span>Entrega de resultados</span>}
                 </button>
 
                 <button

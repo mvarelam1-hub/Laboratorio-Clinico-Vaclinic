@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -15,7 +15,11 @@ import { QualityControlQC } from './components/staff/QualityControlQC';
 import { UserManagement } from './components/staff/UserManagement';
 import { InternalChatView } from './components/chat/InternalChatView';
 import { InternalChatDrawer } from './components/chat/InternalChatDrawer';
-import { PatientPortal } from './components/patient/PatientPortal';
+import { PatientPortalReal } from './components/patient/PatientPortalReal';
+import { DEMO_MODE } from './config/demoMode';
+
+// El portal de demostración (datos de ejemplo) solo se descarga si se compiló con VITE_DEMO_MODE=true.
+const PatientPortalDemo = lazy(() => import('./components/patient/PatientPortal').then((m) => ({ default: m.PatientPortal })));
 import { PrintReportModal } from './components/common/PrintReportModal';
 import { PushNotificationToast } from './components/common/PushNotificationToast';
 
@@ -143,7 +147,11 @@ const MainContent: React.FC = () => {
               </div>
             ) : (
               <div className="animate-fade-in">
-                <PatientPortal />
+                {DEMO_MODE ? (
+                  <Suspense fallback={null}><PatientPortalDemo /></Suspense>
+                ) : (
+                  <PatientPortalReal />
+                )}
               </div>
             )}
           </main>

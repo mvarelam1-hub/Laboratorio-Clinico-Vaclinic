@@ -38,6 +38,9 @@ import {
   INITIAL_PUSH_NOTIFICATIONS
 } from '../data/initialData';
 import { INITIAL_ORDERS, INITIAL_ORDER_FOLDERS } from '../data/ordersData';
+import { DEMO_MODE, soloEnDemo } from '../config/demoMode';
+import { limpiarDatosDeEjemplo } from '../utils/datosDeEjemplo';
+import { perfilDesdeServidor, USUARIO_SIN_SESION, esUsuarioSinSesion } from '../utils/staffProfile';
 import { FACTORY_CATALOG_TESTS, INITIAL_CUSTOM_PROFILES } from '../data/factoryCatalog';
 import { DEFAULT_VACLINIC_PROFILES, ensureProfileTests } from '../utils/profileTestUtils';
 import { 
@@ -63,6 +66,8 @@ import {
   createPacienteRemote,
   updatePacienteRemote,
   mapPacienteApiToPatient,
+  combinarPacientesRemotos,
+  fetchPacientesRemote,
   esPacienteIdRemoto,
   PacientesApiError,
   type CrearPacienteInput
@@ -94,6 +99,8 @@ import {
   actualizarInformeRemoto,
   publicarInformeRemoto,
   eliminarInformeRemoto,
+  listarInformesRemotos,
+  combinarInformesRemotos,
   InformesApiError
 } from '../services/informesApiService';
 import {
@@ -134,6 +141,8 @@ import {
 } from '../services/perfilesApiService';
 import {
   crearPersonalRemoto,
+  listarPersonalRemoto,
+  combinarPersonalRemoto,
   actualizarPersonalRemoto,
   cambiarEstadoPersonalRemoto,
   reiniciarPinPersonalRemoto,
@@ -444,6 +453,34 @@ import { STAFF_SESSION_TOKEN_STORAGE_KEY, getStaffSessionToken } from '../servic
 export { STAFF_SESSION_TOKEN_STORAGE_KEY };
 
 export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // MODO REAL: versiones anteriores guardaron en este navegador pacientes,
+  // informes, personal y mensajes de EJEMPLO. Se quitan (una sola vez, antes
+  // de cargar el resto del estado); lo creado de verdad conserva su id y se queda.
+  useState(() => {
+    if (!DEMO_MODE) {
+      limpiarDatosDeEjemplo([
+        { clave: PATIENTS_STORAGE_KEY, ids: INITIAL_PATIENTS.map((x) => x.id) },
+        { clave: REPORTS_STORAGE_KEY, ids: INITIAL_REPORTS.map((x) => x.id) },
+        { clave: EPISODES_STORAGE_KEY, ids: INITIAL_EPISODES.map((x) => x.id) },
+        { clave: TRANSFERS_STORAGE_KEY, ids: INITIAL_TRANSFERS.map((x) => x.id) },
+        { clave: PUSH_NOTIFICATIONS_STORAGE_KEY, ids: INITIAL_PUSH_NOTIFICATIONS.map((x) => x.id) },
+        { clave: STAFF_USERS_STORAGE_KEY, ids: INITIAL_STAFF_USERS.map((x) => x.id) },
+        { clave: AUDIT_LOGS_STORAGE_KEY, ids: INITIAL_AUDIT_LOGS.map((x) => x.id) },
+        { clave: CHAT_MESSAGES_STORAGE_KEY, ids: INITIAL_CHAT_MESSAGES.map((x) => x.id) },
+        { clave: ORDERS_STORAGE_KEY, ids: INITIAL_ORDERS.map((x) => x.id) },
+        { clave: REAGENTS_STORAGE_KEY, ids: INITIAL_REAGENTS.map((x) => x.id) },
+        { clave: REAGENTS_MOVEMENTS_STORAGE_KEY, ids: ['mov-init-1', 'mov-init-2'] }
+      ]);
+      try {
+        const activo = localStorage.getItem(ACTIVE_STAFF_USER_STORAGE_KEY);
+        if (activo && INITIAL_STAFF_USERS.some((u) => u.id === (JSON.parse(activo) as { id?: string }).id)) {
+          localStorage.removeItem(ACTIVE_STAFF_USER_STORAGE_KEY);
+        }
+      } catch { /* almacenamiento no disponible */ }
+    }
+    return true;
+  });
+
   // Etapa 3 (seguridad): antes 'personal' + `true` por defecto significaba
   // que CUALQUIERA que abriera la app por primera vez, sin iniciar sesión,
   // caía directo dentro del panel de personal del laboratorio. Ahora el
@@ -568,7 +605,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_PATIENTS;
+    return soloEnDemo(INITIAL_PATIENTS);
   });
 
   // Load reports from local storage or defaults
@@ -579,7 +616,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_REPORTS;
+    return soloEnDemo(INITIAL_REPORTS);
   });
 
   // Load 4D episodes
@@ -590,7 +627,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_EPISODES;
+    return soloEnDemo(INITIAL_EPISODES);
   });
 
   // Load Transfers
@@ -601,7 +638,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_TRANSFERS;
+    return soloEnDemo(INITIAL_TRANSFERS);
   });
 
   // Load Push Notifications
@@ -612,7 +649,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_PUSH_NOTIFICATIONS;
+    return soloEnDemo(INITIAL_PUSH_NOTIFICATIONS);
   });
 
   // Preferencias de notificación por paciente — noveno módulo de los 9
@@ -713,7 +750,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_STAFF_USERS;
+    return soloEnDemo(INITIAL_STAFF_USERS);
   });
 
   // Load Staff Roles Config
@@ -741,7 +778,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_AUDIT_LOGS;
+    return soloEnDemo(INITIAL_AUDIT_LOGS);
   });
 
   // Load Internal Chat Messages
@@ -755,7 +792,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_CHAT_MESSAGES;
+    return soloEnDemo(INITIAL_CHAT_MESSAGES);
   });
 
   // Load Orders & Folders
@@ -769,7 +806,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error('Error loading orders from localStorage:', e);
     }
-    return INITIAL_ORDERS;
+    return soloEnDemo(INITIAL_ORDERS);
   });
 
   const [orderFolders, setOrderFolders] = useState<OrderFolder[]>(() => {
@@ -796,7 +833,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error('Error loading reagents inventory from localStorage:', e);
     }
-    return INITIAL_REAGENTS;
+    return soloEnDemo(INITIAL_REAGENTS);
   });
 
   const [reagentMovements, setReagentMovements] = useState<ReagentMovementLog[]>(() => {
@@ -809,7 +846,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error('Error loading reagent movements from localStorage:', e);
     }
-    return [
+    return soloEnDemo([
       {
         id: 'mov-init-1',
         reagentId: 'rgt-001',
@@ -834,7 +871,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         operator: 'Dra. Sofía Alarcón',
         timestamp: '2026-09-01 09:15'
       }
-    ];
+    ]);
   });
 
   const [activeChatChannelId, setActiveChatChannelId] = useState<string>('general');
@@ -852,7 +889,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_STAFF_USERS[0];
+    return DEMO_MODE ? INITIAL_STAFF_USERS[0] : USUARIO_SIN_SESION;
   });
 
   // Etapa 3 (seguridad): única fuente de verdad de "¿hay personal con
@@ -900,9 +937,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // acceso real ya lo otorgó el backend arriba; esto solo decide qué
         // datos de perfil se muestran en pantalla.
         const usuarioCoincidente = staffUsers.find((u) => u.remoteId === verification.data.idUsuario);
-        if (usuarioCoincidente) {
-          setCurrentStaffUser(usuarioCoincidente);
-        }
+        setCurrentStaffUser(
+          usuarioCoincidente ||
+          perfilDesdeServidor({
+            idUsuario: verification.data.idUsuario,
+            nombreCompleto: verification.data.nombreCompleto,
+            roleId: verification.data.roleId
+          })
+        );
         setStaffAuthMeta({
           mustChangePassword: verification.data.mustChangePassword,
           totpEnabled: verification.data.totpEnabled,
@@ -1015,7 +1057,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error(e);
     }
   }, [templates]);
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>('pat-1');
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(DEMO_MODE ? 'pat-1' : null);
   const [staffActiveTab, setStaffActiveTab] = useState<StaffTabType>('nueva_orden');
   const [activeReportToPrint, setActiveReportToPrint] = useState<MedicalReport | null>(null);
   const [activeReportToEdit, setActiveReportToEdit] = useState<MedicalReport | null>(null);
@@ -1257,7 +1299,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
     syncLabSettings();
-  }, [isEffectiveOnline]);
+  }, [isEffectiveOnline, isStaffAuthenticated]);
 
   /**
    * Papelera: al cargar, confirma contra el servidor cuáles órdenes están
@@ -1294,7 +1336,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
     syncPapelera();
-  }, [isEffectiveOnline]);
+  }, [isEffectiveOnline, isStaffAuthenticated]);
 
   /**
    * Fase 5 (sincronización real de órdenes): convierte una fila de
@@ -1390,7 +1432,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (filas.length === 0) return;
         setOrders(prev => {
           const filasPorRemoteId = new Map(filas.map(f => [f.id_orden, f]));
-          const maxSeqLocal = prev.reduce((max, o) => Math.max(max, o.seqNumber || 0), 198);
+          const maxSeqLocal = prev.reduce((max, o) => Math.max(max, o.seqNumber || 0), 0);
           let siguienteSeq = maxSeqLocal + 1;
 
           const actualizadas = prev.map(o => {
@@ -1427,7 +1469,54 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
     syncOrdersFromServer();
-  }, [isEffectiveOnline]);
+  }, [isEffectiveOnline, isStaffAuthenticated]);
+
+  /**
+   * Pacientes REALES: al iniciar sesión el personal (y cada vez que vuelve la
+   * conexión) se cargan desde Postgres. Los pacientes que solo existen en este
+   * navegador (id no numérico, creados sin conexión) se conservan.
+   */
+  useEffect(() => {
+    const syncPacientesFromServer = async () => {
+      if (!isEffectiveOnline || !isStaffAuthenticated || !getStaffSessionToken()) return;
+      try {
+        const filas = await fetchPacientesRemote(200);
+        setPatients((prev) => combinarPacientesRemotos(prev, filas));
+      } catch (error) {
+        console.error('Error fetching patients from backend:', error);
+      }
+    };
+    syncPacientesFromServer();
+  }, [isEffectiveOnline, isStaffAuthenticated]);
+
+  /** Personal REAL (tabla usuario). Solo quien tiene permiso de administrar usuarios recibe la lista. */
+  useEffect(() => {
+    const syncPersonalFromServer = async () => {
+      if (!isEffectiveOnline || !isStaffAuthenticated || !getStaffSessionToken()) return;
+      try {
+        const filas = await listarPersonalRemoto();
+        const nombresDeRol = Object.fromEntries(INITIAL_ROLES_CONFIG.map((r) => [r.id, r.name]));
+        setStaffUsers((prev) => combinarPersonalRemoto(prev, filas, nombresDeRol));
+      } catch {
+        /* sin permiso (403) o sin conexión: el resto del sistema sigue funcionando */
+      }
+    };
+    syncPersonalFromServer();
+  }, [isEffectiveOnline, isStaffAuthenticated]);
+
+  /** Informes REALES (borradores y publicados) desde Postgres, al iniciar sesión. */
+  useEffect(() => {
+    const syncInformesFromServer = async () => {
+      if (!isEffectiveOnline || !isStaffAuthenticated || !getStaffSessionToken()) return;
+      try {
+        const filas = await listarInformesRemotos(200);
+        setReports((prev) => combinarInformesRemotos(prev, filas));
+      } catch (error) {
+        console.error('Error fetching informes from backend:', error);
+      }
+    };
+    syncInformesFromServer();
+  }, [isEffectiveOnline, isStaffAuthenticated]);
 
   const queuePendingAction = (actionData: Omit<OfflinePendingAction, 'id' | 'timestamp' | 'status' | 'retryCount'>): OfflinePendingAction => {
     const newAction: OfflinePendingAction = {
@@ -2280,12 +2369,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const publishReport = async (
     id: string,
-    doctorName = 'Dr. Alejandro Valenzuela Morales',
-    doctorSpecialty = 'Médico Patólogo Clínico & Diagnóstico',
-    doctorLicense = 'CMP-649102 / RNE-28491',
-    bioanalystName = 'Licda. Elena Morales Cruz',
-    bioanalystSpecialty = 'Licenciada en Bioanálisis Clínico & Microbiología',
-    bioanalystLicense = 'Col. Bioanálisis #4192 / MSPAS-8812'
+    doctorName = '',
+    doctorSpecialty = '',
+    doctorLicense = '',
+    bioanalystName = '',
+    bioanalystSpecialty = '',
+    bioanalystLicense = ''
   ): Promise<void> => {
     // Ya NO se inventa un hash en el navegador (antes: 24 hex con
     // Math.random(), imposible de verificar). El único sello válido lo emite
@@ -2696,8 +2785,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // =========================================================================
 
   const logAuditEvent = (logData: Omit<LabAuditLog, 'id' | 'timestamp'>) => {
+    // El responsable del evento es SIEMPRE quien tiene la sesión iniciada: ya no
+    // se aceptan actores escritos a mano ("Administrador del Sistema", etc.).
+    const actor = isStaffAuthenticated && !esUsuarioSinSesion(currentStaffUser)
+      ? { userId: currentStaffUser.id, userName: currentStaffUser.fullName, userRole: currentStaffUser.roleName || currentStaffUser.roleId }
+      : {};
     const newLog: LabAuditLog = {
       ...logData,
+      ...actor,
       id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       timestamp: new Date().toISOString(),
     };

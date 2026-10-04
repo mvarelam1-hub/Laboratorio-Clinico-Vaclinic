@@ -29,6 +29,7 @@ import { Router } from 'express';
 import { pool } from '../db';
 import { signPortalToken, verifyPortalToken } from '../token';
 import { asyncHandler } from '../asyncHandler';
+import { emitirPdfInforme } from '../informeEmision';
 
 export const portalRouter = Router();
 
@@ -131,4 +132,67 @@ portalRouter.get('/orden', requirePortalToken, asyncHandler(async (req: any, res
     }));
 
   return res.json({ idOrden, resultados: visibles });
+}));
+
+/**
+ * Informes PUBLICADOS de la orden con la que el paciente inició sesión.
+ * Nunca se devuelven borradores ni informes en revisión, ni de otra orden.
+ * No se incluye la "explicación IA": el paciente recibe lo que firmó el
+ * laboratorio (parámetros, conclusión del profesional y recomendaciones).
+ */
+portalRouter.get('/informes', requirePortalToken, asyncHandler(async (req: any, res) => {
+  const { idPaciente, idOrden } = req.portalAuth;
+  const { rows: ord } = await pool.query(
+    `SELECT o.numero_orden, p.nombre_completo
+     FROM orden o JOIN paciente p ON p.id_paciente = o.id_paciente
+     WHERE o.id_orden = $1 AND o.id_paciente = $2`,
+    [idOrden, idPaciente]
+  );
+  if (ord.length === 0) return res.status(404).json({ error: 'Orden no encontrada.' });
+
+  const { rows } = await pool.query(
+    `SELECT id_informe, numero_informe, titulo, categoria, estado, fecha_muestra, fecha_publicacion,
+            conclusiones_medico, recomendaciones, datos_json, publicado_por_nombre, codigo_verificacion
+     FROM informe_clinico
+     WHERE id_orden = $1 AND eliminado = FALSE AND estado IN ('publicado', 'entregado')
+     ORDER BY fecha_publicacion DESC NULLS LAST, id_informe DESC`,
+    [idOrden]
+  );
+
+  return res.json({
+    numeroOrden: ord[0].numero_orden,
+    paciente: ord[0].nombre_completo,
+    informes: rows.map((r: any) => {
+      const d = r.datos_json || {};
+      const incluirConclusion = d.includeConclusionsInReport !== false;
+      const incluirRecom = d.includeRecommendationsInReport !== false;
+      return {
+        id: r.id_informe,
+        numero: r.numero_informe,
+        titulo: r.titulo,
+        categoria: r.categoria,
+        fechaMuestra: r.fecha_muestra,
+        fechaPublicacion: r.fecha_publicacion,
+        publicadoPor: r.publicado_por_nombre,
+        codigoVerificacion: r.codigo_verificacion,
+        parametros: (Array.isArray(d.parameters) ? d.parameters : []).map((p: any) => ({
+          nombre: p.name ?? '', valor: p.value ?? '', unidad: p.unit ?? '',
+          referencia: p.referenceRange ?? '', estado: p.status ?? 'normal', seccion: p.section ?? null
+        })),
+        conclusion: incluirConclusion ? r.conclusiones_medico : null,
+        recomendaciones: incluirRecom ? (r.recomendaciones || []) : []
+      };
+    })
+  });
+}));
+
+portalRouter.get('/informes/:id/pdf', requirePortalToken, asyncHandler(async (req: any, res) => {
+  const { idOrden } = req.portalAuth;
+  const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+  const r = await emitirPdfInforme(Number(req.params.id), { baseUrl, idOrden, soloPublicados: true });
+  if (r.ok === false) return res.status(r.status).json({ error: r.error });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${r.nombreArchivo}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  return res.send(Buffer.from(r.pdf as Uint8Array));
 }));

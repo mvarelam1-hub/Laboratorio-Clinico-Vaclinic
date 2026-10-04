@@ -55,7 +55,7 @@ import {
 } from 'lucide-react';
 import { BiometricAuthModal } from './BiometricAuthModal';
 import { BiometricAuthResult } from '../../services/biometricService';
-import { generateDemographicParametersForTests } from '../../utils/referenceRangeEvaluator';
+import { construirBorradorDeOrden } from '../../utils/borradorInforme';
 
 interface OrdersMasterManagerProps {
   mode: 'active' | 'archived' | 'trash';
@@ -378,8 +378,8 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
   const currentYearNum = new Date().getFullYear();
 
   const totalCount = baseModeOrders.length;
-  const todayCount = baseModeOrders.filter(o => o.date === todayStr || o.date.startsWith('2026-08-31')).length;
-  const thisMonthCount = baseModeOrders.filter(o => (o.year === currentYearNum && o.month === currentMonthNum) || o.date.startsWith('2026-08')).length;
+  const todayCount = baseModeOrders.filter(o => o.date === todayStr).length;
+  const thisMonthCount = baseModeOrders.filter(o => (o.year === currentYearNum && o.month === currentMonthNum)).length;
   const classifiedInFoldersCount = baseModeOrders.filter(o => o.folderId && o.folderId !== 'folder-unassigned' && o.folderId !== 'folder-all').length;
 
   // Selection handlers
@@ -498,252 +498,40 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
   };
 
   // Generate realistic parameters for specific test list
-  const generateParametersForTests = (testsList: string[]): ReportParameter[] => {
-    const params: ReportParameter[] = [];
-    let pId = 1;
+  // Informe REAL vinculado a la orden (por orderId). Nunca se arma un informe
+  // "de relleno" ni se reutiliza el de otro paciente por coincidencia de nombre:
+  // si la orden no tiene informe, se dice y se abre un borrador vacío.
+  const informeDeLaOrden = (ord: LabOrder): MedicalReport | undefined =>
+    reports.find((r) => r.orderId === ord.id);
 
-    testsList.forEach(tName => {
-      const lower = tName.toLowerCase();
-      if (lower.includes('gluc')) {
-        params.push({
-          id: `p-${pId++}`,
-          name: 'Glucosa en Suero (Basal / Ayuno)',
-          value: '88.5',
-          unit: 'mg/dL',
-          referenceRange: '70.0 - 100.0 mg/dL',
-          status: 'normal',
-          methodology: 'Enzimático Hexoquinasa / Espectrofotometría UV',
-          sampleType: 'Suero'
-        });
-      } else if (lower.includes('hema') || lower.includes('sangre')) {
-        params.push(
-          {
-            id: `p-${pId++}`,
-            name: 'Hemoglobina (Hb)',
-            value: '14.4',
-            unit: 'g/dL',
-            referenceRange: '12.0 - 16.0 g/dL',
-            status: 'normal',
-            methodology: 'Fotometría SLS / Impedancia Electrónica',
-            sampleType: 'Sangre Total EDTA'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Hematocrito (Hto)',
-            value: '43.2',
-            unit: '%',
-            referenceRange: '37.0 - 48.0 %',
-            status: 'normal',
-            methodology: 'Cálculo Acumulativo de Pulsos',
-            sampleType: 'Sangre Total EDTA'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Leucocitos Totales (Glóbulos Blancos)',
-            value: '6,850',
-            unit: '/uL',
-            referenceRange: '4,500 - 11,000 /uL',
-            status: 'normal',
-            methodology: 'Citometría de Flujo Fluorescente',
-            sampleType: 'Sangre Total EDTA'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Plaquetas (Trombocitos)',
-            value: '248,000',
-            unit: '/uL',
-            referenceRange: '150,000 - 450,000 /uL',
-            status: 'normal',
-            methodology: 'Impedancia Hidrodinámica',
-            sampleType: 'Sangre Total EDTA'
-          }
-        );
-      } else if (lower.includes('lipid') || lower.includes('colest') || lower.includes('triglic')) {
-        params.push(
-          {
-            id: `p-${pId++}`,
-            name: 'Colesterol Total',
-            value: '172',
-            unit: 'mg/dL',
-            referenceRange: 'Deseable: < 200.0 mg/dL',
-            status: 'normal',
-            methodology: 'Enzimático Colorimétrico (CHOD-PAP)',
-            sampleType: 'Suero'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Triglicéridos Séricos',
-            value: '135',
-            unit: 'mg/dL',
-            referenceRange: 'Normal: < 150.0 mg/dL',
-            status: 'normal',
-            methodology: 'GPO-PAP Enzimático',
-            sampleType: 'Suero'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Colesterol HDL (Protector)',
-            value: '54.0',
-            unit: 'mg/dL',
-            referenceRange: 'Óptimo: > 45.0 mg/dL',
-            status: 'normal',
-            methodology: 'Inmuno-inhibición Directa',
-            sampleType: 'Suero'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Colesterol LDL (Calculado)',
-            value: '91.0',
-            unit: 'mg/dL',
-            referenceRange: 'Óptimo: < 100.0 mg/dL',
-            status: 'normal',
-            methodology: 'Fórmula de Friedewald Modificada',
-            sampleType: 'Suero'
-          }
-        );
-      } else if (lower.includes('creat') || lower.includes('urea') || lower.includes('renal')) {
-        params.push(
-          {
-            id: `p-${pId++}`,
-            name: 'Creatinina en Suero',
-            value: '0.88',
-            unit: 'mg/dL',
-            referenceRange: '0.60 - 1.20 mg/dL',
-            status: 'normal',
-            methodology: 'Cinética Jaffé Compensada IDMS',
-            sampleType: 'Suero'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Nitrógeno de Urea (BUN)',
-            value: '14.2',
-            unit: 'mg/dL',
-            referenceRange: '7.0 - 20.0 mg/dL',
-            status: 'normal',
-            methodology: 'Ureasa / GLDH UV',
-            sampleType: 'Suero'
-          }
-        );
-      } else if (lower.includes('urin') || lower.includes('ego')) {
-        params.push(
-          {
-            id: `p-${pId++}`,
-            name: 'Aspecto y Color',
-            value: 'Transparente / Amarillo Paja',
-            unit: '-',
-            referenceRange: 'Transparente / Amarillo',
-            status: 'normal',
-            methodology: 'Examen Físico Macroscópico',
-            sampleType: 'Orina'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Densidad Específica',
-            value: '1.018',
-            unit: '-',
-            referenceRange: '1.005 - 1.030',
-            status: 'normal',
-            methodology: 'Refractometría / Tira Reactiva',
-            sampleType: 'Orina'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Proteínas y Glucosa en Orina',
-            value: 'Negativo (Normal)',
-            unit: 'mg/dL',
-            referenceRange: 'Negativo (< 15 mg/dL)',
-            status: 'normal',
-            methodology: 'Colorimetría / Tira Reactiva',
-            sampleType: 'Orina'
-          },
-          {
-            id: `p-${pId++}`,
-            name: 'Sedimento Microscópico (Leucocitos)',
-            value: '1 - 2 por campo',
-            unit: 'x campo 40x',
-            referenceRange: '0 - 3 por campo',
-            status: 'normal',
-            methodology: 'Microscopía Óptica de Contraste',
-            sampleType: 'Orina'
-          }
-        );
-      } else {
-        params.push({
-          id: `p-${pId++}`,
-          name: tName,
-          value: 'NEGATIVO / NORMAL',
-          unit: 'Resultado',
-          referenceRange: 'Valores Estándar Clínicos',
-          status: 'normal',
-          methodology: 'Ensayo Clínico Estandarizado VACLINIC',
-          sampleType: 'Suero / Muestra Biológica'
-        });
-      }
-    });
-
-    return params;
-  };
-
-  // Build a certified MedicalReport for an order
-  const buildReportForOrder = (ord: LabOrder): MedicalReport => {
-    const existing = reports.find(r => r.patientNationalId === ord.nationalId || r.patientName.toLowerCase() === ord.patientName.toLowerCase());
-    if (existing) {
-      return {
-        ...existing,
-        reportNumber: `INF-${ord.orderNumber.replace('#', '')}-2026`,
-        title: ord.testsList.join(', ') || 'Informe Clínico Consolidado',
-        sampleDate: ord.date,
-        emissionDate: ord.date + 'T11:30:00.000Z'
-      };
-    }
-
-    const patientObj = patients.find(p => p.nationalId === ord.nationalId || p.fullName.toLowerCase() === ord.patientName.toLowerCase());
-    const patAge = patientObj?.age || 42;
-    const patGender = patientObj?.gender || 'F';
-    const parameters = generateDemographicParametersForTests(ord.testsList, patAge, patGender, catalogTests);
-
-    return {
-      id: `rep-${ord.id}`,
-      reportNumber: `INF-${ord.orderNumber.replace('#', '')}-2026`,
-      patientId: patientObj?.id || `VAC-${ord.seqNumber || '00198'}`,
+  const borradorDeLaOrden = (ord: LabOrder): MedicalReport => {
+    const paciente = patients.find((p) => p.nationalId === ord.nationalId && ord.nationalId);
+    return construirBorradorDeOrden({
+      orderId: ord.id,
+      orderNumber: ord.orderNumber,
+      patientId: paciente?.id || '',
       patientName: ord.patientName,
-      patientNationalId: ord.nationalId,
-      patientAge: patientObj?.age || 42,
-      patientGender: patientObj?.gender || 'F',
-      category: 'bioquimica',
-      title: ord.testsList.join(' + ') || 'Análisis Clínico de Laboratorio',
+      nationalId: ord.nationalId,
+      patientAge: paciente?.age,
+      patientGender: paciente?.gender,
+      testsList: ord.testsList,
+      catalogTests,
       sampleDate: ord.date,
-      emissionDate: ord.date + 'T12:00:00.000Z',
-      laboratoryName: 'VACLINIC LABORATORIO CLÍNICO',
-      status: 'publicado',
-      sampleType: 'Muestras Biológicas Controladas',
-      tubeType: 'Tubos Primarios con Código de Barras',
-      parameters: parameters,
-      clinicalFindings: 'Parámetros analíticos procesados dentro de los rangos de referencia fisiológicos esperados para la edad y condición del paciente.',
-      doctorConclusions: 'Resultados compatibles con normalidad biológica. Se sugiere correlacionar con la historia clínica y criterio del médico tratante.',
-      patientExplanation: 'Tus análisis de laboratorio han sido procesados y validados con los más altos estándares de control de calidad.',
-      recommendations: [
-        'Mantener hábitos saludables y control médico periódico.',
-        'Conservar este informe para su próxima consulta médica.'
-      ],
-      // El código de verificación real lo emite el servidor al publicar el informe (sello verificable).
-      qrVerificationCode: '',
-      signature: {
-        bioanalystName: 'Licda. Elena Morales Cruz',
-        bioanalystSpecialty: 'Licenciada en Bioanálisis Clínico & Microbiología',
-        bioanalystLicense: 'Col. Bioanálisis #4192 / MSPAS-8812',
-        doctorName: 'Dr. Alejandro Valenzuela Morales',
-        doctorSpecialty: 'Médico Patólogo Clínico',
-        doctorLicense: 'CMP-649102 / RNE-28491',
-        signedAt: `${ord.date}T12:30:00.000Z`,
-        validationHash: `0x79f2c84a${ord.nationalId.padEnd(24, '0')}`
-      }
-    };
+      laboratoryName: labSettings.labName || 'VACLINIC LABORATORIO CLÍNICO'
+    });
   };
 
   // Action: Print Official Clinical Report (Membretado con QR)
   const handlePrintOfficialReport = (ord: LabOrder) => {
-    const rep = buildReportForOrder(ord);
+    const rep = informeDeLaOrden(ord);
+    if (!rep) {
+      showNotification(`La orden ${ord.orderNumber} todavía no tiene informe. Captura los resultados en el Redactor.`, 'warning');
+      return;
+    }
+    if (rep.status !== 'publicado') {
+      showNotification(`El informe de la orden ${ord.orderNumber} aún no está publicado; no se imprime como oficial.`, 'warning');
+      return;
+    }
     setActiveReportToPrint(rep);
   };
 
@@ -754,10 +542,9 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
 
   // Action: Open in Report Editor
   const handleEditResultsInEditor = (ord: LabOrder) => {
-    const rep = buildReportForOrder(ord);
-    setActiveReportToEdit(rep);
+    setActiveReportToEdit(informeDeLaOrden(ord) || borradorDeLaOrden(ord));
     setStaffActiveTab('redactor');
-    showNotification(`Cargando orden ${ord.orderNumber} en el Redactor Clínico`, 'info');
+    showNotification(`Orden ${ord.orderNumber} abierta en el Redactor`, 'info');
   };
 
   // Action: Confirm and process bulk orders liquidation
@@ -2087,16 +1874,23 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
               {/* Financial summary */}
               <div className="flex justify-between font-black text-sm text-slate-900 border-b border-slate-200 pb-2">
                 <span>TOTAL LIQUIDADO:</span>
-                <span>{orderTicketToPrint.totalPrice || 'Q140.00'}</span>
+                <span>{orderTicketToPrint.totalPrice || '—'}</span>
               </div>
 
               {/* Verification & Barcode */}
               <div className="text-center pt-1 space-y-1.5">
-                <div className="text-[10px] text-slate-500">Consulta de resultados en línea con tu DNI:</div>
-                <div className="font-bold text-teal-700 text-[10px]">https://vaclinic.laboratorio.gt</div>
-                <div className="p-2 bg-white rounded-lg border border-slate-200 inline-block">
-                  <QrCode className="w-16 h-16 mx-auto text-slate-800" />
-                </div>
+                {orderTicketToPrint.codigoConsulta ? (
+                  <>
+                    <div className="text-[10px] text-slate-500">Consulta tus resultados en línea:</div>
+                    <div className="font-bold text-slate-900 text-[10px]">{window.location.origin}</div>
+                    <div className="text-[10px] text-slate-500">Código de consulta:</div>
+                    <div className="font-mono font-black text-base tracking-widest text-slate-900 border border-slate-400 rounded px-2 py-1 inline-block">
+                      {orderTicketToPrint.codigoConsulta}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-[10px] text-slate-500">El código de consulta se entrega en recepción cuando la orden queda registrada en el servidor.</div>
+                )}
                 <div className="text-[9px] text-slate-400">
                   Trazabilidad ISO 15189 • Gracias por su confianza
                 </div>

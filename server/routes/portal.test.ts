@@ -132,3 +132,78 @@ describe('GET /api/portal/orden', () => {
     expect(res.body.resultados[0].valor).toBe('95');
   });
 });
+
+describe('GET /api/portal/informes', () => {
+  it('rechaza sin token de portal (401)', async () => {
+    const app = await buildApp();
+    const res = await request(app).get('/api/portal/informes');
+    expect(res.status).toBe(401);
+  });
+
+  it('solo consulta informes publicados de la orden del token y no expone la explicación IA', async () => {
+    const { signPortalToken } = await import('../token');
+    const token = signPortalToken({ idPaciente: 1, idOrden: 10 });
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ numero_orden: 'ORD-10', nombre_completo: 'Paciente Real' }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id_informe: 5, numero_informe: 'INF-5', titulo: 'Hemograma', categoria: 'hematologia', estado: 'publicado',
+          fecha_muestra: null, fecha_publicacion: null, conclusiones_medico: 'Conclusión firmada', recomendaciones: ['Control en 6 meses'],
+          publicado_por_nombre: 'Profesional', codigo_verificacion: 'ABCD',
+          datos_json: {
+            explicacion_ia: 'NO DEBE SALIR',
+            parameters: [{ name: 'Hemoglobina', value: 13, unit: 'g/dL', referenceRange: '12 - 16', status: 'normal' }]
+          }
+        }]
+      });
+    const app = await buildApp();
+    const res = await request(app).get('/api/portal/informes').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.informes).toHaveLength(1);
+    expect(res.body.informes[0].parametros[0]).toMatchObject({ nombre: 'Hemoglobina', valor: 13, estado: 'normal' });
+    expect(JSON.stringify(res.body)).not.toContain('NO DEBE SALIR');
+    const sqlInformes = String(queryMock.mock.calls[1][0]);
+    expect(sqlInformes).toMatch(/estado IN \('publicado', 'entregado'\)/);
+    expect(queryMock.mock.calls[1][1]).toEqual([10]);
+  });
+
+  it('respeta que el laboratorio haya excluido la conclusión del informe', async () => {
+    const { signPortalToken } = await import('../token');
+    const token = signPortalToken({ idPaciente: 1, idOrden: 10 });
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ numero_orden: 'ORD-10', nombre_completo: 'Paciente Real' }] })
+      .mockResolvedValueOnce({
+        rows: [{ id_informe: 5, numero_informe: 'INF-5', titulo: 'X', conclusiones_medico: 'Reservada', recomendaciones: ['r'], datos_json: { includeConclusionsInReport: false, includeRecommendationsInReport: false } }]
+      });
+    const app = await buildApp();
+    const res = await request(app).get('/api/portal/informes').set('Authorization', `Bearer ${token}`);
+    expect(res.body.informes[0].conclusion).toBeNull();
+    expect(res.body.informes[0].recomendaciones).toEqual([]);
+  });
+});
+
+describe('GET /api/portal/informes/:id/pdf', () => {
+  it('rechaza sin token (401)', async () => {
+    const app = await buildApp();
+    const res = await request(app).get('/api/portal/informes/5/pdf');
+    expect(res.status).toBe(401);
+  });
+
+  it('un informe de otra orden responde 404 (no revela que existe)', async () => {
+    const { signPortalToken } = await import('../token');
+    const token = signPortalToken({ idPaciente: 1, idOrden: 10 });
+    queryMock.mockResolvedValueOnce({ rows: [{ id_informe: 5, id_orden: 99, estado: 'publicado', eliminado: false }] });
+    const app = await buildApp();
+    const res = await request(app).get('/api/portal/informes/5/pdf').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('un borrador de su propia orden tampoco se entrega (404)', async () => {
+    const { signPortalToken } = await import('../token');
+    const token = signPortalToken({ idPaciente: 1, idOrden: 10 });
+    queryMock.mockResolvedValueOnce({ rows: [{ id_informe: 5, id_orden: 10, estado: 'borrador', eliminado: false }] });
+    const app = await buildApp();
+    const res = await request(app).get('/api/portal/informes/5/pdf').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+  });
+});
