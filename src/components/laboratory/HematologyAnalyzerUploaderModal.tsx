@@ -165,7 +165,7 @@ export const HematologyAnalyzerUploaderModal: React.FC<HematologyAnalyzerUploade
     }
 
     const report = createOzelleMedicalReport(targetPatientId, loadedOzelleData);
-    addReport(report);
+    addReport(report).catch((e) => showNotification(e instanceof Error ? e.message : "No se pudo guardar el informe.", "error"));
     setActiveReportToPrint(report);
     onClose();
     showNotification('¡Informe de Hematología Ozelle publicado oficialmente con sello criptográfico y anexo de imágenes!', 'success');

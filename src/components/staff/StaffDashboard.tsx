@@ -790,7 +790,7 @@ export const StaffDashboard: React.FC = () => {
 
                       {report.status !== 'publicado' && (
                         <button
-                          onClick={() => publishReport(report.id)}
+                          onClick={() => publishReport(report.id).catch(() => { /* el motivo ya se mostró en pantalla */ })}
                           title="Publicar en Portal del Paciente"
                           className="p-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
                         >

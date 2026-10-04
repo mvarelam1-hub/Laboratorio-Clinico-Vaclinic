@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { validarInformeContraOrden } from '../utils/validarInformeContraOrden';
 import { 
   Patient, 
   MedicalReport, 
@@ -2225,6 +2226,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addReport = async (reportData: Omit<MedicalReport, 'id' | 'reportNumber' | 'qrVerificationCode'>): Promise<MedicalReport> => {
     // Número único y código de verificación vacío: el sello verificable
     // real lo emite el servidor al publicar (nunca un código inventado aquí).
+    if (!DEMO_MODE) {
+      const v = validarInformeContraOrden(orders.find((o) => o.id === reportData.orderId), reportData.parameters || []);
+      if (!v.ok) throw new Error(v.motivo);
+    }
     const reportNumber = (reportData as Partial<MedicalReport>).reportNumber || numeroInformeNuevo();
     const draftReport: MedicalReport = {
       ...reportData,
@@ -2298,6 +2303,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // fusionados (updates puede traer solo un subconjunto de campos, ej.
     // AiSummaryModeModal.tsx que solo actualiza patientExplanation).
     const merged: MedicalReport | undefined = existente ? { ...existente, ...updates } : undefined;
+    if (!DEMO_MODE && merged && updates.parameters) {
+      const v = validarInformeContraOrden(orders.find((o) => o.id === merged.orderId), merged.parameters || []);
+      if (!v.ok) throw new Error(v.motivo);
+    }
     const resultadosRemotos = merged ? await syncCapturaResultados(merged) : undefined;
     const finalUpdates: Partial<MedicalReport> = resultadosRemotos ? { ...updates, resultadosRemotos } : updates;
 
@@ -2403,6 +2412,16 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       bioanalystLicense,
       signedAt: new Date().toISOString()
     };
+    if (!DEMO_MODE) {
+      const aPublicar = reports.find((r) => r.id === id);
+      if (aPublicar) {
+        const v = validarInformeContraOrden(orders.find((o) => o.id === aPublicar.orderId), aPublicar.parameters || []);
+        if (!v.ok) {
+          showNotification(v.motivo, 'error');
+          throw new Error(v.motivo);
+        }
+      }
+    }
     let selloServidor: { codigo: string; hash: string } | null = null;
 
     // Esta es la única acción real de "publicar" (también se invoca

@@ -1,4 +1,5 @@
 import { DEMO_MODE } from '../../config/demoMode';
+import { validarInformeContraOrden } from '../../utils/validarInformeContraOrden';
 import { firmantesPorDefecto } from '../../utils/firmantes';
 import { numeroInformeNuevo } from '../../utils/borradorInforme';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -662,6 +663,15 @@ export const ReportEditor: React.FC = () => {
 
   // Executes the actual storage after confirmation
   const executeSave = async (targetStatus: ReportStatus, paramsToSave: ReportParameter[]) => {
+    // MODO REAL: solo se guardan/envían resultados de los exámenes que ya
+    // estaban en la orden (los que el paciente ordenó y pagó al registrarla).
+    if (soloOrden) {
+      const v = validarInformeContraOrden(ordenDelInforme, paramsToSave);
+      if (!v.ok) {
+        showNotification(v.motivo, 'error');
+        return;
+      }
+    }
     const cleanRecommendations = recommendations.filter(r => r.trim().length > 0);
     const hasCritical = paramsToSave.some(p => p.status === 'critical');
 
