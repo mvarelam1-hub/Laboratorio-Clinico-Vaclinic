@@ -93,7 +93,9 @@ function fmtFecha(valor: Date | string | null | undefined, conHora = false): str
   return d.toLocaleString('es-GT', conHora ? { dateStyle: 'long', timeStyle: 'short', timeZone: 'America/Guatemala' } : { dateStyle: 'long', timeZone: 'America/Guatemala' });
 }
 
-const ETIQUETA_ESTADO: Record<string, string> = { normal: 'Normal', low: 'Bajo', high: 'Alto', critical: 'CRITICO' };
+// Diseno en blanco y negro con UN solo acento (color primario del laboratorio):
+// el estado se distingue por texto/forma (negrita, Alto/Bajo, recuadro negro), no por colores.
+const ETIQUETA_ESTADO: Record<string, string> = { normal: 'Normal', low: 'Bajo (L)', high: 'Alto (H)', critical: 'CRITICO' };
 
 export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array> {
   const formato = d.laboratorio.papel === 'a4' ? 'a4' : d.laboratorio.papel === 'legal' ? 'legal' : 'letter';
@@ -104,7 +106,7 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
   const W = PW - M * 2;
   const FOOT = 24; // reserva inferior para el pie de página
   const color = rgb(d.laboratorio.color_primario, [13, 148, 136]);
-  const rojo = rgb(d.laboratorio.color_critico, [200, 30, 30]);
+  const negro: [number, number, number] = [20, 20, 20];
   const oficial = !!d.sello;
 
   let y = M;
@@ -213,8 +215,8 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
   ];
   const colW = W / 2;
   const altoFicha = Math.ceil(campos.length / 2) * 10 + 4;
-  doc.setFillColor(244, 247, 249); doc.setDrawColor(220, 226, 230); doc.setLineWidth(0.2);
-  doc.roundedRect(M, y, W, altoFicha, 1.5, 1.5, 'FD');
+  doc.setDrawColor(...negro); doc.setLineWidth(0.25);
+  doc.rect(M, y, W, altoFicha, 'S');
   campos.forEach(([k, v], idx) => {
     const cx = M + 4 + (idx % 2) * colW;
     const cy = y + 6 + Math.floor(idx / 2) * 10;
@@ -238,16 +240,14 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
   cols.reduce((acc, c) => { xs.push(acc); return acc + c.w; }, M);
 
   const cabeceraTabla = () => {
-    doc.setFillColor(...color);
-    doc.rect(M, y - 4.2, W, 6.2, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
-    cols.forEach((c, i) => texto(c.t, xs[i] + 1.5, y));
-    y += 5.2;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...negro);
+    cols.forEach((c, i) => texto(c.t.toUpperCase(), xs[i] + 1.5, y));
+    doc.setDrawColor(...negro); doc.setLineWidth(0.4); doc.line(M, y + 1.8, PW - M, y + 1.8);
+    y += 6;
   };
   cabeceraTabla();
 
   let seccionActual: string | undefined;
-  let cebra = false;
   if (d.parametros.length === 0) {
     doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(120, 120, 120);
     texto('Este informe no contiene resultados cuantitativos.', M + 1.5, y + 1);
@@ -257,10 +257,8 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
     if (prm.section && prm.section !== seccionActual) {
       seccionActual = prm.section;
       asegurar(14, cabeceraTabla);
-      doc.setFillColor(228, 234, 238);
-      doc.rect(M, y - 3.6, W, 5.2, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(50, 60, 70);
-      texto(prm.section, M + 1.5, y);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...color);
+      texto(prm.section.toUpperCase(), M + 1.5, y);
       y += 5.2;
     }
     const estado = (prm.status || 'normal').toLowerCase();
@@ -271,8 +269,6 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
     const filas = Math.max(nombre.length + notas.length, ref.length, 1);
     const alto = filas * 4 + 2;
     asegurar(alto + 1, cabeceraTabla);
-    if (cebra) { doc.setFillColor(248, 250, 251); doc.rect(M, y - 3.4, W, alto, 'F'); }
-    cebra = !cebra;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(30, 30, 30);
     nombre.forEach((l, i) => texto(l, xs[0] + 1.5, y + i * 4));
     if (notas.length) {
@@ -280,16 +276,27 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
       notas.forEach((l, i) => texto(l, xs[0] + 1.5, y + (nombre.length + i) * 4));
     }
     doc.setFont('helvetica', anormal ? 'bold' : 'normal'); doc.setFontSize(9);
-    if (estado === 'critical') doc.setTextColor(...rojo); else if (anormal) doc.setTextColor(180, 90, 0); else doc.setTextColor(30, 30, 30);
+    doc.setTextColor(...negro);
     texto(lineas(prm.value ?? '-', cols[1].w - 3)[0] || '-', xs[1] + 1.5, y);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(60, 60, 60);
     texto(lineas(prm.unit || '', cols[2].w - 3)[0] || '', xs[2] + 1.5, y);
     ref.forEach((l, i) => texto(l, xs[3] + 1.5, y + i * 4));
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
-    if (estado === 'critical') doc.setTextColor(...rojo); else if (anormal) doc.setTextColor(180, 90, 0); else doc.setTextColor(40, 130, 70);
-    texto(ETIQUETA_ESTADO[estado] || limpiarTexto(prm.status), xs[4] + 1.5, y);
+    const etiqueta = ETIQUETA_ESTADO[estado] || limpiarTexto(prm.status);
+    if (estado === 'critical') {
+      // Recuadro negro con texto blanco: se distingue incluso en impresion monocromatica.
+      const ancho = doc.getTextWidth(etiqueta) + 3;
+      doc.setFillColor(...negro);
+      doc.rect(xs[4] + 0.5, y - 3.2, ancho, 4.6, 'F');
+      doc.setTextColor(255, 255, 255);
+      texto(etiqueta, xs[4] + 2, y);
+    } else {
+      doc.setFont('helvetica', anormal ? 'bold' : 'normal');
+      doc.setTextColor(...(anormal ? negro : ([90, 90, 90] as [number, number, number])));
+      texto(etiqueta, xs[4] + 1.5, y);
+    }
     y += alto;
-    doc.setDrawColor(232, 236, 238); doc.setLineWidth(0.15); doc.line(M, y - 3, PW - M, y - 3);
+    doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.15); doc.line(M, y - 3, PW - M, y - 3);
   }
   y += 5;
 
@@ -347,7 +354,7 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
     y = yf;
   } else {
     y = yf + 2;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...rojo);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...negro);
     for (const l of lineas('Este documento es un BORRADOR sin valor oficial: no ha sido publicado y no incluye codigo de verificacion.', W)) { texto(l, M, y); y += 4; }
   }
 
