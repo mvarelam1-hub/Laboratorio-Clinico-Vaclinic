@@ -119,7 +119,7 @@ export const LabSettingsView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-black text-slate-900">
-                Ajustes del Laboratorio & Membrete de Informes
+                Ajustes del Laboratorio
               </h1>
               {hasUnsavedChanges && (
                 <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200 animate-pulse">
@@ -128,7 +128,7 @@ export const LabSettingsView: React.FC = () => {
               )}
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Personaliza firmas digitales, logotipos, márgenes de hoja, colores institucionales y sellos oficiales ISO 15189.
+              Datos del laboratorio, membrete y diseño de los informes. Recuerda pulsar «Guardar Ajustes» al terminar.
             </p>
           </div>
         </div>
@@ -179,7 +179,7 @@ export const LabSettingsView: React.FC = () => {
       </div>
 
       {/* Navigation Tabs Bar */}
-      <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-1 overflow-x-auto">
+      <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-1">
         {[
           { id: 'membrete', label: '1. Membrete e Identidad Visual', icon: Building2 },
           { id: 'firmas', label: '2. Firmas & Sellos', icon: Award },
@@ -195,7 +195,7 @@ export const LabSettingsView: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as SettingsTab)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 isActive
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -290,7 +290,7 @@ export const LabSettingsView: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
                   <span className="text-xs font-black uppercase tracking-wider text-slate-100">
-                    Vista Previa en Vivo del Informe
+                    Vista previa del informe (datos de ejemplo)
                   </span>
                 </div>
                 <span className="text-[10px] font-mono text-teal-300 bg-teal-900/50 px-2 py-0.5 rounded border border-teal-700">
