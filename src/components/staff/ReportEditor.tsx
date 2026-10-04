@@ -1,5 +1,6 @@
 import { DEMO_MODE } from '../../config/demoMode';
 import { validarInformeContraOrden, saldoPendienteDeOrden } from '../../utils/validarInformeContraOrden';
+import { AiInterpretationModal } from './AiInterpretationModal';
 import { firmantesPorDefecto } from '../../utils/firmantes';
 import { numeroInformeNuevo } from '../../utils/borradorInforme';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -141,6 +142,8 @@ export const ReportEditor: React.FC = () => {
   const [clinicalFindings, setClinicalFindings] = useState<string>(activeReportToEdit?.clinicalFindings || '');
   const [doctorConclusions, setDoctorConclusions] = useState<string>(activeReportToEdit?.doctorConclusions || '');
   const [patientExplanation, setPatientExplanation] = useState<string>(activeReportToEdit?.patientExplanation || '');
+  const [incluirExplicacion, setIncluirExplicacion] = useState<boolean>(activeReportToEdit?.includeAiExplanationInReport ?? false);
+  const [showAiInterpretation, setShowAiInterpretation] = useState<boolean>(false);
   const [recommendations, setRecommendations] = useState<string[]>(
     activeReportToEdit?.recommendations || []
   );
@@ -253,6 +256,7 @@ export const ReportEditor: React.FC = () => {
       setClinicalFindings(activeReportToEdit.clinicalFindings || '');
       setDoctorConclusions(activeReportToEdit.doctorConclusions || '');
       setPatientExplanation(activeReportToEdit.patientExplanation || '');
+      setIncluirExplicacion(activeReportToEdit.includeAiExplanationInReport ?? false);
       setRecommendations(activeReportToEdit.recommendations || []);
       setUrgentAlert(activeReportToEdit.urgentAlert || false);
       setAttachedAnalyzerReport(activeReportToEdit.attachedAnalyzerReport);
@@ -297,6 +301,7 @@ export const ReportEditor: React.FC = () => {
       recommendations: cleanRecommendations,
       includeConclusionsInReport,
       includeRecommendationsInReport,
+      includeAiExplanationInReport: incluirExplicacion,
       urgentAlert,
       attachedAnalyzerReport,
       signature: {
@@ -930,6 +935,9 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
           {/* Herramientas de apoyo (secundarias) */}
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <button type="button" id="btn-interpretacion-ia" onClick={() => setShowAiInterpretation(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg cursor-pointer" title="Explicación en lenguaje sencillo con IA (no diagnostica; tú la revisas antes de usarla)">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" /><span>Interpretación IA</span>
+            </button>
             <button type="button" onClick={() => setShowTubeGuideModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Tipos de tubos de extracción y anticoagulantes">
               <FlaskConical className="w-3.5 h-3.5 text-amber-600" /><span>Guía de Tubos</span>
             </button>
@@ -1932,6 +1940,10 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 placeholder="Explicación en lenguaje directo, libre de tecnicismos complejos, para que el paciente entienda sus resultados..."
                 className="w-full bg-white border border-teal-200 rounded-xl p-3 text-xs text-slate-800 focus:ring-2 focus:ring-teal-500 focus:outline-none"
               />
+              <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-teal-900 cursor-pointer">
+                <input type="checkbox" checked={incluirExplicacion} onChange={(e) => setIncluirExplicacion(e.target.checked)} className="w-4 h-4 accent-teal-600" />
+                Incluir esta explicación en el informe del paciente
+              </label>
             </div>
 
           </div>
@@ -2387,6 +2399,24 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
         </div>
 
       </div>
+
+      <AiInterpretationModal
+        abierto={showAiInterpretation}
+        onCerrar={() => setShowAiInterpretation(false)}
+        paciente={currentPatient?.fullName || ordenDelInforme?.patientName || '—'}
+        orden={ordenDelInforme?.orderNumber || activeReportToEdit?.reportNumber || '—'}
+        fecha={new Date().toLocaleDateString('es-GT')}
+        edad={currentPatient?.age ?? null}
+        genero={currentPatient?.gender}
+        titulo={title}
+        parametros={parameters.map((p) => ({ name: p.name, value: p.value, unit: p.unit, referenceRange: p.referenceRange, status: p.status }))}
+        onUsar={(texto) => {
+          setPatientExplanation(texto);
+          setIncluirExplicacion(true);
+          setShowAiInterpretation(false);
+          showNotification('Explicación agregada al informe. Revísala en «Observaciones del profesional» antes de publicar.', 'success');
+        }}
+      />
 
       {/* ========================================================================= */}
       {/* MODAL: IMPORT TESTS & PROFILES FROM CATALOG (161 ITEMS) */}

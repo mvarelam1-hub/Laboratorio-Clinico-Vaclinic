@@ -21,6 +21,7 @@ import { plantillasRouter } from './plantillas';
 import { chatRouter } from './chat';
 import { informesRouter } from './informes';
 import { configLabRouter } from './configLab';
+import { iaRouter } from './ia';
 
 export const apiRouter = Router();
 
@@ -92,3 +93,4 @@ apiRouter.use('/plantillas', plantillasRouter);
 apiRouter.use('/chat', chatRouter);
 apiRouter.use('/informes', informesRouter);
 apiRouter.use('/config-lab', configLabRouter);
+apiRouter.use('/ia', iaRouter);
