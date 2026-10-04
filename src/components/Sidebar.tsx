@@ -1,6 +1,6 @@
 import { calcularAlertasReales } from '../utils/alertasReales';
 import { DEMO_MODE } from '../config/demoMode';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useClinic } from '../context/ClinicContext';
 import { StaffTabType } from '../context/ClinicContext';
 import { 
@@ -41,6 +41,20 @@ import {
   FileEdit
 } from 'lucide-react';
 
+interface ItemNav {
+  tab: StaffTabType;
+  etiqueta: string;
+  icono: React.ComponentType<{ className?: string }>;
+  domId?: string;
+  titulo?: string;
+  atajo?: string;
+  contador?: number;
+  /** Contador en rojo (algo que atender) en lugar de gris (solo informativo). */
+  alerta?: boolean;
+  destacado?: boolean;
+}
+interface SeccionNav { id: string; titulo: string; items: ItemNav[]; }
+
 interface SidebarProps {
   isMobileOpen: boolean;
   setIsMobileOpen: (open: boolean) => void;
@@ -80,16 +94,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Accordion collapsed state for groups
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     principal: true,
-    pacientes: true,
-    ordenes: true,
-    archivo: true,
-    catalogo: true,
-    reportes: true,
-    comunicacion: true,
-    administracion: true
+    recepcion: true,
+    resultados: true,
+    entrega: true,
+    archivo: false,
+    catalogo: false,
+    analisis: false,
+    equipo: true,
+    administracion: false
   });
 
   const [searchFilter, setSearchFilter] = useState('');
+
+  // La barra superior (sticky, z-40) tapaba la parte alta del menú (logo y datos
+  // del usuario). El menú se coloca justo debajo de ella en escritorio.
+  useEffect(() => {
+    const cabecera = document.querySelector('header');
+    if (!cabecera) return;
+    const aplicar = () => document.documentElement.style.setProperty('--navbar-h', `${Math.round(cabecera.getBoundingClientRect().height)}px`);
+    aplicar();
+    const obs = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(aplicar) : null;
+    obs?.observe(cabecera);
+    window.addEventListener('resize', aplicar);
+    return () => { obs?.disconnect(); window.removeEventListener('resize', aplicar); };
+  }, []);
 
   const toggleSection = (sec: string) => {
     setOpenSections(prev => ({ ...prev, [sec]: !prev[sec] }));
@@ -109,6 +137,84 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  // Contadores reales (nada de números fijos).
+  const ordenesActivasCount = orders.filter(o => !o.isArchived && !o.isDeleted).length;
+
+  const secciones: SeccionNav[] = [
+    {
+      id: 'principal', titulo: 'Inicio',
+      items: [
+        { tab: 'dashboard', etiqueta: 'Dashboard', icono: LayoutDashboard, domId: 'btn-nav-dashboard' }
+      ]
+    },
+    {
+      id: 'recepcion', titulo: '1 · Recepción',
+      items: [
+        { tab: 'nueva_orden', etiqueta: 'Nueva orden', icono: Plus, domId: 'btn-nav-nueva-orden', atajo: 'Ctrl+N', destacado: true, titulo: 'Nueva Orden de Laboratorio (Ctrl+N)' },
+        { tab: 'pacientes', etiqueta: 'Pacientes', icono: Users, domId: 'btn-nav-pacientes', contador: patients.length, titulo: 'Directorio de Pacientes (Alt+3 • Búsqueda rápida: Ctrl+B)' },
+        { tab: 'ordenes', etiqueta: 'Órdenes', icono: FileText, domId: 'btn-nav-ordenes', contador: ordenesActivasCount },
+        { tab: 'muestras', etiqueta: 'Recepción de muestras', icono: FlaskConical, domId: 'btn-nav-muestras' }
+      ]
+    },
+    {
+      id: 'resultados', titulo: '2 · Resultados',
+      items: [
+        { tab: 'redactor', etiqueta: 'Ingresar resultados', icono: FileEdit, domId: 'btn-nav-redactor', titulo: 'Ingresar y validar resultados de una orden' },
+        { tab: 'verificacion_criticos', etiqueta: 'Verificación de críticos', icono: ShieldCheck },
+        { tab: 'alertas', etiqueta: 'Alertas', icono: AlertTriangle, contador: totalAlertas, alerta: true }
+      ]
+    },
+    {
+      id: 'entrega', titulo: '3 · Entrega',
+      items: [
+        { tab: 'envios', etiqueta: 'Entrega de resultados', icono: Send },
+        { tab: 'historial_ordenes', etiqueta: 'Historial de órdenes', icono: Clock }
+      ]
+    },
+    {
+      id: 'archivo', titulo: 'Archivo',
+      items: [
+        { tab: 'ordenes_archivadas', etiqueta: 'Órdenes archivadas', icono: Archive, contador: ordenesArchivadasCount },
+        { tab: 'papelera', etiqueta: 'Papelera', icono: Trash2, contador: ordenesEnPapeleraCount }
+      ]
+    },
+    {
+      id: 'catalogo', titulo: 'Catálogo',
+      items: [
+        { tab: 'catalogo_perfiles', etiqueta: 'Catálogo y perfiles', icono: Layers },
+        { tab: 'promociones', etiqueta: 'Promociones', icono: BadgePercent },
+        { tab: 'atlas_microscopico', etiqueta: 'Atlas microscópico', icono: Microscope, domId: 'btn-nav-atlas-microscopico' }
+      ]
+    },
+    {
+      id: 'analisis', titulo: 'Análisis',
+      items: [
+        { tab: 'estadisticas', etiqueta: 'Estadísticas', icono: BarChart3 }
+      ]
+    },
+    {
+      id: 'equipo', titulo: 'Equipo',
+      items: [
+        { tab: 'chat_interno', etiqueta: 'Chat interno', icono: MessageSquare, contador: unreadChatCount, alerta: true },
+        { tab: 'episodios', etiqueta: 'Flujo de trabajo', icono: Activity }
+      ]
+    },
+    {
+      id: 'administracion', titulo: 'Administración',
+      items: [
+        { tab: 'usuarios', etiqueta: 'Usuarios y roles', icono: Users },
+        { tab: 'auditoria', etiqueta: 'Auditoría', icono: ShieldCheck },
+        { tab: 'ajustes', etiqueta: 'Ajustes', icono: SlidersHorizontal, contador: reagentsBelowMinThreshold.length, alerta: true, titulo: 'Ajustes del laboratorio (el contador son reactivos bajo el mínimo)' },
+        { tab: 'respaldos', etiqueta: 'Respaldos', icono: Database },
+        // Solo en demostración: simuladores sin datos reales.
+        ...(DEMO_MODE ? [
+          { tab: 'asistente_ia' as StaffTabType, etiqueta: 'Asistente IA (demo)', icono: Sparkles },
+          { tab: 'biometria' as StaffTabType, etiqueta: 'Biometría (demo)', icono: Fingerprint, domId: 'btn-nav-biometria' }
+        ] : [])
+      ]
+    }
+  ];
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -122,7 +228,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Sidebar Container */}
       <aside 
         className={`
-          fixed top-0 bottom-0 left-0 z-50 lg:z-30 print:hidden
+          fixed top-0 lg:top-[var(--navbar-h,0px)] bottom-0 left-0 z-50 lg:z-30 print:hidden
           flex flex-col bg-[#0b1329] text-slate-200 border-r border-slate-800/80
           transition-all duration-300 ease-in-out shadow-2xl lg:shadow-none
           ${isMobileOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'}
@@ -166,10 +272,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-xs font-bold text-white truncate">
-                  {currentStaffUser?.fullName || 'Administrador VACLINIC'}
+                  {currentStaffUser?.fullName || 'Sin sesión'}
                 </div>
                 <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                  {currentStaffUser?.role || 'ADMINISTRADOR'}
+                  {currentStaffUser?.roleName || ''}
                 </div>
               </div>
             </div>
@@ -211,660 +317,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Navigation Sections */}
-        <div className="flex-1 overflow-y-auto py-2 px-2.5 space-y-4 scrollbar-thin scrollbar-thumb-slate-800">
-          
-          {/* SECTION 0: PRINCIPAL */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <button
-                onClick={() => toggleSection('principal')}
-                className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                <span>PRINCIPAL</span>
-                {openSections.principal ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-              </button>
-            )}
-
-            {openSections.principal && (
-              <div className="space-y-1">
+        {/* Navegación ordenada por flujo de trabajo: Recepción → Resultados → Entrega → Archivo → Catálogo → Análisis → Equipo → Administración */}
+        <div className="flex-1 overflow-y-auto py-2 px-2.5 space-y-3 scrollbar-thin scrollbar-thumb-slate-800">
+          {secciones.map((sec) => (
+            <div key={sec.id} className="space-y-1">
+              {(!isCollapsed || isMobileOpen) && (
                 <button
-                  id="btn-nav-dashboard"
-                  onClick={() => handleSelectTab('dashboard')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'dashboard' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
+                  onClick={() => toggleSection(sec.id)}
+                  className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 cursor-pointer"
                 >
-                  <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Dashboard</span>}
+                  <span>{sec.titulo}</span>
+                  {openSections[sec.id] ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
                 </button>
-              </div>
-            )}
-          </div>
+              )}
 
-          {/* SECTION 0.5: GESTIÓN DE PACIENTES */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <button
-                onClick={() => toggleSection('pacientes')}
-                className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                <span>GESTIÓN DE PACIENTES</span>
-                {openSections.pacientes ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-              </button>
-            )}
-
-            {openSections.pacientes && (
-              <div className="space-y-1">
-                <button
-                  id="btn-nav-pacientes"
-                  onClick={() => handleSelectTab('pacientes')}
-                  title="Directorio de Pacientes (Alt+3 • Búsqueda rápida: Ctrl+B)"
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'pacientes' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Users className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Pacientes</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-mono font-bold text-slate-500 hidden xl:inline">
-                          Alt+3
-                        </span>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                          staffActiveTab === 'pacientes' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
-                        }`}>
-                          {patients.length}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </button>
-
-
-              </div>
-            )}
-          </div>
-
-          {/* SECTION 1: GESTIÓN DE ÓRDENES */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <button
-                onClick={() => toggleSection('ordenes')}
-                className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                <span>GESTIÓN DE ÓRDENES</span>
-                {openSections.ordenes ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-              </button>
-            )}
-
-            {openSections.ordenes && (
-              <div className="space-y-1">
-                {/* Órdenes */}
-                <button
-                  id="btn-nav-ordenes"
-                  onClick={() => handleSelectTab('ordenes')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'ordenes' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <FileText className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <span>Órdenes ({episodes.length})</span>
-                  )}
-                </button>
-
-                {/* Editor / Redactor de Informes */}
-                <button
-                  id="btn-nav-redactor"
-                  onClick={() => handleSelectTab('redactor')}
-                  title="Editor y Redactor de Informes Clínicos (Cargar pruebas y analizador Ozelle)"
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'redactor' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <FileEdit className="w-4 h-4 flex-shrink-0 text-violet-400" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Editor de Informes</span>
-                      <span className="text-[9px] font-mono font-bold bg-violet-950 text-violet-300 px-1.5 py-0.5 rounded border border-violet-500/30">
-                        Ozelle / IA
-                      </span>
-                    </div>
-                  )}
-                </button>
-
-                {/* Recepción & Rotulado de Tubos (Muestras) */}
-                <button
-                  id="btn-nav-muestras"
-                  onClick={() => handleSelectTab('muestras')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'muestras' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <FlaskConical className="w-4 h-4 flex-shrink-0 text-teal-400" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Recepción & Tubos</span>
-                      <span className="text-[9px] font-mono font-bold bg-teal-900/60 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30">
-                        LIS
-                      </span>
-                    </div>
-                  )}
-                </button>
-
-                {/* + Nueva Orden (Highlighted in teal/emerald) */}
-                <button
-                  id="btn-nav-nueva-orden"
-                  onClick={() => handleSelectTab('nueva_orden')}
-                  title="Nueva Orden de Laboratorio (Ctrl+N)"
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'nueva_orden' 
-                      ? 'bg-teal-600 text-white shadow-md shadow-teal-950/50' 
-                      : 'text-teal-400 hover:bg-teal-950/40 hover:text-teal-300'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Plus className="w-4 h-4 flex-shrink-0 stroke-[2.5]" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Nueva Orden</span>
-                      <span className="text-[9px] font-mono font-bold bg-teal-950/80 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/40">
-                        Ctrl+N
-                      </span>
-                    </div>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* SECTION 2: GESTIÓN Y ARCHIVO */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <button
-                onClick={() => toggleSection('archivo')}
-                className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                <span>GESTIÓN Y ARCHIVO</span>
-                {openSections.archivo ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-              </button>
-            )}
-
-            {openSections.archivo && (
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => handleSelectTab('ordenes_archivadas')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'ordenes_archivadas' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Archive className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Órdenes Archivadas ({ordenesArchivadasCount})</span>}
-                </button>
-
-                <button
-                  onClick={() => handleSelectTab('historial_ordenes')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'historial_ordenes' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Clock className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Historial de Órdenes</span>}
-                </button>
-
-                <button
-                  onClick={() => handleSelectTab('papelera')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'papelera' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Trash2 className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Papelera ({ordenesEnPapeleraCount})</span>}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* SECTION 3: CATÁLOGOS Y CONFIGURACIÓN */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <button
-                onClick={() => toggleSection('catalogo')}
-                className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                <span>CATÁLOGOS Y CONFIGURACIÓN</span>
-                {openSections.catalogo ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-              </button>
-            )}
-
-            {openSections.catalogo && (
-              <div className="space-y-0.5">
-                <button
-                  id="btn-nav-atlas-microscopico"
-                  onClick={() => handleSelectTab('atlas_microscopico')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'atlas_microscopico' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md shadow-teal-950/40' 
-                      : 'text-teal-300 hover:bg-teal-950/50 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Microscope className="w-4 h-4 flex-shrink-0 text-teal-400" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Atlas Microscópico</span>
-                      <span className="text-[9px] font-mono font-bold bg-teal-500/20 text-teal-300 px-1.5 py-0.2 rounded border border-teal-400/30">
-                        IA
-                      </span>
-                    </div>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => handleSelectTab('catalogo_perfiles')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'catalogo_perfiles' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Layers className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Catálogo y Perfiles</span>}
-                </button>
-
-                <button
-                  onClick={() => handleSelectTab('promociones')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'promociones' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <BadgePercent className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Promociones</span>}
-                </button>
-
-                <button
-                  onClick={() => handleSelectTab('ajustes')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'ajustes' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <SlidersHorizontal className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between w-full">
-                      <span>Ajustes</span>
-                      {reagentsBelowMinThreshold.length > 0 && (
-                        <span 
-                          className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-2xs"
-                          title={`${reagentsBelowMinThreshold.length} reactivos en nivel crítico de inventario`}
-                        >
-                          {reagentsBelowMinThreshold.length}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* SECTION 4: REPORTES Y ESTADÍSTICAS */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <button
-                onClick={() => toggleSection('reportes')}
-                className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                <span>REPORTES Y ESTADÍSTICAS</span>
-                {openSections.reportes ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-              </button>
-            )}
-
-            {openSections.reportes && (
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => handleSelectTab('estadisticas')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'estadisticas' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <BarChart3 className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Estadísticas</span>}
-                </button>
-
-                <button
-                  onClick={() => handleSelectTab('alertas')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'alertas' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-400" />
-                  {(!isCollapsed || isMobileOpen) && <span>{totalAlertas > 0 ? `Alertas (${totalAlertas})` : 'Alertas'}</span>}
-                </button>
-
-                <button
-                  onClick={() => handleSelectTab('verificacion_criticos')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'verificacion_criticos' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                  title="Verificación de críticos"
-                >
-                  <ShieldCheck className="w-4 h-4 flex-shrink-0 text-rose-400" />
-                  {(!isCollapsed || isMobileOpen) && <span>Verificación de críticos</span>}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* SECTION 5: COMUNICACIÓN */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <button
-                onClick={() => toggleSection('comunicacion')}
-                className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                <span>COMUNICACIÓN</span>
-                {openSections.comunicacion ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-              </button>
-            )}
-
-            {openSections.comunicacion && (
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => handleSelectTab('envios')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'envios' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Send className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Entrega de resultados</span>}
-                </button>
-
-                {DEMO_MODE && (
-                <button
-                  onClick={() => handleSelectTab('asistente_ia')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'asistente_ia' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-emerald-400 hover:bg-emerald-950/30'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Sparkles className="w-4 h-4 flex-shrink-0 text-emerald-400" />
-                  {(!isCollapsed || isMobileOpen) && <span>Asistente IA</span>}
-                </button>
-                )}
-
-                <button
-                  onClick={() => handleSelectTab('chat_interno')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'chat_interno' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <MessageSquare className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex-1 flex items-center justify-between">
-                      <span>Chat Intercom</span>
-                      {unreadChatCount > 0 && (
-                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-rose-600 text-white">
-                          {unreadChatCount}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* SECTION 6: ADMINISTRACIÓN */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <button
-                onClick={() => toggleSection('administracion')}
-                className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                <span>ADMINISTRACIÓN</span>
-                {openSections.administracion ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-              </button>
-            )}
-
-            {openSections.administracion && (
-              <div className="space-y-0.5">
-                <button
-                  id="btn-nav-usuarios"
-                  onClick={() => handleSelectTab('usuarios')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'usuarios' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Users className="w-4 h-4 flex-shrink-0 text-amber-400" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Usuarios & Claves</span>
-                      <span className="text-[9px] font-mono font-bold bg-amber-950 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30">
-                        PIN / RBAC
-                      </span>
-                    </div>
-                  )}
-                </button>
-
-                <button
-                  id="btn-nav-auditoria"
-                  onClick={() => handleSelectTab('auditoria')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'auditoria' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <ShieldCheck className="w-4 h-4 flex-shrink-0 text-teal-400" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Auditoría & Modificaciones</span>
-                      <span className="text-[9px] font-mono font-bold bg-teal-950 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30">
-                        ISO 15189
-                      </span>
-                    </div>
-                  )}
-                </button>
-
-                {DEMO_MODE && (
-                <button
-                  id="btn-nav-biometria"
-                  onClick={() => handleSelectTab('biometria')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'biometria' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Fingerprint className="w-4 h-4 flex-shrink-0 text-cyan-400" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Biometría & Acceso</span>
-                      <span className="text-[9px] font-mono font-bold bg-teal-950 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30">
-                        BIO
-                      </span>
-                    </div>
-                  )}
-                </button>
-                )}
-
-                <button
-                  onClick={() => handleSelectTab('episodios')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'episodios' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Layers className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Flujo LABVACLINIC & Analizadores</span>}
-                </button>
-
-                <button
-                  id="btn-nav-respaldos"
-                  onClick={() => handleSelectTab('respaldos')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    ${staffActiveTab === 'respaldos' 
-                      ? 'bg-teal-600 text-white font-bold shadow-md' 
-                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
-                    }
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Database className="w-4 h-4 flex-shrink-0 text-teal-400" />
-                  {(!isCollapsed || isMobileOpen) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>Respaldos & Backup</span>
-                      <span className="text-[9px] font-mono font-bold bg-teal-950 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30">
-                        JSON
-                      </span>
-                    </div>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => handleSelectTab('sincronizar')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-                    transition-all duration-150 relative cursor-pointer text-left
-                    text-slate-300 hover:bg-slate-900/80 hover:text-white
-                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
-                  `}
-                >
-                  <Cloud className="w-4 h-4 flex-shrink-0" />
-                  {(!isCollapsed || isMobileOpen) && <span>Sincronizar Ahora</span>}
-                </button>
-              </div>
-            )}
-          </div>
-
+              {(openSections[sec.id] || (isCollapsed && !isMobileOpen)) && (
+                <div className="space-y-0.5">
+                  {sec.items.map((it) => {
+                    const Icono = it.icono;
+                    const activo = staffActiveTab === it.tab;
+                    return (
+                      <button
+                        key={it.tab}
+                        id={it.domId}
+                        onClick={() => handleSelectTab(it.tab)}
+                        title={it.titulo || it.etiqueta}
+                        className={`
+                          w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
+                          transition-all duration-150 relative cursor-pointer text-left
+                          ${activo
+                            ? 'bg-teal-600 text-white font-bold shadow-md'
+                            : it.destacado
+                              ? 'text-teal-300 hover:bg-teal-950/40'
+                              : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
+                          }
+                          ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
+                        `}
+                      >
+                        <Icono className="w-4 h-4 flex-shrink-0" />
+                        {(!isCollapsed || isMobileOpen) && (
+                          <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                            <span className="truncate">{it.etiqueta}</span>
+                            {it.contador != null && it.contador > 0 && (
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${it.alerta ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300'}`}>
+                                {it.contador}
+                              </span>
+                            )}
+                            {it.atajo && (
+                              <span className="text-[9px] font-mono font-bold text-slate-500">{it.atajo}</span>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
 
         {/* Footer Area: User Status & Desktop Collapse Button */}

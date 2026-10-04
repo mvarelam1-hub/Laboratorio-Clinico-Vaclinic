@@ -33,11 +33,26 @@ import {
   User,
   SlidersHorizontal,
   MessageSquare,
+  LayoutGrid,
+  List,
   X
 } from 'lucide-react';
 import { WhatsAppMessageModal } from './WhatsAppMessageModal';
 
 type TimeFilterMode = 'all' | 'day' | 'week' | 'month' | 'year';
+
+// Fechas de referencia = HOY real (antes estaban fijas en 31-ago-2026, por eso
+// "Por día / semana / mes" mostraban 0 aunque hubiera pacientes de hoy).
+const aTexto = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const lunesDe = (d: Date) => {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
+};
+const hoyTexto = () => aTexto(new Date());
+const inicioSemanaTexto = () => aTexto(lunesDe(new Date()));
+const finSemanaTexto = () => { const f = lunesDe(new Date()); f.setDate(f.getDate() + 6); return aTexto(f); };
+const etiquetaHoy = () => new Date().toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' });
 
 export const PatientManager: React.FC = () => {
   const { 
@@ -60,11 +75,11 @@ export const PatientManager: React.FC = () => {
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'name-asc' | 'name-desc' | 'code'>('code');
 
   // Temporal Navigation States
-  // Default reference date: 2026-08-31
-  const [selectedDate, setSelectedDate] = useState<string>('2026-08-31');
-  const [selectedMonth, setSelectedMonth] = useState<number>(7); // 0-indexed: 7 = Agosto
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [selectedWeekStart, setSelectedWeekStart] = useState<string>('2026-08-25');
+  // Fecha de referencia por defecto: hoy
+  const [selectedDate, setSelectedDate] = useState<string>(hoyTexto());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedWeekStart, setSelectedWeekStart] = useState<string>(inicioSemanaTexto());
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -73,6 +88,14 @@ export const PatientManager: React.FC = () => {
   const [patientForHistoryPdf, setPatientForHistoryPdf] = useState<Patient | null>(null);
   const [patientForWhatsApp, setPatientForWhatsApp] = useState<Patient | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  // Vista: tabla (por defecto, más ordenada) o tarjetas.
+  const [vista, setVista] = useState<'lista' | 'tarjetas'>(() => {
+    try { return localStorage.getItem('vaclinic_pacientes_vista') === 'tarjetas' ? 'tarjetas' : 'lista'; } catch { return 'lista'; }
+  });
+  const cambiarVista = (v: 'lista' | 'tarjetas') => {
+    setVista(v);
+    try { localStorage.setItem('vaclinic_pacientes_vista', v); } catch { /* sin almacenamiento */ }
+  };
 
   // New Patient Form State
   const [fullName, setFullName] = useState('');
@@ -87,7 +110,7 @@ export const PatientManager: React.FC = () => {
   const [bloodType, setBloodType] = useState('');
   const [allergies, setAllergies] = useState('');
   const [address, setAddress] = useState('');
-  const [customRegDate, setCustomRegDate] = useState('2026-08-31');
+  const [customRegDate, setCustomRegDate] = useState(hoyTexto());
 
   // Helper function to safely parse a patient's registration date
   const getPatientDate = (patient: Patient): Date => {
@@ -99,7 +122,7 @@ export const PatientManager: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
-    return new Date('2026-08-31');
+    return new Date();
   };
 
   // Helper date formatters
@@ -112,9 +135,8 @@ export const PatientManager: React.FC = () => {
 
   // Calculate counts for each time tab
   const tabCounts = useMemo(() => {
-    const todayStr = '2026-08-31';
-    const thisWeekStartStr = '2026-08-25';
-    const thisWeekEndStr = '2026-08-31';
+    const thisWeekStartStr = inicioSemanaTexto();
+    const thisWeekEndStr = finSemanaTexto();
 
     let dayCount = 0;
     let weekCount = 0;
@@ -236,7 +258,7 @@ export const PatientManager: React.FC = () => {
   };
 
   const handleToday = () => {
-    setSelectedDate('2026-08-31');
+    setSelectedDate(hoyTexto());
   };
 
   const handlePrevWeek = () => {
@@ -252,7 +274,7 @@ export const PatientManager: React.FC = () => {
   };
 
   const handleCurrentWeek = () => {
-    setSelectedWeekStart('2026-08-25');
+    setSelectedWeekStart(inicioSemanaTexto());
   };
 
   const monthsList = [
@@ -537,7 +559,7 @@ export const PatientManager: React.FC = () => {
                 onClick={handleToday}
                 className="text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
               >
-                Hoy (31 Ago 2026)
+                Hoy ({etiquetaHoy()})
               </button>
             </div>
             <div className="text-xs text-slate-500 font-medium">
@@ -739,6 +761,28 @@ export const PatientManager: React.FC = () => {
               <option value="name-desc">Nombre Z-A</option>
             </select>
 
+            {/* Selector de vista: lista / tarjetas */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200" role="group" aria-label="Vista">
+              <button
+                type="button"
+                onClick={() => cambiarVista('tarjetas')}
+                title="Ver como tarjetas"
+                aria-pressed={vista === 'tarjetas'}
+                className={`p-1.5 rounded-lg cursor-pointer ${vista === 'tarjetas' ? 'bg-white text-teal-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => cambiarVista('lista')}
+                title="Ver como lista"
+                aria-pressed={vista === 'lista'}
+                className={`p-1.5 rounded-lg cursor-pointer ${vista === 'lista' ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+
           </div>
         </div>
 
@@ -784,6 +828,86 @@ export const PatientManager: React.FC = () => {
             >
               + Registrar Paciente
             </button>
+          </div>
+        </div>
+      ) : vista === 'lista' ? (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                  <th className="px-4 py-3">Paciente</th>
+                  <th className="px-4 py-3">Código</th>
+                  <th className="px-4 py-3">Documento</th>
+                  <th className="px-4 py-3">Edad / Género</th>
+                  <th className="px-4 py-3">Teléfono</th>
+                  <th className="px-4 py-3">Fecha de registro</th>
+                  <th className="px-4 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredPatients.map((patient) => {
+                  const cantOrdenes = orders.filter((o) => o && (o.patientId === patient.id || (o.patientCode && patient.patientCode && o.patientCode === patient.patientCode))).length;
+                  return (
+                    <tr key={patient.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+                            <User className="w-4 h-4 text-slate-500" />
+                          </div>
+                          <span className="font-black text-slate-900 uppercase truncate max-w-[260px]" title={patient.fullName}>{patient.fullName}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-mono font-black text-teal-800">{patient.patientCode || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{patient.nationalId || 'no tiene'}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {patient.age} años, {patient.gender === 'M' ? 'masculino' : patient.gender === 'F' ? 'femenino' : 'otro'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{patient.phone || 'Sin teléfono'}</td>
+                      <td className="px-4 py-3 text-slate-500">{getPatientDate(patient).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => setPatientForOrdersHistory(patient)}
+                            title={`Ver historial de órdenes (${cantOrdenes})`}
+                            className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg cursor-pointer"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setPatientForWhatsApp(patient)}
+                            title="Enviar aviso por WhatsApp"
+                            className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg cursor-pointer"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setPatientToEdit(patient)}
+                            title="Editar paciente"
+                            className="p-1.5 text-slate-400 hover:text-amber-700 hover:bg-amber-50 rounded-lg cursor-pointer"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`¿Eliminar al paciente ${patient.fullName}? Esta acción borrará sus expedientes asociados.`)) {
+                                deletePatient(patient.id);
+                              }
+                            }}
+                            title="Eliminar paciente"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : (
@@ -948,7 +1072,7 @@ export const PatientManager: React.FC = () => {
                       className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <MessageSquare className="w-3 h-3" />
-                      <span>WhatsApp PIN</span>
+                      <span>WhatsApp</span>
                     </button>
 
                     <button
