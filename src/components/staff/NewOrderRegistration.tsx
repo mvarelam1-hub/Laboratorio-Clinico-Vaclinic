@@ -787,7 +787,16 @@ export const NewOrderRegistration: React.FC = () => {
 
         {/* Header */}
         <div className="flex items-center justify-between gap-3 mb-5">
-          <h1 className="text-lg sm:text-xl font-bold text-slate-900">Nueva orden</h1>
+          <div>
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900">Nueva orden</h1>
+            <ol className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-slate-500" aria-label="Pasos de la orden">
+              <li className="flex items-center gap-1"><span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">1</span>Paciente</li>
+              <li aria-hidden="true">›</li>
+              <li className="flex items-center gap-1"><span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">2</span>Exámenes</li>
+              <li aria-hidden="true">›</li>
+              <li className="flex items-center gap-1"><span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">3</span>Cobro y código de consulta</li>
+            </ol>
+          </div>
           <button
             type="button"
             onClick={handleResetForm}
@@ -1201,9 +1210,15 @@ export const NewOrderRegistration: React.FC = () => {
                             />
                           ))}
                         </div>
-                        <span className="w-16 text-right font-mono font-semibold text-slate-800 shrink-0">
-                          {test.priceFormatted || `Q${test.price}`}
-                        </span>
+                        {Number(test.price) > 0 ? (
+                          <span className="w-16 text-right font-mono font-semibold text-slate-800 shrink-0">
+                            {test.priceFormatted || `Q${test.price}`}
+                          </span>
+                        ) : (
+                          <span className="w-16 text-right text-[10px] font-bold text-amber-700 shrink-0" title="Este examen no tiene precio en el catálogo">
+                            Sin precio
+                          </span>
+                        )}
                       </div>
                     );
                   })}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DEMO_MODE } from '../../config/demoMode';
 import { useClinic } from '../../context/ClinicContext';
+import { aFechaLocal, coincidePeriodo } from '../../utils/periodoOrdenes';
 import { 
   GripVertical, 
   Eye, 
@@ -123,7 +124,7 @@ const TODOS_LOS_WIDGETS: WidgetConfig[] = [
 
 // En modo real se ocultan los widgets cuyos datos no existen todavía en el
 // sistema (telemetría de analizadores y TAT por área): mostraban cifras fijas.
-const WIDGETS_SIN_DATOS_REALES = ['equipment_status', 'tat_performance'];
+const WIDGETS_SIN_DATOS_REALES = ['equipment_status', 'tat_performance', 'quality_control', 'traceability_4d'];
 const DEFAULT_WIDGETS: WidgetConfig[] = DEMO_MODE
   ? TODOS_LOS_WIDGETS
   : TODOS_LOS_WIDGETS.filter((w) => !WIDGETS_SIN_DATOS_REALES.includes(w.id));
@@ -132,6 +133,7 @@ const LOCAL_STORAGE_KEY = 'vaclinic_staff_dashboard_widgets_v2';
 
 export const DashboardWidgetGrid: React.FC = () => {
   const { 
+    orders,
     reports, 
     episodes, 
     patients, 
@@ -292,8 +294,17 @@ export const DashboardWidgetGrid: React.FC = () => {
     );
   }, [branchEpisodes]);
 
-  const panicCount = urgentSamples.filter(e => e.priority === 'stat_panico').length;
-  const urgentCount = urgentSamples.filter(e => e.priority === 'urgente').length;
+  // Órdenes reales pendientes con prioridad (modo real). En demo se usan los episodios.
+  const ordenesVigentes = useMemo(() => orders.filter(o => !o.isArchived && !o.isDeleted), [orders]);
+  const urgentesReales = useMemo(
+    () => ordenesVigentes.filter(o => o.status !== 'Listo' && (o.priority === 'stat_panico' || o.priority === 'urgente')),
+    [ordenesVigentes]
+  );
+  const colaUrgente: { id: string; patientName: string; priority: string; sub: string }[] = DEMO_MODE
+    ? urgentSamples.map(e => ({ id: e.id, patientName: e.patientName, priority: e.priority, sub: `${e.episodeNumber} · ${e.currentDimension.replace('D3_analizadores', 'En Analizador').replace('D2_flebotomia', 'Flebotomía')}` }))
+    : urgentesReales.map(o => ({ id: o.id, patientName: o.patientName, priority: o.priority || 'urgente', sub: o.orderNumber }));
+  const panicCount = colaUrgente.filter(e => e.priority === 'stat_panico').length;
+  const urgentCount = colaUrgente.filter(e => e.priority === 'urgente').length;
 
   // 4D Dimension counts
   const d1Count = branchEpisodes.filter(e => e.currentDimension === 'D1_admision').length;
@@ -303,9 +314,26 @@ export const DashboardWidgetGrid: React.FC = () => {
   const totalInPipeline = d1Count + d2Count + d3Count + d4Count;
 
   // Daily volume statistics
-  const todayCount = 142 + reports.length;
+  // Modo real: órdenes registradas hoy (fecha local), sin metas ni cifras de relleno.
+  const hoyLocal = aFechaLocal(new Date());
+  const ordenesHoy = ordenesVigentes.filter(o => (o.date || '').slice(0, 10) === hoyLocal);
+  const todayCount = DEMO_MODE ? 142 + reports.length : ordenesHoy.length;
   const dailyTarget = 160;
   const volumePercentage = Math.min(100, Math.round((todayCount / dailyTarget) * 100));
+  const ordenesSemana = ordenesVigentes.filter(o => coincidePeriodo(o.date, 'semana')).length;
+  const ordenesMes = ordenesVigentes.filter(o => coincidePeriodo(o.date, 'mes')).length;
+  const barrasPorHora = (() => {
+    const horas = [7, 9, 11, 13, 15, 17];
+    const cuentas = horas.map(h => ordenesHoy.filter(o => {
+      const m = /(\d{1,2}):\d{2}/.exec(o.time || '');
+      if (!m) return false;
+      let hh = parseInt(m[1], 10);
+      if (/p\.?\s?m/i.test(o.time || '') && hh < 12) hh += 12;
+      return hh >= h && hh < h + 2;
+    }).length);
+    const max = Math.max(1, ...cuentas);
+    return horas.map((h, i) => ({ hour: `${String(h).padStart(2, '0')}h`, val: cuentas[i], pct: Math.max(4, Math.round((cuentas[i] / max) * 100)) }));
+  })();
 
   // Visible widgets list
   const visibleWidgets = widgets.filter(w => w.isVisible);
@@ -325,11 +353,11 @@ export const DashboardWidgetGrid: React.FC = () => {
               <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
               <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider">STAT / Pánico</span>
             </div>
-            <div className="text-xl font-black text-rose-900 mt-0.5">{panicCount || 2}</div>
+            <div className="text-xl font-black text-rose-900 mt-0.5">{panicCount}</div>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-200 text-rose-900 border border-rose-300">
+          {DEMO_MODE && (<span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-200 text-rose-900 border border-rose-300">
             &lt; 15 min
-          </span>
+          </span>)}
         </div>
 
         <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl flex items-center justify-between">
@@ -338,11 +366,11 @@ export const DashboardWidgetGrid: React.FC = () => {
               <span className="w-2 h-2 rounded-full bg-amber-500" />
               <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Urgentes</span>
             </div>
-            <div className="text-xl font-black text-amber-900 mt-0.5">{urgentCount || 5}</div>
+            <div className="text-xl font-black text-amber-900 mt-0.5">{urgentCount}</div>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-200 text-amber-900 border border-amber-300">
+          {DEMO_MODE && (<span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-200 text-amber-900 border border-amber-300">
             &lt; 30 min
-          </span>
+          </span>)}
         </div>
       </div>
 
@@ -350,23 +378,23 @@ export const DashboardWidgetGrid: React.FC = () => {
       <div className="space-y-1.5">
         <span className="text-[11px] font-bold text-slate-700 block">Cola Prioritaria Activa:</span>
         <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-          {urgentSamples.slice(0, 3).map((s, idx) => (
+          {colaUrgente.slice(0, 3).map((s, idx) => (
             <div key={s.id || idx} className="p-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs">
               <div className="truncate pr-2">
                 <div className="font-bold text-slate-800 truncate flex items-center gap-1.5">
                   <span className={`w-1.5 h-1.5 rounded-full ${s.priority === 'stat_panico' ? 'bg-rose-500' : 'bg-amber-500'}`} />
                   <span className="truncate">{s.patientName}</span>
                 </div>
-                <div className="text-[10px] text-slate-500 font-mono">
-                  {s.episodeNumber} &middot; {s.currentDimension.replace('D3_analizadores', 'En Analizador').replace('D2_flebotomia', 'Flebotomía')}
-                </div>
+                <div className="text-[10px] text-slate-500 font-mono">{s.sub}</div>
               </div>
-              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 whitespace-nowrap">
-                {idx === 0 ? '8 min rest' : '14 min rest'}
-              </span>
+              {DEMO_MODE && (
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 whitespace-nowrap">
+                  {idx === 0 ? '8 min rest' : '14 min rest'}
+                </span>
+              )}
             </div>
           ))}
-          {urgentSamples.length === 0 && (
+          {colaUrgente.length === 0 && (
             <div className="p-3 bg-slate-50 text-center rounded-lg border border-slate-200 text-xs text-slate-500">
               ✓ No hay alertas STAT críticas pendientes en este momento
             </div>
@@ -385,7 +413,39 @@ export const DashboardWidgetGrid: React.FC = () => {
   );
 
   // 2. WIDGET: Daily Volume
-  const renderDailyVolumeWidget = () => (
+  const renderDailyVolumeWidget = () => !DEMO_MODE ? (
+    <div className="space-y-3">
+      <div>
+        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Órdenes registradas hoy</span>
+        <div className="text-2xl font-black text-slate-900">{todayCount}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-center text-xs">
+        <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl">
+          <div className="text-[10px] text-slate-500">Esta semana</div>
+          <div className="text-base font-black text-slate-900 mt-0.5">{ordenesSemana}</div>
+        </div>
+        <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl">
+          <div className="text-[10px] text-slate-500">Este mes</div>
+          <div className="text-base font-black text-slate-900 mt-0.5">{ordenesMes}</div>
+        </div>
+      </div>
+      <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+        <span className="text-[10px] font-bold text-slate-600 block mb-1.5">Hoy por horario:</span>
+        {todayCount === 0 ? (
+          <p className="text-[11px] text-slate-400 text-center py-2">Todavía no hay órdenes hoy.</p>
+        ) : (
+          <div className="flex items-end justify-between gap-1 h-12 pt-1 px-1">
+            {barrasPorHora.map((bar, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full rounded-t-sm bg-teal-600" style={{ height: `${bar.pct}%` }} title={`${bar.hour}: ${bar.val} órdenes`} />
+                <span className="text-[9px] font-mono text-slate-500">{bar.hour}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : (
     <div className="space-y-3">
       <div className="flex items-end justify-between">
         <div>
@@ -654,6 +714,26 @@ export const DashboardWidgetGrid: React.FC = () => {
   const renderReagentsStockAlertWidget = () => {
     const hasCritical = reagentsBelowMinThreshold.length > 0;
 
+    if (!DEMO_MODE && reagents.length === 0) {
+      return (
+        <div className="space-y-3">
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-1">
+            <div className="font-bold text-slate-800 text-xs">Sin reactivos registrados</div>
+            <p className="text-[11px] text-slate-500 leading-snug">
+              Cuando registres tus insumos en Inventario, aquí se avisará qué está por agotarse.
+            </p>
+          </div>
+          <button
+            onClick={navigateToInventory}
+            className="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-slate-300"
+          >
+            <FlaskConical className="w-3.5 h-3.5 text-teal-600" />
+            <span>Ir a Inventario</span>
+          </button>
+        </div>
+      );
+    }
+
     if (!hasCritical) {
       return (
         <div className="space-y-3">
@@ -689,7 +769,7 @@ export const DashboardWidgetGrid: React.FC = () => {
               <span>Ver Inventario</span>
             </button>
 
-            {reagents.length > 0 && (
+            {DEMO_MODE && reagents.length > 0 && (
               <button
                 onClick={() => simulateReagentConsumption(reagents[0].id, Math.max(1, reagents[0].currentStock - 4))}
                 className="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-[10px] border border-rose-200 transition-all cursor-pointer"
@@ -853,7 +933,7 @@ export const DashboardWidgetGrid: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              Arrastra y suelta (&vellip;&vellip;) para reordenar o activa/desactiva métricas clave
+              Arrastra y suelta (⋮⋮) para reordenar o activa/desactiva métricas clave
             </p>
           </div>
         </div>
