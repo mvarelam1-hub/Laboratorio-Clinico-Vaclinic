@@ -74,6 +74,21 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 
+/** En modo real, el contenido opcional va plegado para no quitar espacio a los resultados. */
+const Plegable: React.FC<{ activo: boolean; titulo: string; children: React.ReactNode }> = ({ activo, titulo, children }) =>
+  activo ? (
+    <details className="group bg-white rounded-2xl border border-slate-200 shadow-xs">
+      <summary className="cursor-pointer select-none list-none px-5 py-3 text-sm font-bold text-slate-700 flex items-center justify-between">
+        <span>{titulo}</span>
+        <span className="text-xs font-semibold text-slate-400 group-open:hidden">Mostrar</span>
+        <span className="text-xs font-semibold text-slate-400 hidden group-open:inline">Ocultar</span>
+      </summary>
+      <div className="px-3 pb-4 space-y-5">{children}</div>
+    </details>
+  ) : (
+    <>{children}</>
+  );
+
 export const ReportEditor: React.FC = () => {
   const { 
     patients, 
@@ -1811,6 +1826,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             )}
           </div>
 
+          <Plegable activo={soloOrden} titulo="Observaciones del profesional (opcional)">
           {/* Clinical Findings and Doctor Conclusions Section */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -1996,10 +2012,12 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             </div>
           </div>
 
+          </Plegable>
+
           {/* Bottom Save & Clinical Validation Action Bar */}
-          <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 ${soloOrden ? 'sticky bottom-0 z-30 shadow-lg' : ''}`}>
+          <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 ${soloOrden ? 'sticky bottom-0 z-30 shadow-lg !p-3' : ''}`}>
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              {!soloOrden && (<div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                 outOfRangeParameters.length > 0 
                   ? 'bg-rose-100 text-rose-700 font-bold border border-rose-200 animate-pulse' 
                   : 'bg-emerald-100 text-emerald-700'
@@ -2009,10 +2027,10 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 ) : (
                   <ShieldCheck className="w-5 h-5" />
                 )}
-              </div>
+              </div>)}
               <div>
                 <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                  <span>Validación Analítica del Informe</span>
+                  <span>{soloOrden ? 'Validación' : 'Validación Analítica del Informe'}</span>
                   {outOfRangeParameters.length > 0 ? (
                     <span className="bg-rose-100 text-rose-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-rose-300">
                       {outOfRangeParameters.length} fuera de rango ({parameters.filter(p => p.status === 'critical').length} crítico/s)
@@ -2027,13 +2045,13 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-500">
+                {!soloOrden && (<p className="text-[11px] text-slate-500">
                   {outOfRangeParameters.length > 0 
                     ? 'Se solicitará confirmación médica de valores críticos antes de guardar o publicar.'
                     : parameters.every((p) => !String(p.value ?? '').trim())
                       ? 'Captura los resultados de los exámenes de la orden para poder validarlos.'
                       : 'Todos los resultados ingresados concuerdan con los rangos biológicos de referencia.'}
-                </p>
+                </p>)}
               </div>
             </div>
 
@@ -2273,6 +2291,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
           </>)}
 
           {/* Dual Digital Signature Box (Bioanalyst + Doctor) */}
+          <Plegable activo={soloOrden} titulo="Firmas y validación digital (opcional)">
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
@@ -2341,7 +2360,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             </div>
 
             {/* Direct PDF Export & Physical Print Preview Trigger Buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {!soloOrden && (<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
                 id="btn-physical-print-preview-sidebar"
@@ -2361,8 +2380,9 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 <Download className="w-3.5 h-3.5" />
                 <span>Descargar PDF</span>
               </button>
-            </div>
+            </div>)}
           </div>
+          </Plegable>
 
         </div>
 
