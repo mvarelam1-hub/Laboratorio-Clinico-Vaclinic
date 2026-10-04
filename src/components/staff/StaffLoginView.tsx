@@ -3,6 +3,13 @@ import { useClinic, STAFF_SESSION_TOKEN_STORAGE_KEY } from '../../context/Clinic
 import { VaclinicPosterGraphic } from '../common/VaclinicPosterGraphic';
 import { loginStaff, verifyTotp, verifyStaffSession } from '../../services/staffAuthService';
 import {
+  loadRecentAccounts,
+  rememberAccount,
+  forgetAccount,
+  filterAccounts,
+  type RecentStaffAccount
+} from '../../services/recentStaffAccounts';
+import {
   Lock,
   User,
   KeyRound,
@@ -51,6 +58,7 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
 }) => {
   const {
     setRole,
+    setIsStaffAuthenticated,
     staffUsers,
     setCurrentStaffUser,
     setStaffAuthMeta,
@@ -69,6 +77,11 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
   // el usuario escribe desde su app autenticadora.
   const [loginTicket, setLoginTicket] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState('');
+
+  // Cuentas usadas antes en ESTE equipo (solo correo/nombre/rol, nunca
+  // contraseñas): al enfocar o escribir el correo se ofrecen para elegirlas.
+  const [recentAccounts, setRecentAccounts] = useState<RecentStaffAccount[]>(() => loadRecentAccounts());
+  const [showAccountList, setShowAccountList] = useState(false);
 
   /**
    * Completa el login una vez que el backend ya emitió una sesión real
@@ -116,8 +129,6 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
       remoteId: resultado.idUsuario
     };
 
-    setCurrentStaffUser(activeUser);
-
     // IMPORTANTE: NO se puede armar `staffAuthMeta` a mano con
     // totpEnabled/totpSetupRequired/totpMandatory fijos (p. ej. `false`) —
     // esos tres campos dependen del ROL del usuario (server/totp.ts::
@@ -132,6 +143,23 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
     // GET /api/auth/whoami (mismo endpoint/contrato que ya usa el efecto de
     // montaje en ClinicContext.tsx) antes de dar el login por completado.
     const verificacion = await verifyStaffSession(resultado.token);
+
+    // Si el servidor no confirma la sesión recién emitida NO se entra al
+    // sistema (antes se ignoraba este caso): se limpia el token y se avisa.
+    if (verificacion.ok === false) {
+      try { localStorage.removeItem(STAFF_SESSION_TOKEN_STORAGE_KEY); } catch { /* ignore */ }
+      setPassword('');
+      setTotpCode('');
+      setLoginTicket(null);
+      setError(
+        verificacion.reason === 'network'
+          ? 'No se pudo confirmar tu sesión con el servidor. Revisa tu conexión e inténtalo de nuevo.'
+          : 'El servidor no aceptó la sesión. Inicia sesión de nuevo.'
+      );
+      return;
+    }
+
+    setCurrentStaffUser(activeUser);
     setStaffAuthMeta(
       verificacion.ok
         ? {
@@ -163,6 +191,13 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
       details: `Acceso autorizado vía autenticación propia (${cleanEmail}).`
     });
 
+    // CAUSA RAÍZ del "regresa a la contraseña": aquí faltaba marcar la sesión
+    // como autenticada. Sin esto `isStaffAuthenticated` seguía en false, App
+    // seguía mostrando este mismo formulario (ya con la contraseña y el
+    // código vaciados) y solo un refresco de la página -que relee el token
+    // guardado- dejaba entrar.
+    setIsStaffAuthenticated(true);
+    setRecentAccounts(rememberAccount({ email: cleanEmail, fullName: activeUser.fullName, roleName: activeUser.roleName }));
     setRole('personal');
     showNotification(`Bienvenido al Sistema LIS, ${activeUser.fullName}`, 'success');
     setPassword('');
@@ -225,7 +260,7 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
         setLoginTicket(null);
         return;
       }
-      finalizarLogin(resultado);
+      await finalizarLogin(resultado);
       return;
     }
     setError(resultado.message);
@@ -377,12 +412,59 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
                       onChange={(e) => {
                         setEmail(e.target.value);
                         setError(null);
+                        setShowAccountList(true);
                       }}
+                      onFocus={() => setShowAccountList(true)}
+                      onBlur={() => setTimeout(() => setShowAccountList(false), 150)}
                       placeholder="nombre.apellido@vaclinic.com"
                       required
                       autoComplete="username"
                       className="w-full pl-10 pr-4 py-3 bg-[#eef2fa] hover:bg-[#e6ecf8] focus:bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-all"
                     />
+
+                    {/* Cuentas usadas antes en este equipo (solo correo/nombre, nunca contraseñas) */}
+                    {showAccountList && filterAccounts(recentAccounts, email).length > 0 && (
+                      <div
+                        id="lista-cuentas-recientes"
+                        className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden"
+                      >
+                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 border-b border-slate-100">
+                          Cuentas usadas en este equipo
+                        </div>
+                        {filterAccounts(recentAccounts, email).map((c) => (
+                          <div key={c.email} className="flex items-center hover:bg-teal-50">
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setEmail(c.email);
+                                setError(null);
+                                setShowAccountList(false);
+                                document.getElementById('password')?.focus();
+                              }}
+                              className="flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2 text-left cursor-pointer"
+                            >
+                              <span className="w-7 h-7 rounded-full bg-teal-100 text-teal-800 text-xs font-black flex items-center justify-center flex-shrink-0">
+                                {c.fullName.trim().charAt(0).toUpperCase() || '?'}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block text-xs font-bold text-slate-800 truncate">{c.fullName}</span>
+                                <span className="block text-[11px] text-slate-500 truncate">{c.email}{c.roleName ? ` · ${c.roleName}` : ''}</span>
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              title="Quitar de la lista de este equipo"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => setRecentAccounts(forgetAccount(c.email))}
+                              className="px-3 py-2 text-slate-300 hover:text-rose-600 text-sm cursor-pointer"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
