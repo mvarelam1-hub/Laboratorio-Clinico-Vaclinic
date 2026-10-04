@@ -1,4 +1,5 @@
 import { calcularAlertasReales } from '../utils/alertasReales';
+import { DEMO_MODE } from '../config/demoMode';
 import React, { useState } from 'react';
 import { useClinic } from '../context/ClinicContext';
 import { StaffTabType } from '../context/ClinicContext';
@@ -780,6 +781,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}
                 </button>
 
+                {DEMO_MODE && (
                 <button
                   id="btn-nav-biometria"
                   onClick={() => handleSelectTab('biometria')}
@@ -803,6 +805,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   )}
                 </button>
+                )}
 
                 <button
                   onClick={() => handleSelectTab('episodios')}

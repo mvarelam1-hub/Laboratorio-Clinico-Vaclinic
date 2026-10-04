@@ -1862,6 +1862,16 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (err instanceof PacientesApiError && err.esRechazoDeDatos) throw err;
         const mensaje = err instanceof PacientesApiError ? err.message : 'Error de red desconocido.';
         console.error('[ClinicContext] No se pudo crear el paciente en el servidor real:', err);
+        if (!DEMO_MODE) {
+          // Modo real: nunca se deja un paciente que solo existe en este navegador.
+          const sinPermiso = err instanceof PacientesApiError && (err.status === 403 || err.status === 401);
+          throw new PacientesApiError(
+            sinPermiso
+              ? 'Tu rol no tiene permiso para registrar pacientes. Pide a un administrador que te asigne un rol con admisión (Recepción o Director Técnico). No se guardó nada.'
+              : `No se pudo guardar el paciente en el servidor (${mensaje}). No se guardó nada; revisa la conexión e inténtalo de nuevo.`,
+            err instanceof PacientesApiError ? err.status : undefined
+          );
+        }
         showNotification(`No se pudo guardar el paciente en el servidor (${mensaje}). Se guardó solo localmente.`, 'warning');
         // Continúa abajo con la ruta local, igual que en modo sin conexión.
       }
@@ -3405,9 +3415,23 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } catch (err) {
         const mensaje = err instanceof OrdenesApiError || err instanceof ExamenesApiError ? err.message : 'Error de red desconocido.';
         console.error('[ClinicContext] No se pudo crear la orden en el servidor real:', err);
+        if (!DEMO_MODE) {
+          // Modo real: sin orden en la base de datos no hay código de consulta ni resultados válidos.
+          const status = err instanceof OrdenesApiError ? err.status : undefined;
+          throw new OrdenesApiError(
+            status === 403 || status === 401
+              ? 'Tu rol no tiene permiso para registrar órdenes. Pide a un administrador que te asigne un rol con admisión (Recepción o Director Técnico). No se guardó nada.'
+              : `No se pudo registrar la orden en el servidor (${mensaje}). No se guardó nada; inténtalo de nuevo.`,
+            status
+          );
+        }
         showNotification(`No se pudo registrar la orden en el servidor (${mensaje}). Se guardó solo localmente.`, 'warning');
         // Continúa abajo con la ruta local.
       }
+    }
+
+    if (!DEMO_MODE && isEffectiveOnline) {
+      throw new OrdenesApiError('Este paciente no existe en la base de datos real, por eso no se puede crear la orden. Vuelve a registrar al paciente.');
     }
 
     const newOrder: LabOrder = {

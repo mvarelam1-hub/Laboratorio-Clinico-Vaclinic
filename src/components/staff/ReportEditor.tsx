@@ -1,3 +1,4 @@
+import { DEMO_MODE } from '../../config/demoMode';
 import { firmantesPorDefecto } from '../../utils/firmantes';
 import { numeroInformeNuevo } from '../../utils/borradorInforme';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -92,12 +93,26 @@ export const ReportEditor: React.FC = () => {
   } = useClinic();
   const firmantesIniciales = firmantesPorDefecto(labSettings, currentStaffUser);
 
+  // MODO REAL: los resultados solo se ingresan sobre los exámenes de la orden
+  // (los que el paciente ya canceló/pagó). Nada de plantillas, catálogo libre,
+  // filas manuales ni analizador de demostración, ni redacción con IA.
+  const soloOrden = !DEMO_MODE;
+  const ordenDelInforme = activeReportToEdit?.orderId ? orders.find((o) => o.id === activeReportToEdit.orderId) : undefined;
+  const fechaParaInput = (v?: string): string => {
+    if (!v) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return `${v}T00:00`;
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return v.substring(0, 16);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   // Form states
   const [patientId, setPatientId] = useState<string>(activeReportToEdit?.patientId || '');
   const [category, setCategory] = useState<ReportCategory>(activeReportToEdit?.category || 'bioquimica');
-  const [title, setTitle] = useState<string>(activeReportToEdit?.title || 'Perfil Bioquímico General');
+  const [title, setTitle] = useState<string>(activeReportToEdit?.title || '');
   const [sampleDate, setSampleDate] = useState<string>(
-    activeReportToEdit?.sampleDate ? activeReportToEdit.sampleDate.substring(0, 16) : new Date().toISOString().substring(0, 16)
+    activeReportToEdit?.sampleDate ? ((v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00` : v.substring(0, 16)))(activeReportToEdit.sampleDate) : new Date().toISOString().substring(0, 16)
   );
   const [laboratoryName, setLaboratoryName] = useState<string>(
     activeReportToEdit?.laboratoryName || 'VACLINIC - Laboratorio Clínico'
@@ -211,7 +226,7 @@ export const ReportEditor: React.FC = () => {
       setPatientId(activeReportToEdit.patientId);
       setCategory(activeReportToEdit.category);
       setTitle(activeReportToEdit.title);
-      setSampleDate(activeReportToEdit.sampleDate ? activeReportToEdit.sampleDate.substring(0, 16) : new Date().toISOString().substring(0, 16));
+      setSampleDate(activeReportToEdit.sampleDate ? ((v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00` : v.substring(0, 16)))(activeReportToEdit.sampleDate) : new Date().toISOString().substring(0, 16));
       setLaboratoryName(activeReportToEdit.laboratoryName);
       setStatus(activeReportToEdit.status);
       setParameters(activeReportToEdit.parameters || []);
@@ -787,6 +802,20 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
   return (
     <div className="space-y-6">
+      {soloOrden && !ordenDelInforme && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3" data-testid="aviso-sin-orden">
+          <p className="text-sm text-amber-900 font-medium">
+            Los resultados solo se ingresan sobre los exámenes de una orden ya registrada y pagada. Abre la orden desde la lista y pulsa «Ingresar resultados».
+          </p>
+          <button
+            type="button"
+            onClick={() => setStaffActiveTab('ordenes')}
+            className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer"
+          >
+            Ir a Órdenes
+          </button>
+        </div>
+      )}
       
       {/* Top Action Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
@@ -842,7 +871,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             <span>Atlas Microscópico</span>
           </button>
 
-          <button
+          {!soloOrden && (<button
             type="button"
             id="btn-subir-ozelle-hematologia"
             onClick={() => setShowHematologyAnalyzerModal(true)}
@@ -854,9 +883,9 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             <span className="bg-white/20 text-white text-[9px] px-1.5 py-0.2 rounded font-mono">
               Auto
             </span>
-          </button>
+          </button>)}
 
-          <button
+          {!soloOrden && (<button
             type="button"
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-all cursor-pointer shadow-xs"
@@ -864,7 +893,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
           >
             <FlaskConical className="w-3.5 h-3.5 text-indigo-600" />
             <span>+ Importar Pruebas / Perfil</span>
-          </button>
+          </button>)}
 
           <button
             type="button"
@@ -963,11 +992,13 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 </select>
                 {currentPatient && (
                   <div className="mt-1 text-[11px] text-slate-500 flex items-center gap-2">
-                    <span>Edad: <strong>{currentPatient.age} años</strong></span>
+                    <span>Edad: <strong>{currentPatient.age ? `${currentPatient.age} años` : 'no registrada'}</strong></span>
                     <span>•</span>
-                    <span>Sexo: <strong>{currentPatient.gender === 'M' ? 'Masc' : 'Fem'}</strong></span>
+                    <span>Sexo: <strong>{/^m/i.test(currentPatient.gender || '') ? 'Masc' : /^f/i.test(currentPatient.gender || '') ? 'Fem' : 'no registrado'}</strong></span>
                     <span>•</span>
-                    <span>Código PIN: <strong className="font-mono text-teal-700">{currentPatient.accessCode}</strong></span>
+                    {ordenDelInforme?.codigoConsulta ? (
+                      <span>Código de consulta: <strong className="font-mono text-teal-700 select-all">{ordenDelInforme.codigoConsulta}</strong></span>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -985,10 +1016,10 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                   <option value="bioquimica">Bioquímica Clínica</option>
                   <option value="hematologia">Hematología & Coagulación</option>
                   <option value="laboratorio">Laboratorio General & Inmunología</option>
-                  <option value="radiologia">Radiología e Imágenes</option>
-                  <option value="cardiologia">Cardiología / Electrodiagnóstico</option>
-                  <option value="patologia">Anatomía Patológica</option>
-                  <option value="consulta_general">Consulta Médica General</option>
+                  {!soloOrden && (<option value="radiologia">Radiología e Imágenes</option>)}
+                  {!soloOrden && (<option value="cardiologia">Cardiología / Electrodiagnóstico</option>)}
+                  {!soloOrden && (<option value="patologia">Anatomía Patológica</option>)}
+                  {!soloOrden && (<option value="consulta_general">Consulta Médica General</option>)}
                 </select>
               </div>
 
@@ -1093,16 +1124,16 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                   <span>Ordenar por Áreas</span>
                 </button>
 
-                <button
+                {!soloOrden && (<button
                   type="button"
                   onClick={() => setShowImportModal(true)}
                   className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Desde Catálogo</span>
-                </button>
+                </button>)}
 
-                <button
+                {!soloOrden && (<button
                   type="button"
                   id="btn-section-subir-ozelle"
                   onClick={() => setShowHematologyAnalyzerModal(true)}
@@ -1111,16 +1142,16 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 >
                   <Microscope className="w-3.5 h-3.5 text-violet-200" />
                   <span>+ Ozelle (Sin Transcribir)</span>
-                </button>
+                </button>)}
 
-                <button
+                {!soloOrden && (<button
                   type="button"
                   onClick={handleAddParameter}
                   className="flex items-center gap-1 text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Fila Manual</span>
-                </button>
+                </button>)}
               </div>
             </div>
 
@@ -1198,7 +1229,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-xl space-y-3">
                 <FlaskConical className="w-8 h-8 text-slate-400 mx-auto" />
                 <p className="text-xs text-slate-500">No hay pruebas o parámetros agregados a este informe.</p>
-                <div className="flex flex-wrap justify-center gap-2">
+                {!soloOrden && (<div className="flex flex-wrap justify-center gap-2">
                   <button
                     type="button"
                     id="btn-empty-subir-ozelle"
@@ -1222,7 +1253,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                   >
                     + Crear fila en blanco
                   </button>
-                </div>
+                </div>)}
               </div>
             ) : (
               <div className="space-y-3">
@@ -1661,7 +1692,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 <span>3. Redacción Diagnóstica y Resumen del Médico</span>
               </h2>
 
-              <button
+              {!soloOrden && (<button
                 type="button"
                 onClick={handleGenerateWithAI}
                 disabled={isAiGenerating}
@@ -1669,7 +1700,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>{isAiGenerating ? 'Analizando con IA...' : '✨ Redactar con IA'}</span>
-              </button>
+              </button>)}
             </div>
 
             {/* Urgent Alert Switch */}
@@ -1682,7 +1713,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 cursor-pointer"
               />
               <label htmlFor="urgentAlert" className="text-xs font-bold text-amber-900 cursor-pointer">
-                Marcar como Notificación Prioritaria / Hallazgo Crítico Urgente (Aviso directo al paciente)
+                Marcar como hallazgo crítico urgente (el laboratorio debe avisar al paciente o a su médico)
               </label>
             </div>
 
@@ -1784,7 +1815,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 </label>
 
                 {/* Direct AI button: ONLY recommendations without touching conclusions */}
-                <button
+                {!soloOrden && (<button
                   type="button"
                   onClick={() => handleGenerateWithAI({ onlyRecommendations: true })}
                   disabled={isAiGenerating}
@@ -1793,7 +1824,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 >
                   <Sparkles className="w-3.5 h-3.5 text-cyan-600" />
                   <span>Sugerir con IA</span>
-                </button>
+                </button>)}
 
                 <button
                   type="button"
@@ -1922,6 +1953,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
         {/* Right Sidebar (1 Col): Template Picker, AI Assistant Highlights & Digital Signatures */}
         <div className="space-y-6">
           
+          {!soloOrden && (<>
           {/* Quick Template Picker */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -2105,6 +2137,8 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             </div>
           </div>
 
+          </>)}
+
           {/* Dual Digital Signature Box (Bioanalyst + Doctor) */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -2135,7 +2169,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               </div>
 
               <div>
-                <label className="block text-[10px] text-slate-500 mb-0.5">Colegiado / Matrícula:</label>
+                <label className="block text-[10px] text-slate-500 mb-0.5">Colegiado:</label>
                 <input
                   type="text"
                   value={bioanalystLicense}
@@ -2149,7 +2183,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
               <div className="flex items-center gap-1.5 text-xs font-bold text-teal-900">
                 <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
-                <span>2. Director Médico / Patólogo</span>
+                <span>2. Segundo firmante (opcional)</span>
               </div>
 
               <div>
@@ -2163,7 +2197,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               </div>
 
               <div>
-                <label className="block text-[10px] text-slate-500 mb-0.5">Registro CMP / RNE:</label>
+                <label className="block text-[10px] text-slate-500 mb-0.5">Colegiado:</label>
                 <input
                   type="text"
                   value={doctorLicense}

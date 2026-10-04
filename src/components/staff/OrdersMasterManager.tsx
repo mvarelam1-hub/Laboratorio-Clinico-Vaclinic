@@ -1,3 +1,4 @@
+import { DEMO_MODE } from '../../config/demoMode';
 import React, { useState, useMemo, useRef } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { LabOrder, OrderFolder, MedicalReport, ReportParameter } from '../../types';
@@ -190,6 +191,8 @@ const getTestDetails = (testName: string) => {
 };
 
 export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }) => {
+  // La biometría solo existe como demostración: sin lector real no hay sello verdadero.
+  const mostrarBiometria = DEMO_MODE;
   const { 
     orders, 
     orderFolders, 
@@ -516,7 +519,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
       patientGender: paciente?.gender,
       testsList: ord.testsList,
       catalogTests,
-      sampleDate: ord.date,
+      sampleDate: ord.createdAt || ord.date,
       laboratoryName: labSettings.labName || 'VACLINIC LABORATORIO CLÍNICO'
     });
   };
@@ -657,13 +660,13 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
         <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
           <div className="text-[11px] font-black uppercase text-slate-400 tracking-wider">HOY</div>
           <div className="text-3xl font-black text-teal-600 mt-1 font-mono">{todayCount}</div>
-          <div className="text-[11px] text-slate-500 mt-1 font-medium">Registradas hoy (31/08)</div>
+          <div className="text-[11px] text-slate-500 mt-1 font-medium">Registradas hoy ({new Date().toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit' })})</div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
           <div className="text-[11px] font-black uppercase text-slate-400 tracking-wider">DEL MES</div>
           <div className="text-3xl font-black text-blue-600 mt-1 font-mono">{thisMonthCount}</div>
-          <div className="text-[11px] text-slate-500 mt-1 font-medium">Agosto 2026</div>
+          <div className="text-[11px] text-slate-500 mt-1 font-medium capitalize">{new Date().toLocaleDateString('es-GT', { month: 'long', year: 'numeric' })}</div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
@@ -1228,7 +1231,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                                 Código: {ord.codigoConsulta}
                               </span>
                             )}
-                            {ord.biometricAuthorized && (
+                            {mostrarBiometria && ord.biometricAuthorized && (
                               <span 
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300"
                                 title={`Sello Biométrico Activo: ${ord.biometricAuthData?.authorizedBy || 'Autorizado'}`}
@@ -1237,7 +1240,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                                 <span>BIO</span>
                               </span>
                             )}
-                            {(!ord.biometricAuthorized && (ord.priority === 'stat_panico' || ord.priority === 'urgente' || ord.isHighRisk)) && (
+                            {(mostrarBiometria && !ord.biometricAuthorized && (ord.priority === 'stat_panico' || ord.priority === 'urgente' || ord.isHighRisk)) && (
                               <button
                                 onClick={() => setOrderForBiometricAuth(ord)}
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300 animate-pulse cursor-pointer hover:bg-rose-200"
@@ -1339,8 +1342,8 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                         {/* Archivado Info (solo en vista archivadas) */}
                         {mode === 'archived' && (
                           <td className="px-4 py-3.5 text-[11px] text-slate-500 whitespace-nowrap">
-                            <div>{ord.archivedAt || '31/08/2026, 11:14 a. m.'}</div>
-                            <div className="text-[10px] text-slate-400">por {ord.archivedBy || 'Administrador VACLINIC'}</div>
+                            <div>{ord.archivedAt || '—'}</div>
+                            <div className="text-[10px] text-slate-400">{ord.archivedBy ? `por ${ord.archivedBy}` : ''}</div>
                           </td>
                         )}
 
@@ -1373,7 +1376,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                             </button>
 
                             {/* Biometría y Acceso Seguro para Alto Riesgo */}
-                            <button
+                            {mostrarBiometria && (<button
                               onClick={() => setOrderForBiometricAuth(ord)}
                               className={`p-1.5 rounded-lg border cursor-pointer shadow-2xs transition-colors ${
                                 ord.biometricAuthorized 
@@ -1383,7 +1386,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                               title={ord.biometricAuthorized ? "Sello Biométrico Activo (Verificar)" : "Autorizar Orden Mediante Biometría"}
                             >
                               <Fingerprint className="w-3.5 h-3.5" />
-                            </button>
+                            </button>)}
 
                             {/* Imprimir Informe Membretado */}
                             <button
@@ -1625,7 +1628,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
             )}
 
             {/* Biometric Security Banner in Details */}
-            {selectedOrderForDetail.biometricAuthorized ? (
+            {!mostrarBiometria ? null : selectedOrderForDetail.biometricAuthorized ? (
               <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3">
                 <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
                   <Fingerprint className="w-5 h-5" />
@@ -1763,12 +1766,12 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                   className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-teal-700 hover:bg-teal-50 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Edit3 className="w-4 h-4" />
-                  <span>Cargar / Editar Resultados</span>
+                  <span>Ingresar resultados</span>
                 </button>
               </div>
 
               <div className="flex items-center gap-2">
-                <button
+                {mostrarBiometria && (<button
                   type="button"
                   onClick={() => {
                     setOrderForBiometricAuth(selectedOrderForDetail);
@@ -1781,7 +1784,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                 >
                   <Fingerprint className="w-4 h-4" />
                   <span>{selectedOrderForDetail.biometricAuthorized ? 'Ver Sello Biométrico' : 'Autorizar con Biometría'}</span>
-                </button>
+                </button>)}
 
                 <button
                   type="button"

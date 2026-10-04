@@ -622,30 +622,11 @@ export const NewOrderRegistration: React.FC = () => {
       episodeAdmissionTime = new Date().toISOString();
     }
 
-    // Create 4D Lab Episode
-    const createdEpisode = await addEpisode({
-      patientId: patientObj.id,
-      patientName: patientObj.fullName,
-      nationalId: patientDni,
-      patientType,
-      healthProgram: 'general',
-      origin,
-      referringDoctor: referringDoctor.trim() || 'No indicado',
-      branchId: currentBranch || 'central',
-      admissionTime: episodeAdmissionTime,
-      currentDimension: 'D1_admision',
-      priority,
-      requestedTests: selectedTests.map(t => t.name),
-      tubeBarcodes: [barcodeNumber],
-      sampleType,
-      tatTargetMinutes: priority === 'stat_panico' ? 45 : priority === 'urgente' ? 90 : 180,
-      tatElapsedMinutes: 0,
-      notes: `Orden liquidada y registrada. Fecha de muestra: ${orderDate} (${formattedTime}). Prioridad: ${priority.toUpperCase()}. Origen: ${origin}. Ayuno: ${fastingCondition}. Flebotomista: ${phlebotomistName}. Tubos: ${tubesDetailed.map(t => t.label).join(', ')}`
-    });
-
     // Add Order to Orders Master
     const isCritical = priority === 'stat_panico' || priority === 'urgente';
-    const savedOrder = await addOrder({
+    let savedOrder: LabOrder;
+    try {
+    savedOrder = await addOrder({
       orderNumber: '',
       patientId: patientObj.id,
       patientName: patientObj.fullName,
@@ -684,6 +665,35 @@ export const NewOrderRegistration: React.FC = () => {
       appliedPromo: appliedPromo.trim() || undefined,
       bedRoom: bedRoom.trim() || undefined,
       notes: orderNotes.trim() || undefined
+    });
+    } catch (err) {
+      const msg = err instanceof Error && err.message ? err.message : 'No se pudo registrar la orden.';
+      setIsReviewModalOpen(false);
+      showNotification(msg, 'error');
+      playNotificationChime('urgent');
+      return;
+    }
+
+
+    // Create 4D Lab Episode
+    const createdEpisode = await addEpisode({
+      patientId: patientObj.id,
+      patientName: patientObj.fullName,
+      nationalId: patientDni,
+      patientType,
+      healthProgram: 'general',
+      origin,
+      referringDoctor: referringDoctor.trim() || 'No indicado',
+      branchId: currentBranch || 'central',
+      admissionTime: episodeAdmissionTime,
+      currentDimension: 'D1_admision',
+      priority,
+      requestedTests: selectedTests.map(t => t.name),
+      tubeBarcodes: [barcodeNumber],
+      sampleType,
+      tatTargetMinutes: priority === 'stat_panico' ? 45 : priority === 'urgente' ? 90 : 180,
+      tatElapsedMinutes: 0,
+      notes: `Orden liquidada y registrada. Fecha de muestra: ${orderDate} (${formattedTime}). Prioridad: ${priority.toUpperCase()}. Origen: ${origin}. Ayuno: ${fastingCondition}. Flebotomista: ${phlebotomistName}. Tubos: ${tubesDetailed.map(t => t.label).join(', ')}`
     });
 
     playNotificationChime('success');

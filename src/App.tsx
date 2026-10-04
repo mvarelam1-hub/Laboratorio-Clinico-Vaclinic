@@ -132,7 +132,7 @@ const MainContent: React.FC = () => {
 
                 {/* 6. Administración & Flujo */}
                 {staffActiveTab === 'auditoria' && <AuditLogsView />}
-                {staffActiveTab === 'biometria' && <BiometricSecuritySection />}
+                {DEMO_MODE && staffActiveTab === 'biometria' && <BiometricSecuritySection />}
                 {staffActiveTab === 'episodios' && <FourDimensionControlHub />}
                 {staffActiveTab === 'dashboard' && <StaffDashboard />}
                 {staffActiveTab === 'multisucursal' && <MultisiteManager />}
