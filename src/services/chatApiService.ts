@@ -103,3 +103,10 @@ export async function limpiarHistorialCanalRemoto(channelId: string): Promise<{ 
   if (!res.ok) throw new ChatApiError(await parseErrorBody(res), res.status);
   return res.json();
 }
+
+/** Historial real del chat (todos los canales y conversaciones directas visibles para el personal). */
+export async function listarMensajesRemotos(): Promise<MensajeChatApiRow[]> {
+  const res = await authFetch('/api/chat');
+  if (!res.ok) throw new ChatApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}

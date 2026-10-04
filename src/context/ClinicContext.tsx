@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { mapMensajeRemoto, combinarMensajesRemotos } from '../utils/chatRemoto';
 import { validarInformeContraOrden } from '../utils/validarInformeContraOrden';
 import { 
   Patient, 
@@ -173,7 +174,8 @@ import {
   toggleReaccionRemota,
   eliminarMensajeRemoto,
   limpiarHistorialCanalRemoto,
-  ChatApiError
+  ChatApiError,
+  listarMensajesRemotos
 } from '../services/chatApiService';
 
 export type StaffTabType = 
@@ -1505,6 +1507,42 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
     syncPersonalFromServer();
   }, [isEffectiveOnline, isStaffAuthenticated]);
+
+  /**
+   * Chat REAL: se carga el historial desde Postgres al iniciar sesión y se
+   * refresca cada 15 s (no hay canal en tiempo real todavía) para que el resto
+   * del personal vea los mensajes. Solo en modo real; en demo el chat es local.
+   */
+  useEffect(() => {
+    if (DEMO_MODE || !isEffectiveOnline || !isStaffAuthenticated) return;
+    let cancelado = false;
+    const cargarChat = async () => {
+      if (!getStaffSessionToken()) return;
+      try {
+        const filas = await listarMensajesRemotos();
+        if (cancelado) return;
+        const remotos = filas.map((f) => mapMensajeRemoto(f, staffUsers, episodes, currentStaffUser));
+        setChatMessages((prev) => combinarMensajesRemotos(prev, remotos));
+      } catch (error) {
+        console.error('[ClinicContext] No se pudo cargar el chat del servidor:', error);
+      }
+    };
+    cargarChat();
+    const timer = setInterval(cargarChat, 15000);
+    return () => { cancelado = true; clearInterval(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEffectiveOnline, isStaffAuthenticated, staffUsers.length, currentStaffUser.id]);
+
+  /**
+   * Cuando llega la lista real de personal, el usuario con sesión se enlaza con
+   * su ficha por id real (así "mis mensajes" y mis firmas usan el mismo id).
+   */
+  useEffect(() => {
+    if (DEMO_MODE || !isStaffAuthenticated || currentStaffUser.remoteId == null) return;
+    const ficha = staffUsers.find((u) => u.remoteId === currentStaffUser.remoteId);
+    if (ficha && ficha.id !== currentStaffUser.id) setCurrentStaffUser(ficha);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffUsers, isStaffAuthenticated]);
 
   /** Informes REALES (borradores y publicados) desde Postgres, al iniciar sesión. */
   useEffect(() => {
@@ -3123,6 +3161,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } catch (err) {
         const mensaje = err instanceof ChatApiError ? err.message : 'Error de red desconocido.';
         console.error('[ClinicContext] No se pudo enviar el mensaje de chat al servidor:', err);
+        if (!DEMO_MODE) {
+          // Modo real: un mensaje que el resto del personal nunca recibirá no se muestra como enviado.
+          showNotification(`No se pudo enviar el mensaje (${mensaje}). No se envió a nadie; inténtalo de nuevo.`, 'error');
+          return draftMsg;
+        }
         showNotification(`No se pudo enviar el mensaje al servidor (${mensaje}). Se guardó solo localmente.`, 'warning');
       }
     }
