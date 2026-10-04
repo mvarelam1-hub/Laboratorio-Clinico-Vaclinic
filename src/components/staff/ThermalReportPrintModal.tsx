@@ -16,6 +16,8 @@ import {
   Share2
 } from 'lucide-react';
 import { MedicalReport } from '../../types';
+import { useClinic } from '../../context/ClinicContext';
+import { lineaContactoLab } from '../../utils/lineaContactoLab';
 
 interface ThermalReportPrintModalProps {
   isOpen: boolean;
@@ -36,6 +38,8 @@ export const ThermalReportPrintModal: React.FC<ThermalReportPrintModalProps> = (
   doctorName = '',
   doctorLicense = ''
 }) => {
+  const { labSettings } = useClinic();
+  const lineaLab = lineaContactoLab(labSettings);
   const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
   const [fontSize, setFontSize] = useState<'normal' | 'condensed'>('normal');
   const [isPureView, setIsPureView] = useState<boolean>(false);
@@ -82,8 +86,7 @@ export const ThermalReportPrintModal: React.FC<ThermalReportPrintModalProps> = (
 
     let text = '';
     text += `       VACLINIC - LABORATORIO CLINICO\n`;
-    text += `       Sede Central - Red Hospitalaria\n`;
-    text += `     MSPAS Reg: 8912-A | PBX: (502) 2300-9800\n`;
+    if (lineaLab) text += `  ${lineaLab}\n`;
     text += `   COMPROBANTE ANALITICO DE LABORATORIO\n`;
     text += `${divider}\n`;
     text += `FOLIO/ORDEN : ${report.reportNumber}\n`;
@@ -435,12 +438,9 @@ export const ThermalReportPrintModal: React.FC<ThermalReportPrintModalProps> = (
                 <div className="font-bold text-[11px] uppercase tracking-wide">
                   LABORATORIO CLINICO
                 </div>
-                <div className="text-[10px] text-black">
-                  Sede Central &middot; Red Hospitalaria
-                </div>
-                <div className="text-[9px] text-black">
-                  MSPAS Reg: 8912-A &middot; PBX: (502) 2300-9800
-                </div>
+                {lineaLab && (
+                  <div className="text-[9px] text-black">{lineaLab}</div>
+                )}
                 <div className="text-[9px] font-bold tracking-tight pt-1">
                   COMPROBANTE ANALITICO TERMICO
                 </div>

@@ -249,9 +249,9 @@ export const LabPerformancePdfModal: React.FC<LabPerformancePdfModalProps> = ({
       };
     }
     return {
-      name: currentStaffUser?.fullName || 'Licda. Elena Morales Cruz',
-      role: currentStaffUser?.roleName || 'Directora Técnica & Químico Bióloga',
-      license: currentStaffUser?.licenseNumber || 'Col. QB #4192 / MSPAS-8812'
+      name: currentStaffUser?.fullName || 'Responsable del informe',
+      role: currentStaffUser?.roleName || '',
+      license: currentStaffUser?.licenseNumber || ''
     };
   }, [staffUsers, selectedSignerId, currentStaffUser]);
 
@@ -707,7 +707,7 @@ export const LabPerformancePdfModal: React.FC<LabPerformancePdfModalProps> = ({
                       <div className="text-[10px] text-slate-600 mt-1 font-medium leading-tight">
                         <span>📍 {labSettings.address || 'Entrada de Pineda, Oratorio, Santa Rosa km 79.5'}</span>
                         <span className="mx-1">•</span>
-                        <span>📞 PBX / WhatsApp: {labSettings.whatsappNumber || '5612-5563'}</span>
+                        <span>📞 PBX / WhatsApp: {labSettings.whatsappNumber || labSettings.phone || ''}</span>
                       </div>
                       <div className="text-[9px] text-slate-500 font-semibold mt-0.5">
                         Licencia Sanitaria MSPAS-DR-SR-2024-089 • Sistema de Gestión de Calidad ISO 15189:2022

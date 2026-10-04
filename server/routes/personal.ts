@@ -35,8 +35,10 @@ export const personalRouter = Router();
 personalRouter.use(requireStaffAuth);
 personalRouter.use(requirePermission('admin_usuarios_roles'));
 
+// `pin_code` NO se devuelve: es un dato obsoleto (ya no autentica, migración 0008)
+// y enviarlo en claro a cada pantalla de administración solo amplía la fuga.
 const SELECT_COLUMNAS = `id_usuario, uid, nombre_completo, correo, rol, especialidad, numero_colegiado,
-       pin_code, estado, permisos_personalizados, nombre_usuario, telefono, sede_asignada,
+       estado, permisos_personalizados, nombre_usuario, telefono, sede_asignada,
        color_avatar, texto_sello_firma, url_imagen_firma, doble_factor_habilitado, notas,
        ultimo_login, fecha_creacion`;
 

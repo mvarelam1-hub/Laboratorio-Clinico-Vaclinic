@@ -166,3 +166,16 @@ describe('DELETE /api/personal/:id', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('El PIN obsoleto nunca se devuelve', () => {
+  it('ninguna consulta de lectura/escritura selecciona pin_code', async () => {
+    queryMock.mockResolvedValue({ rows: [] });
+    const app = await buildApp();
+    await request(app).get('/api/personal');
+    await request(app).patch('/api/personal/2/pin').send({ pinCode: '4321' });
+    for (const [sql] of queryMock.mock.calls) {
+      const returning = String(sql).split('RETURNING')[1] ?? String(sql).split('FROM usuario')[0];
+      expect(returning).not.toMatch(/pin_code/);
+    }
+  });
+});

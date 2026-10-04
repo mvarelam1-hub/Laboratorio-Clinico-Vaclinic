@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { lineaContactoLab } from '../../utils/lineaContactoLab';
 import { LabAuditLog, LabStaffUser } from '../../types';
 import { useClinic } from '../../context/ClinicContext';
 import { AuditExportService } from '../../services/auditExportService';
@@ -386,7 +387,7 @@ export const AuditPdfExportModal: React.FC<AuditPdfExportModalProps> = ({
                       DEPARTAMENTO DE GESTIÓN DE CALIDAD & AUDITORÍA FORENSE — ISO 15189:2022
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
-                      República de Guatemala • Licencia Sanitaria MSPAS No. LAB-2026-089 • PBX: +(502) 2234-5678
+                      {lineaContactoLab(labSettings) || 'República de Guatemala'}
                     </div>
                   </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { lineaContactoLab } from '../../utils/lineaContactoLab';
 import { useClinic } from '../../context/ClinicContext';
 import { 
   LabStaffUser, 
@@ -72,7 +73,8 @@ export const UserManagement: React.FC = () => {
     updateRolePermissions,
     logAuditEvent,
     showNotification,
-    setStaffActiveTab
+    setStaffActiveTab,
+    labSettings
   } = useClinic();
 
   // Navigation Subtabs
@@ -854,7 +856,7 @@ export const UserManagement: React.FC = () => {
                           <Key className="w-3.5 h-3.5 text-teal-600" />
                           <span className="text-xs text-slate-500 font-medium">PIN de Acceso:</span>
                           <span className="font-mono text-xs font-black text-slate-800">
-                            {isPinRevealed ? user.pinCode : '••••'}
+                            {isPinRevealed ? (user.pinCode || 'No disponible') : '••••'}
                           </span>
                         </div>
 
@@ -970,7 +972,7 @@ export const UserManagement: React.FC = () => {
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-1.5 font-mono font-bold">
-                              <span>{isPinRevealed ? user.pinCode : '••••'}</span>
+                              <span>{isPinRevealed ? (user.pinCode || 'No disponible') : '••••'}</span>
                               <button
                                 onClick={() => togglePinReveal(user.id)}
                                 className="text-slate-400 hover:text-slate-700 p-0.5"
@@ -1938,7 +1940,7 @@ export const UserManagement: React.FC = () => {
                 DEPARTAMENTO DE GESTIÓN DE CALIDAD & AUDITORÍA FORENSE (ISO 15189:2022)
               </div>
               <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>
-                Guatemala, C.A. • PBX: (502) 2234-5678 • Registro Sanitario MSPAS No. LAB-2026-089
+                {lineaContactoLab(labSettings) || 'Guatemala, C.A.'}
               </div>
             </div>
             <div style={{ textAlign: 'right', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 12px', backgroundColor: '#f8fafc' }}>

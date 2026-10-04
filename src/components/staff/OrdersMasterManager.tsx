@@ -216,7 +216,8 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
     reports,
     patients,
     catalogTests,
-    labSettings
+    labSettings,
+    currentStaffUser
   } = useClinic();
 
   // View state: 'list' (table) or 'folders' (grid)
@@ -1842,7 +1843,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                 <div className="font-black text-base text-slate-900">VACLINIC LABORATORIO CLÍNICO</div>
                 <div className="text-[10px] text-slate-500">"Precisión que diagnostica, confianza que cuida"</div>
                 <div className="text-[10px] text-slate-600 mt-1">📍 Entrada de Pineda Oratorio Santa Rosa km 79.5</div>
-                <div className="text-[10px] text-slate-600">📞 PBX / WhatsApp: 56125563</div>
+                {(labSettings.whatsappNumber || labSettings.phone) && (<div className="text-[10px] text-slate-600">📞 {labSettings.whatsappNumber || labSettings.phone}</div>)}
               </div>
 
               {/* Order metadata */}
@@ -2136,8 +2137,8 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
         isOpen={!!orderForBiometricAuth}
         onClose={() => setOrderForBiometricAuth(null)}
         order={orderForBiometricAuth}
-        staffName="Lic. Mily Jeannette Rodríguez Magaña"
-        staffRole="Químico Biólogo / Director Técnico"
+        staffName={currentStaffUser?.fullName || ""}
+        staffRole={currentStaffUser?.roleName || ""}
         onAuthorized={(orderId, authResult) => {
           updateOrder(orderId, {
             biometricAuthorized: true,
@@ -2416,7 +2417,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
               <div className="text-center border-b border-dashed border-slate-300 pb-4 space-y-1">
                 <h2 className="text-base font-black text-slate-900">{labSettings.labName || 'LABORATORIO CLÍNICO Y BIOLÓGICO'}</h2>
                 <p className="text-[11px] text-slate-500">{labSettings.address || 'Ciudad de Guatemala'}</p>
-                <p className="text-[11px] text-slate-500">PBX: {labSettings.phone || '2222-0000'}</p>
+                <p className="text-[11px] text-slate-500">{labSettings.phone ? `Tel. ${labSettings.phone}` : ''}</p>
                 <div className="mt-2 inline-block bg-teal-50 border border-teal-200 px-3 py-1 rounded-full font-mono font-bold text-teal-800">
                   LOTE #{bulkLiquidationReceipt.receiptNumber}
                 </div>
