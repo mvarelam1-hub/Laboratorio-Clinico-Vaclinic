@@ -20,4 +20,15 @@ describe('validarInformeContraOrden', () => {
     expect(validarInformeContraOrden(undefined, []).ok).toBe(false);
     expect(validarInformeContraOrden({ examCodes: [] }, []).ok).toBe(false);
   });
+
+  it('bloquea si la orden tiene saldo pendiente (cancelado = pagado)', () => {
+    const r = validarInformeContraOrden({ examCodes: ['HEM'], pendingBalance: 75 }, [{ name: 'Hb', examCode: 'HEM' }]);
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toContain('Q75.00');
+  });
+
+  it('permite si el saldo es 0 o no existe', () => {
+    expect(validarInformeContraOrden({ examCodes: ['HEM'], pendingBalance: 0 }, [{ name: 'Hb', examCode: 'HEM' }]).ok).toBe(true);
+    expect(validarInformeContraOrden({ examCodes: ['HEM'] }, [{ name: 'Hb', examCode: 'HEM' }]).ok).toBe(true);
+  });
 });

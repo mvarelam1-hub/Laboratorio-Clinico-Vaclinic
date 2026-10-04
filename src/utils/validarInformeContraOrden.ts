@@ -2,6 +2,8 @@
  * Regla de modo real: un informe solo puede contener resultados de los
  * exámenes que ya estaban en la orden (los que el paciente ordenó y pagó al
  * registrarla). No se agregan, editan ni envían filas de otros exámenes.
+ * "Cancelado" = pagado: si la orden aún tiene saldo pendiente, tampoco se
+ * ingresan ni se envían resultados hasta que se liquide.
  */
 import type { ReportParameter } from '../types';
 
@@ -15,14 +17,29 @@ export interface ResultadoValidacionOrden {
   sinCapturar: string[];
 }
 
+/** Saldo pendiente de la orden (0 si está pagada o el dato no existe). */
+export function saldoPendienteDeOrden(orden: { pendingBalance?: number } | undefined | null): number {
+  const n = Number(orden?.pendingBalance);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export function validarInformeContraOrden(
-  orden: { examCodes?: string[] } | undefined | null,
+  orden: { examCodes?: string[]; pendingBalance?: number } | undefined | null,
   parametros: Pick<ReportParameter, 'name' | 'examCode'>[]
 ): ResultadoValidacionOrden {
   if (!orden) {
     return {
       ok: false,
       motivo: 'Los resultados solo se ingresan sobre una orden registrada. Abre la orden y pulsa «Ingresar resultados».',
+      fueraDeOrden: [],
+      sinCapturar: []
+    };
+  }
+  const saldo = saldoPendienteDeOrden(orden);
+  if (saldo > 0) {
+    return {
+      ok: false,
+      motivo: `La orden tiene un saldo pendiente de Q${saldo.toFixed(2)}. Los resultados se ingresan y envían cuando los exámenes están cancelados (pagados): liquida la orden en Órdenes.`,
       fueraDeOrden: [],
       sinCapturar: []
     };

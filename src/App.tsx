@@ -5,7 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { StaffDashboard } from './components/staff/StaffDashboard';
 import { FourDimensionControlHub } from './components/staff/FourDimensionControlHub';
 import { MultisiteManager } from './components/staff/MultisiteManager';
-import { ReportEditor } from './components/staff/ReportEditor';
+import { ResultsWorkspace } from './components/staff/ResultsWorkspace';
 import { PatientManager } from './components/staff/PatientManager';
 import { TemplateManager } from './components/staff/TemplateManager';
 import { CatalogAndProfilesManager } from './components/staff/CatalogAndProfilesManager';
@@ -139,7 +139,7 @@ const MainContent: React.FC = () => {
                 {staffActiveTab === 'muestras' && <SampleReception />}
                 {DEMO_MODE && staffActiveTab === 'analizadores' && <AnalyzerBatchEntry />}
                 {staffActiveTab === 'control_calidad' && <QualityControlQC />}
-                {staffActiveTab === 'redactor' && <ReportEditor />}
+                {staffActiveTab === 'redactor' && <ResultsWorkspace />}
                 {staffActiveTab === 'pacientes' && <PatientManager />}
                 {staffActiveTab === 'usuarios' && <UserManagement />}
                 {staffActiveTab === 'plantillas' && <TemplateManager />}

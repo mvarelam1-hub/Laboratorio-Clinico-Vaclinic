@@ -1,5 +1,5 @@
 import { DEMO_MODE } from '../../config/demoMode';
-import { validarInformeContraOrden } from '../../utils/validarInformeContraOrden';
+import { validarInformeContraOrden, saldoPendienteDeOrden } from '../../utils/validarInformeContraOrden';
 import { firmantesPorDefecto } from '../../utils/firmantes';
 import { numeroInformeNuevo } from '../../utils/borradorInforme';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -212,12 +212,16 @@ export const ReportEditor: React.FC = () => {
   }, [parameters]);
 
   // Parameter metrics summary
+  const saldoDeLaOrden = saldoPendienteDeOrden(ordenDelInforme);
+  const sinResultado = parameters.filter((p) => !String(p.value ?? '').trim()).length;
   const paramStats = useMemo(() => {
     const total = parameters.length;
-    const normal = parameters.filter(p => p.status === 'normal').length;
-    const high = parameters.filter(p => p.status === 'high').length;
-    const low = parameters.filter(p => p.status === 'low').length;
-    const critical = parameters.filter(p => p.status === 'critical').length;
+    // Solo cuentan los parámetros con resultado capturado: una fila vacía no es "normal".
+    const conValor = parameters.filter(p => String(p.value ?? '').trim() !== '');
+    const normal = conValor.filter(p => p.status === 'normal').length;
+    const high = conValor.filter(p => p.status === 'high').length;
+    const low = conValor.filter(p => p.status === 'low').length;
+    const critical = conValor.filter(p => p.status === 'critical').length;
     return { total, normal, high, low, critical };
   }, [parameters]);
 
@@ -827,6 +831,116 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
         </div>
       )}
       
+      {/* ENCABEZADO MODO REAL: título, orden activa y herramientas */}
+      {soloOrden && (
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-slate-100">
+            <div>
+              <h1 className="text-xl font-black text-slate-900">Ingreso de Resultados de Laboratorio</h1>
+              <p className="text-xs text-slate-500 mt-0.5">Llena los parámetros analizados de la orden activa. Solo se capturan los exámenes de esa orden.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-[11px] uppercase font-bold px-2.5 py-1 rounded-full border ${
+                  status === 'publicado' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                  status === 'revision' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                  'bg-slate-100 text-slate-700 border-slate-300'
+                }`}
+              >
+                {status === 'publicado' ? 'Publicado' : status === 'revision' ? 'En revisión' : 'Borrador'}
+              </span>
+              {ordenDelInforme && (
+                <span className="font-mono font-black text-teal-800 bg-teal-50 border border-teal-200 rounded-full px-3 py-1 text-xs">
+                  {ordenDelInforme.orderNumber}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Tarjeta del paciente y la orden */}
+          <div className="mt-4 rounded-2xl border border-slate-200 p-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-lg font-black text-slate-900 uppercase leading-tight">
+                  {currentPatient?.fullName || ordenDelInforme?.patientName || '—'}
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  {typeof currentPatient?.age === 'number' ? `${currentPatient.age} años` : 'Edad no registrada'}
+                  {currentPatient?.gender ? ` · ${currentPatient.gender}` : ''}
+                  {ordenDelInforme?.date ? ` · Orden del ${ordenDelInforme.date.split('-').reverse().join('/')}` : ''}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                {ordenDelInforme?.codigoConsulta && (
+                  <span className="font-mono bg-slate-100 border border-slate-200 rounded-md px-2 py-1" title="El paciente usa este código para ver sus resultados en línea">
+                    Código de consulta: <strong className="select-all">{ordenDelInforme.codigoConsulta}</strong>
+                  </span>
+                )}
+                <span className="bg-slate-100 border border-slate-200 rounded-md px-2 py-1 font-bold">
+                  Pruebas: {parameters.length}
+                </span>
+              </div>
+            </div>
+
+            {saldoDeLaOrden > 0 && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs font-medium px-3 py-2 flex flex-wrap items-center justify-between gap-2" data-testid="aviso-saldo-pendiente">
+                <span>
+                  Saldo pendiente de <strong>Q{saldoDeLaOrden.toFixed(2)}</strong>. Los resultados se ingresan y envían cuando los exámenes están cancelados (pagados).
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStaffActiveTab('ordenes')}
+                  className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
+                >
+                  Ir a liquidar
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100 text-xs font-bold">
+              <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Normales: {paramStats.normal}</span>
+              <span className="px-3 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200">Altos: {paramStats.high}</span>
+              <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Bajos: {paramStats.low}</span>
+              {paramStats.critical > 0 && (
+                <span className="px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-300">Críticos: {paramStats.critical}</span>
+              )}
+              <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">Total: {paramStats.total}</span>
+              {sinResultado > 0 && (
+                <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200" title="Parámetros que todavía no tienen valor capturado">
+                  Sin resultado: {sinResultado}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Herramientas de apoyo (secundarias) */}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <button type="button" onClick={() => setShowTubeGuideModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Tipos de tubos de extracción y anticoagulantes">
+              <FlaskConical className="w-3.5 h-3.5 text-amber-600" /><span>Guía de Tubos</span>
+            </button>
+            <button type="button" onClick={() => setShowAtlasModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Atlas microscópico de parásitos, cristales y sedimento">
+              <BookOpen className="w-3.5 h-3.5 text-cyan-600" /><span>Atlas Microscópico</span>
+            </button>
+            <button type="button" onClick={() => setShowPdfExportModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Exportar PDF oficial">
+              <Download className="w-3.5 h-3.5 text-teal-600" /><span>Exportar PDF</span>
+            </button>
+            <button type="button" id="btn-physical-print-preview" onClick={() => setShowPhysicalPrintPreview(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Cómo se verá en papel">
+              <Eye className="w-3.5 h-3.5 text-sky-600" /><span>Vista de impresión</span>
+            </button>
+            <button type="button" id="btn-thermal-print-preview" onClick={() => setShowThermalPrintModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Formato ticket térmico">
+              <Printer className="w-3.5 h-3.5 text-slate-600" /><span>Ticket térmico</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveReportToEdit(null); }}
+              className="ml-auto px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg cursor-pointer"
+            >
+              Cerrar orden
+            </button>
+          </div>
+        </div>
+      )}
+      {!soloOrden && (<>
       {/* Top Action Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -967,13 +1081,15 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
           </button>
         </div>
       </div>
+      </>)}
 
       {/* Main Grid: Left Editor & Right AI / Template Sidebar */}
-      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_24rem] gap-6">
+      <div className={`grid grid-cols-1 gap-6 ${soloOrden ? '' : '2xl:grid-cols-[minmax(0,1fr)_24rem]'}`}>
         
         {/* Left Column (2 Cols): Form Fields and Parameters */}
         <div className="space-y-6 min-w-0">
           
+          {!soloOrden && (<>
           {/* Patient and Study Metadata Section */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -1062,6 +1178,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
             </div>
           </div>
+          </>)}
 
           {/* Structured Parameters Table Section */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
@@ -1071,13 +1188,13 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               <div>
                 <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-teal-600" />
-                  <span>2. Pruebas y Valores de Referencia ({parameters.length})</span>
+                  <span>{soloOrden ? `Resultados por examen (${parameters.length})` : `2. Pruebas y Valores de Referencia (${parameters.length})`}</span>
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-[11px] text-slate-500">
                     Modifique una por una: resultado, unidad, rango de referencia y observaciones
                   </span>
-                  {paramStats.total > 0 && (
+                  {(paramStats.normal + paramStats.high + paramStats.low + paramStats.critical) > 0 && (
                     <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono">
                       <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
                         {paramStats.normal} Normal
@@ -1699,7 +1816,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-teal-600" />
-                <span>3. Redacción Diagnóstica y Resumen del Médico</span>
+                <span>{soloOrden ? 'Observaciones del profesional' : '3. Redacción Diagnóstica y Resumen del Médico'}</span>
               </h2>
 
               {!soloOrden && (<button
@@ -1880,7 +1997,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
           </div>
 
           {/* Bottom Save & Clinical Validation Action Bar */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 ${soloOrden ? 'sticky bottom-0 z-30 shadow-lg' : ''}`}>
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                 outOfRangeParameters.length > 0 
@@ -1900,6 +2017,10 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                     <span className="bg-rose-100 text-rose-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-rose-300">
                       {outOfRangeParameters.length} fuera de rango ({parameters.filter(p => p.status === 'critical').length} crítico/s)
                     </span>
+                  ) : parameters.every((p) => !String(p.value ?? '').trim()) ? (
+                    <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-300">
+                      Sin resultados capturados
+                    </span>
                   ) : (
                     <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300">
                       Todos en rango normal
@@ -1909,7 +2030,9 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 <p className="text-[11px] text-slate-500">
                   {outOfRangeParameters.length > 0 
                     ? 'Se solicitará confirmación médica de valores críticos antes de guardar o publicar.'
-                    : 'Todos los resultados ingresados concuerdan con los rangos biológicos de referencia.'}
+                    : parameters.every((p) => !String(p.value ?? '').trim())
+                      ? 'Captura los resultados de los exámenes de la orden para poder validarlos.'
+                      : 'Todos los resultados ingresados concuerdan con los rangos biológicos de referencia.'}
                 </p>
               </div>
             </div>
@@ -1953,7 +2076,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-sm shadow-teal-600/30 transition-all cursor-pointer"
               >
                 <ShieldCheck className="w-4 h-4" />
-                <span>Firmar y Publicar</span>
+                <span>{soloOrden ? 'Validar y publicar' : 'Firmar y Publicar'}</span>
               </button>
             </div>
           </div>
