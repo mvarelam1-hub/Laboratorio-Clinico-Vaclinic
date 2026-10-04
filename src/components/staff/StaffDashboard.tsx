@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { DEMO_MODE } from '../../config/demoMode';
 import { useClinic } from '../../context/ClinicContext';
 import { MedicalReport, ReportStatus, ReportCategory, LabEpisode, LabOrder } from '../../types';
 import { VaclinicVisualDashboard } from './VaclinicVisualDashboard';
@@ -536,6 +537,7 @@ export const StaffDashboard: React.FC = () => {
             <span className="sm:hidden">Widgets</span>
           </button>
 
+          {DEMO_MODE && (<>
           <button
             onClick={() => setDashboardView('visual_completo')}
             className={`flex items-center gap-2 px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[40px] ${
@@ -561,6 +563,7 @@ export const StaffDashboard: React.FC = () => {
             <span className="hidden sm:inline">Volumen Diario (Barras)</span>
             <span className="sm:hidden">Volumen</span>
           </button>
+          </>)}
 
           <button
             onClick={() => setDashboardView('informes')}
@@ -621,12 +624,12 @@ export const StaffDashboard: React.FC = () => {
       )}
 
       {/* RENDER VISUAL DASHBOARD (PANEL VACLINIC WITH RECHARTS) */}
-      {dashboardView === 'visual_completo' && (
+      {DEMO_MODE && dashboardView === 'visual_completo' && (
         <VaclinicVisualDashboard />
       )}
 
       {/* RENDER DEDICATED DAILY VOLUME CONTROL PANEL */}
-      {dashboardView === 'volumen_barras' && (
+      {DEMO_MODE && dashboardView === 'volumen_barras' && (
         <DailyVolumeControlPanel />
       )}
 

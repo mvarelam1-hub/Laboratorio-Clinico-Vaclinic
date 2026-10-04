@@ -1,4 +1,5 @@
 import { firmantesPorDefecto } from '../../utils/firmantes';
+import { DEMO_MODE } from '../../config/demoMode';
 import React, { useRef, useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { PdfReportService } from '../../services/pdfReportService';
@@ -231,6 +232,7 @@ export const PrintReportModal: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            {DEMO_MODE && (<>
             {/* AI Summary Mode Button */}
             <button
               onClick={() => setShowAiSummaryModal(true)}
@@ -240,6 +242,7 @@ export const PrintReportModal: React.FC = () => {
               <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
               <span>Modo Resumen IA</span>
             </button>
+            </>)}
 
             {/* Customization Options Toggle */}
             <button

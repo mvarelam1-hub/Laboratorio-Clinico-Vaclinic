@@ -675,6 +675,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {(!isCollapsed || isMobileOpen) && <span>Entrega de resultados</span>}
                 </button>
 
+                {DEMO_MODE && (
                 <button
                   onClick={() => handleSelectTab('asistente_ia')}
                   className={`
@@ -690,6 +691,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Sparkles className="w-4 h-4 flex-shrink-0 text-emerald-400" />
                   {(!isCollapsed || isMobileOpen) && <span>Asistente IA</span>}
                 </button>
+                )}
 
                 <button
                   onClick={() => handleSelectTab('chat_interno')}

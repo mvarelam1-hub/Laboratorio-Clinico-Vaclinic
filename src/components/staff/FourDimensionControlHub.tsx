@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DEMO_MODE } from '../../config/demoMode';
 import { useClinic } from '../../context/ClinicContext';
 import { 
   LabEpisode, 
@@ -67,7 +68,7 @@ export const FourDimensionControlHub: React.FC = () => {
 
   // New Episode Modal
   const [showNewEpisodeModal, setShowNewEpisodeModal] = useState(false);
-  const [selectedPatientIdForEp, setSelectedPatientIdForEp] = useState<string>(patients[0]?.id || '');
+  const [selectedPatientIdForEp, setSelectedPatientIdForEp] = useState<string>((DEMO_MODE ? patients[0]?.id : '') || '');
   const [newPatientType, setNewPatientType] = useState<PatientType>('ambulatorio');
   const [newProgram, setNewProgram] = useState<HealthProgram>('preventivo_360');
   const [newOrigin, setNewOrigin] = useState<OriginDepartment>('consulta_externa');
@@ -728,9 +729,10 @@ export const FourDimensionControlHub: React.FC = () => {
                   onChange={(e) => setSelectedPatientIdForEp(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 >
+                  {!DEMO_MODE && <option value="">Selecciona un paciente…</option>}
                   {patients.map(p => (
                     <option key={p.id} value={p.id}>
-                      {p.fullName} (DNI: {p.nationalId} • {p.accessCode})
+                      {p.fullName} (DNI: {p.nationalId}{DEMO_MODE ? ` • ${p.accessCode}` : ''})
                     </option>
                   ))}
                 </select>

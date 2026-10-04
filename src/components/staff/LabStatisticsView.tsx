@@ -479,7 +479,7 @@ export const LabStatisticsView: React.FC = () => {
           </div>
           <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1">
             <TrendingUp className="w-3.5 h-3.5" />
-            <span>100% trazables con código de barras</span>
+            <span>{filteredOrders.filter(o => o.reportStatus === 'Validado').length} con informe validado</span>
           </div>
         </div>
 
@@ -531,7 +531,7 @@ export const LabStatisticsView: React.FC = () => {
           </div>
           <div className="text-[11px] text-purple-700 font-bold mt-1.5 flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" />
-            <span>TAT 1h 45m • 98.6% SLA Cumplido</span>
+            <span>Total de pacientes registrados</span>
           </div>
         </div>
 
@@ -1197,16 +1197,12 @@ export const LabStatisticsView: React.FC = () => {
 
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
                   <div className="flex justify-between items-center text-slate-700 font-bold">
-                    <span>Índice de Trazabilidad ISO 15189</span>
-                    <span className="text-teal-700">100% Garantizada</span>
+                    <span>Órdenes con informe validado</span>
+                    <span className="text-teal-700">{filteredOrders.filter(o => o.reportStatus === 'Validado').length} de {filteredOrders.length}</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-700 font-bold">
-                    <span>Turnaround Time (TAT) Medio</span>
-                    <span className="text-slate-900">1 hora 45 minutos</span>
-                  </div>
-                  <div className="flex justify-between items-center text-slate-700 font-bold">
-                    <span>Fidelidad & Retención de Pacientes</span>
-                    <span className="text-emerald-700">99.1% Satisfacción</span>
+                    <span>Órdenes aún sin informe</span>
+                    <span className="text-slate-900">{filteredOrders.filter(o => o.reportStatus === 'Sin Informe').length}</span>
                   </div>
                 </div>
               </div>

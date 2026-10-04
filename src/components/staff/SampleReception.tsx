@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DEMO_MODE } from '../../config/demoMode';
 import { useClinic } from '../../context/ClinicContext';
 import { 
   FlaskConical, 
@@ -54,10 +55,10 @@ interface LabSample {
 }
 
 export const SampleReception: React.FC = () => {
-  const { patients, showNotification, setStaffActiveTab, setActiveReportToEdit } = useClinic();
+  const { patients, showNotification, setStaffActiveTab, setActiveReportToEdit, currentStaffUser } = useClinic();
 
   // Initial demo samples reflecting Tubes vs Containers (Heces, Orina, Urocultivo)
-  const [samples, setSamples] = useState<LabSample[]>([
+  const [samples, setSamples] = useState<LabSample[]>(!DEMO_MODE ? [] : [
     {
       id: 'samp-101',
       barcode: 'TUB-2026-89410',
@@ -158,14 +159,14 @@ export const SampleReception: React.FC = () => {
   const [lastValidatedSample, setLastValidatedSample] = useState<LabSample | null>(null);
 
   // New sample form state
-  const [newPatientId, setNewPatientId] = useState(patients[0]?.id || '');
+  const [newPatientId, setNewPatientId] = useState(DEMO_MODE ? (patients[0]?.id || '') : '');
   const [autoContainerMode, setAutoContainerMode] = useState<boolean>(true);
   const [newTubeType, setNewTubeType] = useState<LabContainerType>('lila');
-  const [newTests, setNewTests] = useState('Hemograma Completo, Glucosa, Perfil Lipídico');
-  const [newPhlebotomist, setNewPhlebotomist] = useState('Lic. Bioquímica de Turno');
+  const [newTests, setNewTests] = useState(DEMO_MODE ? 'Hemograma Completo, Glucosa, Perfil Lipídico' : '');
+  const [newPhlebotomist, setNewPhlebotomist] = useState(DEMO_MODE ? 'Lic. Bioquímica de Turno' : (currentStaffUser?.fullName || ''));
   const [newQuality, setNewQuality] = useState<'optima' | 'hemolisis_leve' | 'hemolisis_severa' | 'lipemica' | 'coagulada'>('optima');
 
-  const selectedPatient = patients.find(p => p.id === newPatientId) || patients[0];
+  const selectedPatient = patients.find(p => p.id === newPatientId) || (DEMO_MODE ? patients[0] : undefined);
 
   // Inferred container computed automatically from the test description
   const inferredContainer = inferTubeForTest(newTests, undefined, undefined, autoContainerMode ? undefined : newTubeType);
@@ -223,6 +224,11 @@ export const SampleReception: React.FC = () => {
       
       showNotification(`¡Muestra validada por escáner! ${foundSample.containerCategory === 'recipiente' ? 'Recipiente' : 'Tubo'} ${foundSample.barcode} - Paciente: ${foundSample.patientName}`, 'success');
     } else {
+      if (!DEMO_MODE) {
+        // Modo real: un código que no está registrado NO se asigna a ningún paciente.
+        showNotification(`El código ${clean} no está registrado. Registra la muestra primero con su paciente; no se asignó a nadie.`, 'error');
+        return;
+      }
       // Create a rapid on-the-fly validated sample entry if it's a new barcode
       const randomPatient = patients[Math.floor(Math.random() * patients.length)] || patients[0];
       const isRecipienteScan = clean.startsWith('REC-') || clean.includes('REC');
@@ -640,6 +646,7 @@ export const SampleReception: React.FC = () => {
                   onChange={(e) => setNewPatientId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-teal-500"
                 >
+                  {!DEMO_MODE && <option value="">Selecciona un paciente…</option>}
                   {patients.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.fullName} • DNI: {p.nationalId}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { DEMO_MODE } from '../../config/demoMode';
 import { useClinic } from '../../context/ClinicContext';
 import { 
   GripVertical, 
@@ -54,7 +55,7 @@ export interface WidgetConfig {
   colSpan: 'single' | 'double' | 'full';
 }
 
-const DEFAULT_WIDGETS: WidgetConfig[] = [
+const TODOS_LOS_WIDGETS: WidgetConfig[] = [
   {
     id: 'reagents_stock_alert',
     title: 'Monitoreo de Reactivos & Stock Crítico',
@@ -119,6 +120,13 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
     colSpan: 'single'
   }
 ];
+
+// En modo real se ocultan los widgets cuyos datos no existen todavía en el
+// sistema (telemetría de analizadores y TAT por área): mostraban cifras fijas.
+const WIDGETS_SIN_DATOS_REALES = ['equipment_status', 'tat_performance'];
+const DEFAULT_WIDGETS: WidgetConfig[] = DEMO_MODE
+  ? TODOS_LOS_WIDGETS
+  : TODOS_LOS_WIDGETS.filter((w) => !WIDGETS_SIN_DATOS_REALES.includes(w.id));
 
 const LOCAL_STORAGE_KEY = 'vaclinic_staff_dashboard_widgets_v2';
 
@@ -384,9 +392,11 @@ export const DashboardWidgetGrid: React.FC = () => {
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Muestras Hoy</span>
           <div className="text-2xl font-black text-slate-900 flex items-baseline gap-2">
             <span>{todayCount}</span>
-            <span className="text-xs font-bold text-emerald-600 flex items-center">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> +14.2%
-            </span>
+            {DEMO_MODE && (
+              <span className="text-xs font-bold text-emerald-600 flex items-center">
+                <TrendingUp className="w-3 h-3 mr-0.5" /> +14.2%
+              </span>
+            )}
           </div>
         </div>
         <div className="text-right">
@@ -552,7 +562,7 @@ export const DashboardWidgetGrid: React.FC = () => {
       <div className="flex items-center justify-between text-xs">
         <span className="font-bold text-slate-700">Muestras en Tránsito</span>
         <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-          {totalInPipeline || 24} órdenes
+          {totalInPipeline} órdenes
         </span>
       </div>
 

@@ -60,6 +60,20 @@ const getGenAI = () => {
   });
 };
 
+// MODO REAL (por defecto): estas rutas eran simuladores (resumen/redacción/
+// consulta "con IA" con respuestas heurísticas que decían "tus resultados están
+// normales" sin que nadie los hubiera interpretado, y notificaciones push
+// "enviadas" que nunca salían). En un laboratorio real el sistema no concluye
+// ni diagnostica: la interpretación es del profesional. Solo se habilitan con
+// DEMO_MODE=true en el servidor (capacitación).
+app.use(["/api/ai", "/api/notifications/firebase"], (req, res, next) => {
+  if (process.env.DEMO_MODE === "true") return next();
+  res.status(501).json({
+    error: "Función desactivada en modo real: el sistema no genera conclusiones, diagnósticos ni notificaciones simuladas. La interpretación la realiza el profesional.",
+    code: "FUNCION_DESACTIVADA_MODO_REAL"
+  });
+});
+
 // Health Check. Además del "ok" del proceso, reporta el estado REAL de la
 // base de datos: si responde y qué migración es la última registrada por
 // scripts/migrate.mjs (tabla schema_migrations). Sirve para verificar un

@@ -127,7 +127,7 @@ const MainContent: React.FC = () => {
 
                 {/* 5. Comunicación */}
                 {staffActiveTab === 'envios' && <LabDispatchesView />}
-                {staffActiveTab === 'asistente_ia' && <AiLabAssistantView />}
+                {DEMO_MODE && staffActiveTab === 'asistente_ia' && <AiLabAssistantView />}
                 {staffActiveTab === 'chat_interno' && <InternalChatView />}
 
                 {/* 6. Administración & Flujo */}
@@ -137,7 +137,7 @@ const MainContent: React.FC = () => {
                 {staffActiveTab === 'dashboard' && <StaffDashboard />}
                 {staffActiveTab === 'multisucursal' && <MultisiteManager />}
                 {staffActiveTab === 'muestras' && <SampleReception />}
-                {staffActiveTab === 'analizadores' && <AnalyzerBatchEntry />}
+                {DEMO_MODE && staffActiveTab === 'analizadores' && <AnalyzerBatchEntry />}
                 {staffActiveTab === 'control_calidad' && <QualityControlQC />}
                 {staffActiveTab === 'redactor' && <ReportEditor />}
                 {staffActiveTab === 'pacientes' && <PatientManager />}
