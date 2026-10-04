@@ -638,6 +638,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-400" />
                   {(!isCollapsed || isMobileOpen) && <span>Alertas (91)</span>}
                 </button>
+
+                <button
+                  onClick={() => handleSelectTab('verificacion_criticos')}
+                  className={`
+                    w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
+                    transition-all duration-150 relative cursor-pointer text-left
+                    ${staffActiveTab === 'verificacion_criticos' 
+                      ? 'bg-teal-600 text-white font-bold shadow-md' 
+                      : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
+                    }
+                    ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
+                  `}
+                  title="Verificación de críticos"
+                >
+                  <ShieldCheck className="w-4 h-4 flex-shrink-0 text-rose-400" />
+                  {(!isCollapsed || isMobileOpen) && <span>Verificación de críticos</span>}
+                </button>
               </div>
             )}
           </div>

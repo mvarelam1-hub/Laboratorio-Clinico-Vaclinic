@@ -29,6 +29,7 @@ import { PromotionsManagerView } from './components/staff/PromotionsManagerView'
 import { LabSettingsView } from './components/staff/LabSettingsView';
 import { LabStatisticsView } from './components/staff/LabStatisticsView';
 import { LabAlertsView } from './components/staff/LabAlertsView';
+import { CriticalVerificationQueueView } from './components/staff/CriticalVerificationQueueView';
 import { LabDispatchesView } from './components/staff/LabDispatchesView';
 import { AiLabAssistantView } from './components/staff/AiLabAssistantView';
 import { AuditLogsView } from './components/staff/AuditLogsView';
@@ -118,6 +119,7 @@ const MainContent: React.FC = () => {
                 {/* 4. Reportes y Estadísticas */}
                 {staffActiveTab === 'estadisticas' && <LabStatisticsView />}
                 {staffActiveTab === 'alertas' && <LabAlertsView />}
+                {staffActiveTab === 'verificacion_criticos' && <CriticalVerificationQueueView />}
 
                 {/* 5. Comunicación */}
                 {staffActiveTab === 'envios' && <LabDispatchesView />}

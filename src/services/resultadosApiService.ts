@@ -14,8 +14,18 @@
 
 import { getStaffSessionToken } from './staffSessionToken';
 
+/**
+ * `code` distingue las reglas de negocio de la doble verificación de
+ * críticos (migración 0018) sin depender del texto del mensaje:
+ *  - DOBLE_VERIFICACION_PENDIENTE: el resultado está fuera de rango y aún no
+ *    lo verificó un segundo bioanalista, así que no puede publicarse.
+ *  - SEPARACION_DE_FUNCIONES: quien intenta verificar capturó o validó ese
+ *    mismo resultado.
+ */
+export type CodigoErrorResultado = 'DOBLE_VERIFICACION_PENDIENTE' | 'SEPARACION_DE_FUNCIONES';
+
 export class ResultadosApiError extends Error {
-  constructor(message: string, public status?: number) {
+  constructor(message: string, public status?: number, public code?: CodigoErrorResultado) {
     super(message);
     this.name = 'ResultadosApiError';
   }
@@ -36,14 +46,17 @@ async function authFetch(path: string, options: RequestInit = {}): Promise<Respo
   });
 }
 
-async function parseErrorBody(res: Response): Promise<string> {
+async function parseError(res: Response): Promise<ResultadosApiError> {
+  let mensaje = `El servidor respondió ${res.status}.`;
+  let code: CodigoErrorResultado | undefined;
   try {
     const body = await res.json();
-    if (body?.error) return body.error;
+    if (body?.error) mensaje = body.error;
+    if (body?.code === 'DOBLE_VERIFICACION_PENDIENTE' || body?.code === 'SEPARACION_DE_FUNCIONES') code = body.code;
   } catch {
     /* respuesta sin cuerpo JSON, se usa el status */
   }
-  return `El servidor respondió ${res.status}.`;
+  return new ResultadosApiError(mensaje, res.status, code);
 }
 
 /** Fila cruda tal como la devuelve POST /api/resultados. */
@@ -73,20 +86,20 @@ export async function crearResultadoRemoto(idDetalle: number, valorCapturado: st
     method: 'POST',
     body: JSON.stringify({ idDetalle, valorCapturado })
   });
-  if (!res.ok) throw new ResultadosApiError(await parseErrorBody(res), res.status);
+  if (!res.ok) throw await parseError(res);
   return res.json();
 }
 
 async function aplicarTransicionResultado(
   idResultado: number,
-  accion: 'validar' | 'publicar' | 'corregir',
+  accion: 'validar' | 'publicar' | 'corregir' | 'verificar',
   body?: Record<string, unknown>
 ): Promise<TransicionResultadoApi> {
   const res = await authFetch(`/api/resultados/${idResultado}/${accion}`, {
     method: 'PATCH',
     body: JSON.stringify(body || {})
   });
-  if (!res.ok) throw new ResultadosApiError(await parseErrorBody(res), res.status);
+  if (!res.ok) throw await parseError(res);
   return res.json();
 }
 
@@ -102,3 +115,34 @@ export const corregirResultadoRemoto = (
   nuevoValor?: string | number
 ): Promise<TransicionResultadoApi> =>
   aplicarTransicionResultado(idResultado, 'corregir', { motivo, nuevoValor });
+
+/**
+ * Segunda verificación obligatoria de un resultado crítico (fuera de rango)
+ * por un bioanalista distinto de quien lo capturó y de quien lo validó
+ * (server/routes/resultados.ts, migración 0018). Sin esto el servidor no
+ * deja publicar el resultado (409 DOBLE_VERIFICACION_PENDIENTE).
+ */
+export const verificarResultadoRemoto = (idResultado: number): Promise<TransicionResultadoApi> =>
+  aplicarTransicionResultado(idResultado, 'verificar');
+
+export interface ResultadoPendienteVerificacion {
+  id_resultado: number;
+  id_orden: number;
+  numero_orden: string;
+  paciente: string;
+  nombre_examen: string;
+  codigo_examen: string | null;
+  unidad_medida: string | null;
+  valor_capturado: string;
+  fecha_captura: string;
+  analista: string | null;
+  validado_por_nombre: string | null;
+  /** false si el usuario autenticado capturó o validó este resultado. */
+  puede_verificar: boolean;
+}
+
+export async function obtenerPendientesVerificacionRemoto(): Promise<ResultadoPendienteVerificacion[]> {
+  const res = await authFetch('/api/resultados/pendientes-verificacion');
+  if (!res.ok) throw await parseError(res);
+  return res.json();
+}

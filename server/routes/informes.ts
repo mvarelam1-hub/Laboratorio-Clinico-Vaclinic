@@ -165,6 +165,30 @@ informesRouter.patch('/:id/publicar', requirePermission('validacion_publicacion'
   const datosAdicionales = extraerDatosAdicionales(req.body || {});
   const datosAEnviar = Object.fromEntries(Object.entries(datosAdicionales).filter(([, v]) => v !== undefined));
 
+  // Doble verificación de críticos (migración 0018): el informe no puede
+  // publicarse mientras la orden tenga un resultado fuera de rango que aún
+  // no verificó un segundo bioanalista. Se enlaza por id_orden porque
+  // resultado.id_informe no se rellena todavía desde ninguna ruta. Los
+  // críticos ya 'Publicado' (legado, anteriores a la migración) no bloquean.
+  const { rows: criticosPendientes } = await pool.query(
+    `SELECT 1
+     FROM informe_clinico i
+     JOIN detalle_orden d ON d.id_orden = i.id_orden
+     JOIN resultado r ON r.id_detalle = d.id_detalle
+     WHERE i.id_informe = $1
+       AND r.esta_fuera_de_rango = TRUE
+       AND r.fecha_verificacion IS NULL
+       AND r.estado <> 'Publicado'
+     LIMIT 1`,
+    [idInforme]
+  );
+  if (criticosPendientes.length > 0) {
+    return res.status(409).json({
+      error: 'Este informe tiene resultados críticos (fuera de rango) que aún requieren la verificación de un segundo bioanalista antes de publicarse.',
+      code: 'DOBLE_VERIFICACION_PENDIENTE'
+    });
+  }
+
   const { rows } = await pool.query(
     `UPDATE informe_clinico
      SET estado = 'publicado', fecha_publicacion = NOW(), id_usuario_publicacion = $1,

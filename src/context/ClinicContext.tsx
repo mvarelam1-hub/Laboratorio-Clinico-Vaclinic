@@ -176,6 +176,7 @@ export type StaffTabType =
   | 'ajustes'
   | 'estadisticas'
   | 'alertas'
+  | 'verificacion_criticos'
   | 'envios'
   | 'asistente_ia'
   | 'auditoria'
@@ -2299,11 +2300,22 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (isEffectiveOnline && resultadosRemotosObjetivo) {
       const entradas: Array<[string, number]> = Object.entries(resultadosRemotosObjetivo);
       let algunoFallo = false;
+      // Doble verificación de críticos (migración 0018): un resultado fuera
+      // de rango no puede publicarse hasta que un SEGUNDO bioanalista lo
+      // verifique. Si alguno queda en ese estado, el informe NO se publica
+      // (ni en el servidor ni en esta pantalla): publicarlo "solo
+      // localmente" mostraría al personal -y luego al paciente- como
+      // liberado un valor peligroso que nadie más revisó.
+      const pendientesVerificacion: string[] = [];
       for (const [examCode, idResultado] of entradas) {
         try {
           await validarResultadoRemoto(idResultado);
           await publicarResultadoRemoto(idResultado);
         } catch (err) {
+          if (err instanceof ResultadosApiError && err.code === 'DOBLE_VERIFICACION_PENDIENTE') {
+            pendientesVerificacion.push(examCode);
+            continue;
+          }
           algunoFallo = true;
           const mensaje = err instanceof ResultadosApiError ? err.message : 'Error de red desconocido.';
           console.error(`[ClinicContext] No se pudo validar/publicar el resultado real de "${examCode}" (id ${idResultado}):`, err);
@@ -2312,6 +2324,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             'warning'
           );
         }
+      }
+      if (pendientesVerificacion.length > 0) {
+        showNotification(
+          `Publicación detenida: ${pendientesVerificacion.join(', ')} está fuera de rango y requiere la verificación de un segundo bioanalista (en "Verificación de críticos"). Cuando la haga, vuelve a publicar el informe.`,
+          'warning'
+        );
+        return;
       }
       if (!algunoFallo && entradas.length > 0) {
         showNotification('Resultados validados y publicados en el servidor real (Borrador → Validado → Publicado).', 'success');

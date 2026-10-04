@@ -36,6 +36,11 @@ vi.mock('../db', () => ({
   withAuditContext: vi.fn(async (_params: any, fn: any) => fn({ query: auditQueryMock })),
 }));
 
+const registrarBitacoraMock = vi.fn(async (..._args: any[]): Promise<void> => undefined);
+vi.mock('../bitacora', () => ({
+  registrarBitacora: (...args: any[]) => registrarBitacoraMock(...args),
+}));
+
 async function buildApp() {
   const { resultadosRouter } = await import('./resultados');
   const app = express();
@@ -48,6 +53,7 @@ beforeEach(() => {
   vi.resetModules();
   selectQueryMock.mockClear();
   auditQueryMock.mockClear();
+  registrarBitacoraMock.mockClear();
   estadoActual = 'Validado';
   currentStaffUser = { idUsuario: 1, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Bioanalista Senior Demo' };
 });
@@ -246,6 +252,164 @@ describe('validaciones adicionales', () => {
     currentStaffUser.roleId = 'recepcionista';
     const app = await buildApp();
     const res = await request(app).get('/api/resultados/1/historial');
+    expect(res.status).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------
+// Doble verificación de resultados críticos (migración 0018)
+// ---------------------------------------------------------------------
+describe('doble verificación de resultados críticos', () => {
+  const critico = (extra: Record<string, unknown> = {}) => ({
+    estado: 'Validado',
+    valor_capturado: '485',
+    esta_fuera_de_rango: true,
+    id_analista: 10,
+    id_validador: 11,
+    fecha_verificacion: null,
+    ...extra,
+  });
+
+  it('publicar un crítico SIN verificación -> 409 con código DOBLE_VERIFICACION_PENDIENTE y no escribe nada', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [critico()] });
+    currentStaffUser = { idUsuario: 11, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Quien Validó' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/publicar');
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('DOBLE_VERIFICACION_PENDIENTE');
+    expect(auditQueryMock).not.toHaveBeenCalled();
+  });
+
+  it('publicar un crítico YA verificado -> 200', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [critico({ fecha_verificacion: '2026-10-04T10:00:00Z' })] });
+    currentStaffUser = { idUsuario: 11, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Quien Validó' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/publicar');
+    expect(res.status).toBe(200);
+    expect(res.body.estadoNuevo).toBe('Publicado');
+  });
+
+  it('un resultado NO crítico se publica sin verificación (el flujo normal no cambia)', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [critico({ esta_fuera_de_rango: false })] });
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/publicar');
+    expect(res.status).toBe(200);
+  });
+
+  it('verificar: un segundo bioanalista distinto -> 200, guarda verificador/fecha y deja huella en la bitácora real', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [critico()] });
+    currentStaffUser = { idUsuario: 12, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Segundo Bioanalista' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/verificar');
+    expect(res.status).toBe(200);
+    expect(res.body.estadoNuevo).toBe('Validado');
+    const [sql, params] = auditQueryMock.mock.calls[0];
+    expect(sql).toMatch(/id_verificador = \$1/);
+    expect(sql).toMatch(/fecha_verificacion = NOW\(\)/);
+    expect(params).toEqual([12, 'Segundo Bioanalista', 1]);
+    expect(registrarBitacoraMock).toHaveBeenCalledTimes(1);
+    expect(registrarBitacoraMock.mock.calls[0][0]).toMatchObject({ idUsuario: 12, accion: 'verificar_resultado_critico', modulo: 'reportes' });
+    // La bitácora no debe llevar el valor clínico ni datos del paciente.
+    expect(JSON.stringify(registrarBitacoraMock.mock.calls[0][0])).not.toContain('485');
+  });
+
+  it('verificar: quien CAPTURÓ el resultado no puede verificarlo -> 409 SEPARACION_DE_FUNCIONES', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [critico()] });
+    currentStaffUser = { idUsuario: 10, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Quien Capturó' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/verificar');
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('SEPARACION_DE_FUNCIONES');
+    expect(auditQueryMock).not.toHaveBeenCalled();
+    expect(registrarBitacoraMock).not.toHaveBeenCalled();
+  });
+
+  it('verificar: quien VALIDÓ el resultado no puede verificarlo -> 409 SEPARACION_DE_FUNCIONES', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [critico()] });
+    currentStaffUser = { idUsuario: 11, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Quien Validó' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/verificar');
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('SEPARACION_DE_FUNCIONES');
+  });
+
+  it('verificar: exige el permiso validacion_firma_digital (403 para recepción)', async () => {
+    currentStaffUser = { idUsuario: 12, roleId: 'recepcionista', status: 'activo', nombreCompleto: 'Recepción' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/verificar');
+    expect(res.status).toBe(403);
+    expect(selectQueryMock).not.toHaveBeenCalled();
+  });
+
+  it('verificar: solo sobre resultados Validados, críticos y aún sin verificar (409 en los demás casos)', async () => {
+    currentStaffUser = { idUsuario: 12, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Segundo' };
+    const casos = [
+      critico({ estado: 'Borrador' }),
+      critico({ esta_fuera_de_rango: false }),
+      critico({ fecha_verificacion: '2026-10-04T10:00:00Z' }),
+    ];
+    for (const fila of casos) {
+      selectQueryMock.mockResolvedValueOnce({ rows: [fila] });
+      const app = await buildApp();
+      const res = await request(app).patch('/api/resultados/1/verificar');
+      expect(res.status).toBe(409);
+    }
+    expect(auditQueryMock).not.toHaveBeenCalled();
+  });
+
+  it('validar sobre un resultado que YA está Validado es un no-op (no reinicia la verificación del segundo bioanalista)', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [critico({ fecha_verificacion: '2026-10-04T10:00:00Z' })] });
+    currentStaffUser = { idUsuario: 10, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Quien Reintenta Publicar' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/validar');
+    expect(res.status).toBe(200);
+    expect(res.body.sinCambios).toBe(true);
+    expect(auditQueryMock).not.toHaveBeenCalled();
+  });
+
+  it('validar reinicia la verificación previa y registra a quien validó (id_validador)', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [critico({ estado: 'Borrador' })] });
+    currentStaffUser = { idUsuario: 11, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Quien Validó' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/validar');
+    expect(res.status).toBe(200);
+    const [sql, params] = auditQueryMock.mock.calls[0];
+    expect(sql).toMatch(/id_validador = \$3/);
+    expect(sql).toMatch(/fecha_verificacion = NULL/);
+    expect(params[2]).toBe(11);
+  });
+
+  it('corregir un resultado publicado invalida validación y verificación (hay que repetirlas)', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [critico({ estado: 'Publicado', fecha_verificacion: '2026-10-04T10:00:00Z' })] });
+    currentStaffUser = { idUsuario: 11, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Quien Corrige' };
+    const app = await buildApp();
+    const res = await request(app).patch('/api/resultados/1/corregir').send({ motivo: 'Repetición', nuevoValor: '95' });
+    expect(res.status).toBe(200);
+    const sql = auditQueryMock.mock.calls[0][0];
+    expect(sql).toMatch(/fecha_verificacion = NULL/);
+    expect(sql).toMatch(/id_validador = NULL/);
+  });
+});
+
+describe('GET /api/resultados/pendientes-verificacion', () => {
+  it('devuelve la cola de críticos Validados sin verificar, calculando puede_verificar para el usuario autenticado', async () => {
+    selectQueryMock.mockResolvedValueOnce({ rows: [{ id_resultado: 7, puede_verificar: true }] });
+    currentStaffUser = { idUsuario: 12, roleId: 'bioanalista_senior', status: 'activo', nombreCompleto: 'Segundo' };
+    const app = await buildApp();
+    const res = await request(app).get('/api/resultados/pendientes-verificacion');
+    expect(res.status).toBe(200);
+    expect(res.body[0].puede_verificar).toBe(true);
+    const [sql, params] = selectQueryMock.mock.calls[0];
+    expect(sql).toMatch(/esta_fuera_de_rango = TRUE/);
+    expect(sql).toMatch(/estado = 'Validado'/);
+    expect(sql).toMatch(/fecha_verificacion IS NULL/);
+    expect(params).toEqual([12]);
+  });
+
+  it('exige validacion_firma_digital (403 para recepción)', async () => {
+    currentStaffUser = { idUsuario: 5, roleId: 'recepcionista', status: 'activo', nombreCompleto: 'Recepción' };
+    const app = await buildApp();
+    const res = await request(app).get('/api/resultados/pendientes-verificacion');
     expect(res.status).toBe(403);
   });
 });

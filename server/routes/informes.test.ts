@@ -143,11 +143,13 @@ describe('PATCH /api/informes/:id', () => {
 
 describe('PATCH /api/informes/:id/publicar', () => {
   it('transiciona a publicado con usuario y fecha de publicación', async () => {
-    queryMock.mockResolvedValueOnce({ rows: [{ id_informe: 1, estado: 'publicado' }] });
+    queryMock
+      .mockResolvedValueOnce({ rows: [] }) // sin críticos pendientes de verificación
+      .mockResolvedValueOnce({ rows: [{ id_informe: 1, estado: 'publicado' }] });
     const app = await buildApp();
     const res = await request(app).patch('/api/informes/1/publicar').send({ signature: { doctorName: 'Dr. Demo' } });
     expect(res.status).toBe(200);
-    const [sql, params] = queryMock.mock.calls[0];
+    const [sql, params] = queryMock.mock.calls[1];
     expect(sql).toMatch(/estado = 'publicado'/);
     expect(sql).toMatch(/id_usuario_publicacion = \$1/);
     expect(params[0]).toBe(1); // idUsuario del staffUser autenticado
@@ -161,10 +163,21 @@ describe('PATCH /api/informes/:id/publicar', () => {
   });
 
   it('devuelve 404 si el informe no existe o ya fue eliminado', async () => {
-    queryMock.mockResolvedValueOnce({ rows: [] });
+    queryMock.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
     const app = await buildApp();
     const res = await request(app).patch('/api/informes/999/publicar');
     expect(res.status).toBe(404);
+  });
+
+  it('rechaza con 409 (DOBLE_VERIFICACION_PENDIENTE) si la orden tiene un resultado crítico sin verificar, y NO publica', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // hay un crítico pendiente
+    const app = await buildApp();
+    const res = await request(app).patch('/api/informes/1/publicar').send({ signature: { doctorName: 'Dr. Demo' } });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('DOBLE_VERIFICACION_PENDIENTE');
+    // Solo se hizo la consulta de verificación; jamás el UPDATE a 'publicado'.
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(queryMock.mock.calls[0][0]).not.toMatch(/UPDATE informe_clinico/);
   });
 });
 
