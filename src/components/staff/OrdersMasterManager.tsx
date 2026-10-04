@@ -57,6 +57,7 @@ import {
 import { BiometricAuthModal } from './BiometricAuthModal';
 import { BiometricAuthResult } from '../../services/biometricService';
 import { construirBorradorDeOrden } from '../../utils/borradorInforme';
+import { coincidePeriodo, Periodo } from '../../utils/periodoOrdenes';
 
 interface OrdersMasterManagerProps {
   mode: 'active' | 'archived' | 'trash';
@@ -231,6 +232,8 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
   const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'Pendiente' | 'En Proceso' | 'Listo'>('all');
   const [activeFolderFilter, setActiveFolderFilter] = useState<string>('all');
+  const [periodo, setPeriodo] = useState<Periodo>('todas');
+  const [masFiltros, setMasFiltros] = useState(false);
 
   // Selection state
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -344,9 +347,11 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
         }
       }
 
-      return matchesSearch && matchesYear && matchesMonth && matchesDateRange && matchesStatus && matchesFolder;
+      const matchesPeriodo = coincidePeriodo(o.date, periodo);
+
+      return matchesSearch && matchesYear && matchesMonth && matchesDateRange && matchesStatus && matchesFolder && matchesPeriodo;
     });
-  }, [baseModeOrders, searchTerm, selectedYear, selectedMonth, startDate, endDate, statusFilter, activeFolderFilter]);
+  }, [baseModeOrders, searchTerm, selectedYear, selectedMonth, startDate, endDate, statusFilter, activeFolderFilter, periodo]);
 
   // Group orders by Year & Month for temporal folders
   const timeBasedGroups = useMemo(() => {
@@ -376,15 +381,50 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
     });
   }, [baseModeOrders]);
 
-  // Metrics summary
-  const todayStr = new Date().toISOString().split('T')[0];
-  const currentMonthNum = new Date().getMonth() + 1;
-  const currentYearNum = new Date().getFullYear();
+  // Chips de periodo con su conteo real (sobre las órdenes de este módulo)
+  const opcionesPeriodo = useMemo(() => {
+    const ahora = new Date();
+    const lista: { id: Periodo; etiqueta: string }[] = [
+      { id: 'todas', etiqueta: 'Todas las fechas' },
+      { id: 'hoy', etiqueta: 'Hoy' },
+      { id: 'semana', etiqueta: 'Esta semana' },
+      { id: 'mes', etiqueta: 'Este mes' },
+      { id: 'anio', etiqueta: 'Este año' }
+    ];
+    return lista.map((op) => ({
+      ...op,
+      cuenta: baseModeOrders.filter((o) => coincidePeriodo(o.date, op.id, ahora)).length
+    }));
+  }, [baseModeOrders]);
 
-  const totalCount = baseModeOrders.length;
-  const todayCount = baseModeOrders.filter(o => o.date === todayStr).length;
-  const thisMonthCount = baseModeOrders.filter(o => (o.year === currentYearNum && o.month === currentMonthNum)).length;
-  const classifiedInFoldersCount = baseModeOrders.filter(o => o.folderId && o.folderId !== 'folder-unassigned' && o.folderId !== 'folder-all').length;
+  const filtrosAvanzadosActivos =
+    (selectedYear !== 'all' ? 1 : 0) +
+    (selectedMonth !== 'all' ? 1 : 0) +
+    (startDate || endDate ? 1 : 0) +
+    (activeFolderFilter !== 'all' ? 1 : 0);
+  const hayFiltrosActivos =
+    filtrosAvanzadosActivos > 0 || !!searchTerm || statusFilter !== 'all' || periodo !== 'todas';
+
+  const limpiarFiltros = () => {
+    setSearchTerm('');
+    setSelectedYear('all');
+    setSelectedMonth('all');
+    setStartDate('');
+    setEndDate('');
+    setStatusFilter('all');
+    setActiveFolderFilter('all');
+    setPeriodo('todas');
+  };
+
+  // Edad del paciente de la orden (dato real del expediente; si no está, no se inventa)
+  const edadDeOrden = (ord: LabOrder): number | null => {
+    const pac = patients.find(
+      (p) =>
+        (ord.nationalId && p.nationalId === ord.nationalId) ||
+        (ord.patientCode && p.patientCode === ord.patientCode)
+    );
+    return typeof pac?.age === 'number' && pac.age >= 0 ? pac.age : null;
+  };
 
   // Selection handlers
   const handleSelectAll = () => {
@@ -399,46 +439,6 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
     setSelectedOrderIds(prev => 
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
-  };
-
-  // Quick Preset Date Filters
-  const handleSetDatePreset = (preset: 'today' | 'yesterday' | 'week' | 'this_month' | 'last_month' | 'this_year' | 'all') => {
-    if (preset === 'today') {
-      setSelectedYear('2026');
-      setSelectedMonth('8');
-      setStartDate('2026-08-31');
-      setEndDate('2026-08-31');
-    } else if (preset === 'yesterday') {
-      setSelectedYear('2026');
-      setSelectedMonth('8');
-      setStartDate('2026-08-30');
-      setEndDate('2026-08-30');
-    } else if (preset === 'week') {
-      setSelectedYear('2026');
-      setSelectedMonth('8');
-      setStartDate('2026-08-24');
-      setEndDate('2026-08-31');
-    } else if (preset === 'this_month') {
-      setSelectedYear('2026');
-      setSelectedMonth('8');
-      setStartDate('2026-08-01');
-      setEndDate('2026-08-31');
-    } else if (preset === 'last_month') {
-      setSelectedYear('2026');
-      setSelectedMonth('7');
-      setStartDate('2026-07-01');
-      setEndDate('2026-07-31');
-    } else if (preset === 'this_year') {
-      setSelectedYear('2026');
-      setSelectedMonth('all');
-      setStartDate('');
-      setEndDate('');
-    } else if (preset === 'all') {
-      setSelectedYear('all');
-      setSelectedMonth('all');
-      setStartDate('');
-      setEndDate('');
-    }
   };
 
   // Open Move To Folder Modal
@@ -584,10 +584,10 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 animate-fade-in text-slate-800 pb-16">
+    <div className="w-full max-w-7xl mx-auto space-y-4 animate-fade-in text-slate-800 pb-16">
       
       {/* 1. TOP HEADER & ACTION BUTTONS */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2.5">
             {mode === 'archived' ? (
@@ -612,7 +612,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                   ? 'Órdenes históricas organizadas por año, mes y carpetas temáticas para consulta limpia.'
                   : mode === 'trash'
                   ? 'Órdenes eliminadas. Se conservan en el sistema y pueden restaurarse a órdenes activas en cualquier momento.'
-                  : 'Gestión completa de órdenes: ver exámenes cargados, imprimir boletas e informes membretados con QR.'}
+                  : 'Cada orden define los exámenes que se pueden resultar. Ábrela para ver su detalle, boleta e informe.'}
               </p>
             </div>
           </div>
@@ -639,41 +639,6 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
             </button>
           )}
 
-          <button
-            onClick={handleExportData}
-            className="px-3.5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-2 transition-all cursor-pointer shadow-2xs"
-            title="Exportar bitácora a Excel/CSV"
-          >
-            <Download className="w-4 h-4 text-slate-600" />
-            <span>Exportar (Excel)</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. STATS OVERVIEW CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
-          <div className="text-[11px] font-black uppercase text-slate-400 tracking-wider">TOTAL ÓRDENES</div>
-          <div className="text-3xl font-black text-slate-900 mt-1 font-mono">{totalCount}</div>
-          <div className="text-[11px] text-slate-500 mt-1 font-medium">En este módulo</div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
-          <div className="text-[11px] font-black uppercase text-slate-400 tracking-wider">HOY</div>
-          <div className="text-3xl font-black text-teal-600 mt-1 font-mono">{todayCount}</div>
-          <div className="text-[11px] text-slate-500 mt-1 font-medium">Registradas hoy ({new Date().toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit' })})</div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
-          <div className="text-[11px] font-black uppercase text-slate-400 tracking-wider">DEL MES</div>
-          <div className="text-3xl font-black text-blue-600 mt-1 font-mono">{thisMonthCount}</div>
-          <div className="text-[11px] text-slate-500 mt-1 font-medium capitalize">{new Date().toLocaleDateString('es-GT', { month: 'long', year: 'numeric' })}</div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
-          <div className="text-[11px] font-black uppercase text-slate-400 tracking-wider">EN CARPETAS</div>
-          <div className="text-3xl font-black text-purple-600 mt-1 font-mono">{classifiedInFoldersCount}</div>
-          <div className="text-[11px] text-slate-500 mt-1 font-medium">Clasificadas en archivadores</div>
         </div>
       </div>
 
@@ -778,68 +743,49 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
         </div>
       )}
 
-      {/* 4. FILTROS PRINCIPALES, BUSCADOR & SELECTOR DE VISTAS */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-        
-        {/* Row 1: Universal Search, Status filter & View switcher */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          
-          {/* Universal Live Search */}
-          <div className="relative flex-1 min-w-[280px]">
+      {/* 4. BARRA ÚNICA: BÚSQUEDA, ESTADO, PERIODO Y MÁS FILTROS */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[240px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               id="input-search-orders"
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por paciente, N° orden (#198), DNI, teléfono o examen cargado... (Ctrl+F)"
-              className="w-full pl-10 pr-16 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-slate-50/50"
+              placeholder="Buscar por paciente, N.° de orden, código, DNI, teléfono o examen…"
+              className="w-full pl-10 pr-9 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-slate-50/50"
             />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-              {searchTerm ? (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-                <span className="hidden sm:inline-block text-[10px] font-mono text-slate-400 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                  Ctrl+F
-                </span>
-              )}
-            </div>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                aria-label="Borrar búsqueda"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Status filter pills */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                statusFilter === 'all' ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setStatusFilter('Pendiente')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                statusFilter === 'Pendiente' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Pendiente
-            </button>
-            <button
-              onClick={() => setStatusFilter('Listo')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                statusFilter === 'Listo' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Listo
-            </button>
+            {([
+              { id: 'all', etiqueta: 'Todos', activo: 'bg-teal-600' },
+              { id: 'Pendiente', etiqueta: 'Pendiente', activo: 'bg-amber-600' },
+              { id: 'Listo', etiqueta: 'Listo', activo: 'bg-emerald-600' }
+            ] as const).map((op) => (
+              <button
+                key={op.id}
+                onClick={() => setStatusFilter(op.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  statusFilter === op.id ? `${op.activo} text-white shadow-xs` : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {op.etiqueta}
+              </button>
+            ))}
           </div>
 
-          {/* View Switcher: Lista vs Carpetas */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
             <button
               onClick={() => setViewMode('list')}
@@ -860,147 +806,143 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
               <span>Carpetas</span>
             </button>
           </div>
-        </div>
 
-        {/* Row 2: Chronological Quick Selectors (Año / Mes / Presets de Fecha) */}
-        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-          
-          {/* Year & Month Selection */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 text-slate-500 font-bold">
-              <span>Año:</span>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 font-bold text-slate-800 outline-hidden cursor-pointer"
-              >
-                <option value="all">Todos los Años</option>
-                {availableYears.map(y => (
-                  <option key={y} value={y.toString()}>{y}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1 text-slate-500 font-bold">
-              <span>Mes:</span>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 font-bold text-slate-800 outline-hidden cursor-pointer"
-              >
-                <option value="all">Todos los Meses</option>
-                {MONTH_NAMES.map(m => (
-                  <option key={m.num} value={m.num.toString()}>{m.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Quick Presets */}
-            <div className="hidden sm:flex items-center gap-1 ml-2 border-l border-slate-200 pl-3">
-              <span className="text-[11px] text-slate-400 font-semibold mr-1">Rápido:</span>
-              <button
-                onClick={() => handleSetDatePreset('today')}
-                className="px-2 py-0.5 rounded-md hover:bg-slate-100 text-slate-600 font-semibold text-[11px] cursor-pointer"
-              >
-                Hoy
-              </button>
-              <button
-                onClick={() => handleSetDatePreset('this_month')}
-                className="px-2 py-0.5 rounded-md hover:bg-slate-100 text-slate-600 font-semibold text-[11px] cursor-pointer"
-              >
-                Este Mes
-              </button>
-              <button
-                onClick={() => handleSetDatePreset('last_month')}
-                className="px-2 py-0.5 rounded-md hover:bg-slate-100 text-slate-600 font-semibold text-[11px] cursor-pointer"
-              >
-                Mes Anterior
-              </button>
-              <button
-                onClick={() => handleSetDatePreset('all')}
-                className="px-2 py-0.5 rounded-md hover:bg-slate-100 text-slate-600 font-semibold text-[11px] cursor-pointer"
-              >
-                Histórico
-              </button>
-            </div>
-          </div>
-
-          {/* Custom Date Range (Desde - Hasta) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-slate-500 font-semibold">Rango:</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-2 py-1 rounded-lg border border-slate-200 text-slate-700 text-xs bg-slate-50"
-              title="Fecha inicial"
-            />
-            <span className="text-slate-400">-</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="px-2 py-1 rounded-lg border border-slate-200 text-slate-700 text-xs bg-slate-50"
-              title="Fecha final"
-            />
-
-            {(selectedYear !== 'all' || selectedMonth !== 'all' || startDate || endDate || searchTerm || activeFolderFilter !== 'all') && (
-              <button
-                onClick={() => {
-                  setSelectedYear('all');
-                  setSelectedMonth('all');
-                  setStartDate('');
-                  setEndDate('');
-                  setSearchTerm('');
-                  setActiveFolderFilter('all');
-                  setStatusFilter('all');
-                }}
-                className="text-[11px] text-rose-600 hover:text-rose-700 font-bold ml-1 cursor-pointer"
-              >
-                Limpiar filtros
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Row 3: Folder Filter Ribbon */}
-        <div className="pt-2 border-t border-slate-100 flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-[11px] font-bold text-slate-400 shrink-0">Carpeta activa:</span>
           <button
-            onClick={() => setActiveFolderFilter('all')}
-            className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${
-              activeFolderFilter === 'all' 
-                ? 'bg-slate-900 text-white shadow-xs' 
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+            onClick={handleExportData}
+            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Exportar lo que se ve a Excel/CSV"
+          >
+            <Download className="w-4 h-4 text-slate-600" />
+            <span>Exportar</span>
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {opcionesPeriodo.map((op) => (
+            <button
+              key={op.id}
+              onClick={() => setPeriodo(op.id)}
+              data-testid={`periodo-${op.id}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                periodo === op.id
+                  ? 'bg-teal-600 text-white border-teal-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700'
+              }`}
+            >
+              {op.etiqueta} <span className={periodo === op.id ? 'text-teal-100' : 'text-slate-400'}>· {op.cuenta}</span>
+            </button>
+          ))}
+
+          <button
+            onClick={() => setMasFiltros((v) => !v)}
+            data-testid="btn-mas-filtros"
+            className={`ml-auto px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 cursor-pointer transition-all ${
+              masFiltros || filtrosAvanzadosActivos > 0
+                ? 'bg-slate-900 text-white border-slate-900'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
             }`}
           >
-            Todas ({baseModeOrders.length})
+            <Filter className="w-3 h-3" />
+            <span>Más filtros{filtrosAvanzadosActivos > 0 ? ` (${filtrosAvanzadosActivos})` : ''}</span>
+            <ChevronDown className={`w-3 h-3 transition-transform ${masFiltros ? 'rotate-180' : ''}`} />
           </button>
 
-          {orderFolders.filter(f => f.id !== 'folder-all').map(f => {
-            const isSelected = activeFolderFilter === f.id;
-            const count = baseModeOrders.filter(o => (f.id === 'folder-unassigned' ? (!o.folderId || o.folderId === 'folder-unassigned') : o.folderId === f.id)).length;
-            const colorInfo = COLOR_MAP[f.color] || COLOR_MAP.slate;
+          {hayFiltrosActivos && (
+            <button
+              onClick={limpiarFiltros}
+              className="text-[11px] text-rose-600 hover:text-rose-700 font-bold px-2 cursor-pointer"
+            >
+              Limpiar filtros
+            </button>
+          )}
+        </div>
 
-            return (
+        {masFiltros && (
+          <div className="pt-3 border-t border-slate-100 space-y-3 text-xs">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <label className="flex items-center gap-1.5 text-slate-500 font-bold">
+                <span>Año</span>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 font-bold text-slate-800 outline-hidden cursor-pointer"
+                >
+                  <option value="all">Todos</option>
+                  {availableYears.map(y => (
+                    <option key={y} value={y.toString()}>{y}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-slate-500 font-bold">
+                <span>Mes</span>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 font-bold text-slate-800 outline-hidden cursor-pointer"
+                >
+                  <option value="all">Todos</option>
+                  {MONTH_NAMES.map(m => (
+                    <option key={m.num} value={m.num.toString()}>{m.name}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center gap-1.5 text-slate-500 font-bold">
+                <span>Del</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-2 py-1 rounded-lg border border-slate-200 text-slate-700 text-xs bg-slate-50"
+                  title="Fecha inicial"
+                />
+                <span>al</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="px-2 py-1 rounded-lg border border-slate-200 text-slate-700 text-xs bg-slate-50"
+                  title="Fecha final"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <span className="text-[11px] font-bold text-slate-400 shrink-0">Carpeta:</span>
               <button
-                key={f.id}
-                onClick={() => setActiveFolderFilter(f.id)}
-                className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isSelected 
-                    ? `${colorInfo.badge} shadow-xs ring-2 ${colorInfo.ring}`
-                    : `${colorInfo.bg} ${colorInfo.text} border ${colorInfo.border} hover:opacity-90`
+                onClick={() => setActiveFolderFilter('all')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                  activeFolderFilter === 'all'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                 }`}
               >
-                <Folder className="w-3.5 h-3.5" />
-                <span>{f.name}</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${isSelected ? 'bg-black/20 text-white' : 'bg-white/80 text-slate-700'}`}>
-                  {count}
-                </span>
+                Todas ({baseModeOrders.length})
               </button>
-            );
-          })}
-        </div>
+              {orderFolders.filter(f => f.id !== 'folder-all').map(f => {
+                const isSelected = activeFolderFilter === f.id;
+                const count = baseModeOrders.filter(o => (f.id === 'folder-unassigned' ? (!o.folderId || o.folderId === 'folder-unassigned') : o.folderId === f.id)).length;
+                const colorInfo = COLOR_MAP[f.color] || COLOR_MAP.slate;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setActiveFolderFilter(f.id)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5 transition-all cursor-pointer ${
+                      isSelected
+                        ? `${colorInfo.badge} shadow-xs ring-2 ${colorInfo.ring}`
+                        : `${colorInfo.bg} ${colorInfo.text} border ${colorInfo.border} hover:opacity-90`
+                    }`}
+                  >
+                    <Folder className="w-3.5 h-3.5" />
+                    <span>{f.name}</span>
+                    <span className={`px-1.5 rounded-full text-[10px] ${isSelected ? 'bg-black/20 text-white' : 'bg-white/80 text-slate-700'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
       </div>
 
@@ -1135,9 +1077,9 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+              <thead className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                 <tr>
-                  <th className="w-10 px-4 py-3.5 text-center">
+                  <th className="w-10 px-3 py-3 text-center">
                     <button
                       onClick={handleSelectAll}
                       className="text-slate-400 hover:text-slate-700 cursor-pointer"
@@ -1150,16 +1092,16 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                       )}
                     </button>
                   </th>
-                  <th className="px-4 py-3.5">ORDEN</th>
-                  <th className="px-4 py-3.5">PACIENTE</th>
-                  <th className="px-4 py-3.5">FECHA</th>
-                  <th className="px-4 py-3.5">EXÁMENES CARGADOS</th>
-                  <th className="px-4 py-3.5">CARPETA</th>
-                  <th className="px-4 py-3.5">ESTADO</th>
-                  <th className="px-4 py-3.5">INFORME</th>
-                  {mode === 'archived' && <th className="px-4 py-3.5">ARCHIVADO</th>}
-                  {mode === 'trash' && <th className="px-4 py-3.5">ELIMINADO</th>}
-                  <th className="px-4 py-3.5 text-right">ACCIONES</th>
+                  <th className="px-3 py-3 whitespace-nowrap">N.° Orden</th>
+                  <th className="px-3 py-3">Paciente</th>
+                  <th className="px-3 py-3">Edad</th>
+                  <th className="px-3 py-3">Exámenes</th>
+                  <th className="px-3 py-3">Estado</th>
+                  <th className="px-3 py-3">Informe</th>
+                  <th className="px-3 py-3">Fecha</th>
+                  {mode === 'archived' && <th className="px-3 py-3">Archivado</th>}
+                  {mode === 'trash' && <th className="px-3 py-3">Eliminado</th>}
+                  <th className="px-3 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
@@ -1167,24 +1109,22 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                   <tr>
                     <td colSpan={mode === 'archived' || mode === 'trash' ? 10 : 9} className="text-center py-16 text-slate-400">
                       <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                      <div className="font-bold text-slate-600 text-sm">No se encontraron órdenes</div>
+                      <div className="font-bold text-slate-600 text-sm">
+                        {baseModeOrders.length === 0 ? 'Todavía no hay órdenes' : 'No se encontraron órdenes'}
+                      </div>
                       <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                        Intenta ajustar los filtros de año, mes, fecha o término de búsqueda.
+                        {baseModeOrders.length === 0
+                          ? 'Las órdenes aparecen aquí cuando se registran desde Nueva Orden.'
+                          : 'Prueba con otro periodo, estado o término de búsqueda.'}
                       </p>
-                      <button
-                        onClick={() => {
-                          setSearchTerm('');
-                          setSelectedYear('all');
-                          setSelectedMonth('all');
-                          setStartDate('');
-                          setEndDate('');
-                          setStatusFilter('all');
-                          setActiveFolderFilter('all');
-                        }}
-                        className="mt-3 text-xs font-bold text-teal-600 hover:underline cursor-pointer"
-                      >
-                        Restablecer todos los filtros
-                      </button>
+                      {baseModeOrders.length > 0 && (
+                        <button
+                          onClick={limpiarFiltros}
+                          className="mt-3 text-xs font-bold text-teal-600 hover:underline cursor-pointer"
+                        >
+                          Restablecer todos los filtros
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -1192,18 +1132,18 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                     const isSelected = selectedOrderIds.includes(ord.id);
                     const folderObj = orderFolders.find(f => f.id === ord.folderId);
                     const folderColor = folderObj ? COLOR_MAP[folderObj.color] || COLOR_MAP.slate : COLOR_MAP.slate;
+                    const edad = edadDeOrden(ord);
 
                     return (
-                      <tr 
-                        key={ord.id} 
+                      <tr
+                        key={ord.id}
                         onClick={() => setSelectedOrderForDetail(ord)}
                         className={`hover:bg-teal-50/30 transition-colors cursor-pointer ${
                           isSelected ? 'bg-teal-50/50' : ''
                         }`}
                       >
-                        {/* Checkbox */}
-                        <td 
-                          className="w-10 px-4 py-3.5 text-center"
+                        <td
+                          className="w-10 px-3 py-3 text-center"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
@@ -1218,22 +1158,14 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                           </button>
                         </td>
 
-                        {/* Orden */}
-                        <td className="px-4 py-3.5">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-mono font-black text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200 text-sm">
+                        {/* N.° de orden (una sola línea) + código de consulta pequeño */}
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-black text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200 text-xs whitespace-nowrap">
                               {ord.orderNumber}
                             </span>
-                            {ord.codigoConsulta && (
-                              <span
-                                className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded-md border border-slate-300 text-xs select-all"
-                                title="Código de consulta: el paciente lo usa para ver sus resultados en línea"
-                              >
-                                Código: {ord.codigoConsulta}
-                              </span>
-                            )}
                             {mostrarBiometria && ord.biometricAuthorized && (
-                              <span 
+                              <span
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300"
                                 title={`Sello Biométrico Activo: ${ord.biometricAuthData?.authorizedBy || 'Autorizado'}`}
                               >
@@ -1243,7 +1175,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                             )}
                             {(mostrarBiometria && !ord.biometricAuthorized && (ord.priority === 'stat_panico' || ord.priority === 'urgente' || ord.isHighRisk)) && (
                               <button
-                                onClick={() => setOrderForBiometricAuth(ord)}
+                                onClick={(e) => { e.stopPropagation(); setOrderForBiometricAuth(ord); }}
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300 animate-pulse cursor-pointer hover:bg-rose-200"
                                 title="Esta orden de alto riesgo requiere autorización biométrica física"
                               >
@@ -1252,72 +1184,55 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                               </button>
                             )}
                           </div>
+                          {ord.codigoConsulta && (
+                            <div
+                              className="mt-1 text-[10px] text-slate-500 font-mono select-all"
+                              title="Código de consulta: el paciente lo usa para ver sus resultados en línea"
+                            >
+                              Código: <span className="font-bold text-slate-700">{ord.codigoConsulta}</span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Paciente */}
-                        <td className="px-4 py-3.5">
-                          <div className="font-bold text-slate-900 hover:text-teal-700 transition-colors">
-                            {ord.patientName}
-                          </div>
+                        <td className="px-3 py-3">
+                          <div className="font-bold text-slate-900">{ord.patientName}</div>
                           <div className="text-[11px] text-slate-400 font-mono">
-                            {ord.patientCode || `DNI: ${ord.nationalId}`}
-                            {ord.phone ? ` • 📞 ${ord.phone}` : ''}
+                            {ord.patientCode || (ord.nationalId ? `DNI: ${ord.nationalId}` : '')}
                           </div>
-                        </td>
-
-                        {/* Fecha */}
-                        <td className="px-4 py-3.5 text-slate-600 font-mono whitespace-nowrap">
-                          {ord.date.includes('-') ? ord.date.split('-').reverse().join('/') : ord.date}
-                          {ord.time && <span className="block text-[10px] text-slate-400">{ord.time}</span>}
-                        </td>
-
-                        {/* Exámenes Cargados */}
-                        <td className="px-4 py-3.5 max-w-[260px]">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                              <FlaskConical className="w-3 h-3 text-teal-600" />
-                              <span>{ord.testsCount} {ord.testsCount === 1 ? 'examen' : 'exámenes'}</span>
-                            </span>
-                            <span className="text-[11px] text-slate-600 truncate font-semibold">
-                              {ord.testsList?.join(', ')}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-teal-600 font-semibold mt-0.5">
-                            👁️ Clic para ver lista de pruebas
-                          </div>
-                        </td>
-
-                        {/* Carpeta */}
-                        <td 
-                          className="px-4 py-3.5"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {folderObj && folderObj.id !== 'folder-unassigned' ? (
+                          {folderObj && folderObj.id !== 'folder-unassigned' && (
                             <button
-                              onClick={() => handleOpenMoveModal([ord.id])}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border ${folderColor.bg} ${folderColor.text} ${folderColor.border} hover:opacity-80 transition-opacity cursor-pointer`}
+                              onClick={(e) => { e.stopPropagation(); handleOpenMoveModal([ord.id]); }}
+                              className={`mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border ${folderColor.bg} ${folderColor.text} ${folderColor.border} cursor-pointer`}
                               title="Cambiar de carpeta"
                             >
-                              <Folder className="w-3 h-3" />
+                              <Folder className="w-2.5 h-2.5" />
                               <span>{folderObj.name}</span>
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleOpenMoveModal([ord.id])}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold text-slate-400 hover:text-teal-700 hover:bg-slate-100 border border-dashed border-slate-300 transition-colors cursor-pointer"
-                              title="Guardar orden en una carpeta"
-                            >
-                              <FolderPlus className="w-3 h-3" />
-                              <span>+ Asignar Carpeta</span>
                             </button>
                           )}
                         </td>
 
+                        {/* Edad */}
+                        <td className="px-3 py-3 text-slate-700 whitespace-nowrap">
+                          {edad !== null ? `${edad} años` : '—'}
+                        </td>
+
+                        {/* Exámenes */}
+                        <td className="px-3 py-3">
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200 whitespace-nowrap"
+                            title={ord.testsList?.join(', ')}
+                          >
+                            <FlaskConical className="w-3 h-3 text-teal-600" />
+                            {ord.testsCount} {ord.testsCount === 1 ? 'examen' : 'exámenes'}
+                          </span>
+                        </td>
+
                         {/* Estado */}
-                        <td className="px-4 py-3.5">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border ${
-                            ord.status === 'Listo' 
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                        <td className="px-3 py-3">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border whitespace-nowrap ${
+                            ord.status === 'Listo'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : ord.status === 'En Proceso'
                               ? 'bg-blue-50 text-blue-700 border-blue-200'
                               : 'bg-amber-50 text-amber-700 border-amber-200'
@@ -1328,8 +1243,8 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                         </td>
 
                         {/* Informe */}
-                        <td className="px-4 py-3.5">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                        <td className="px-3 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold whitespace-nowrap ${
                             ord.reportStatus === 'Validado'
                               ? 'bg-teal-50 text-teal-700 border border-teal-200'
                               : ord.reportStatus === 'En Revisión'
@@ -1340,17 +1255,21 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                           </span>
                         </td>
 
-                        {/* Archivado Info (solo en vista archivadas) */}
+                        {/* Fecha */}
+                        <td className="px-3 py-3 text-slate-600 font-mono whitespace-nowrap">
+                          {ord.date.includes('-') ? ord.date.split('-').reverse().join('/') : ord.date}
+                          {ord.time && <span className="block text-[10px] text-slate-400">{ord.time}</span>}
+                        </td>
+
                         {mode === 'archived' && (
-                          <td className="px-4 py-3.5 text-[11px] text-slate-500 whitespace-nowrap">
+                          <td className="px-3 py-3 text-[11px] text-slate-500 whitespace-nowrap">
                             <div>{ord.archivedAt || '—'}</div>
                             <div className="text-[10px] text-slate-400">{ord.archivedBy ? `por ${ord.archivedBy}` : ''}</div>
                           </td>
                         )}
 
-                        {/* Eliminado Info (solo en Papelera) */}
                         {mode === 'trash' && (
-                          <td className="px-4 py-3.5 text-[11px] text-slate-500 whitespace-nowrap">
+                          <td className="px-3 py-3 text-[11px] text-slate-500 whitespace-nowrap">
                             <div>{ord.deletedAt ? new Date(ord.deletedAt).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</div>
                             <div className="text-[10px] text-slate-400">por {ord.deletedBy || 'Personal VACLINIC'}</div>
                             {ord.deleteReason && (
@@ -1359,29 +1278,26 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                           </td>
                         )}
 
-                        {/* Acciones */}
-                        <td 
-                          className="px-4 py-3.5 text-right whitespace-nowrap"
+                        {/* Acciones: solo íconos, siempre visibles */}
+                        <td
+                          className="px-3 py-3 text-right whitespace-nowrap"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="inline-flex items-center gap-1.5">
-                            
-                            {/* Ver detalle */}
+                          <div className="inline-flex items-center gap-1">
                             <button
                               onClick={() => setSelectedOrderForDetail(ord)}
-                              className="px-2 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-bold text-xs flex items-center gap-1 border border-teal-200 cursor-pointer shadow-2xs"
-                              title="Ver Orden & Exámenes Cargados"
+                              className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 cursor-pointer"
+                              title="Ver orden y exámenes"
+                              aria-label="Ver orden"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                              <span>Ver</span>
                             </button>
 
-                            {/* Biometría y Acceso Seguro para Alto Riesgo */}
                             {mostrarBiometria && (<button
                               onClick={() => setOrderForBiometricAuth(ord)}
-                              className={`p-1.5 rounded-lg border cursor-pointer shadow-2xs transition-colors ${
-                                ord.biometricAuthorized 
-                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' 
+                              className={`p-1.5 rounded-lg border cursor-pointer transition-colors ${
+                                ord.biometricAuthorized
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                                   : 'border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100'
                               }`}
                               title={ord.biometricAuthorized ? "Sello Biométrico Activo (Verificar)" : "Autorizar Orden Mediante Biometría"}
@@ -1389,48 +1305,48 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                               <Fingerprint className="w-3.5 h-3.5" />
                             </button>)}
 
-                            {/* Imprimir Informe Membretado */}
                             <button
                               onClick={() => handlePrintOfficialReport(ord)}
-                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-blue-50 text-slate-600 hover:text-blue-700 cursor-pointer shadow-2xs"
-                              title="Imprimir Informe Clínico Oficial (Membretado con QR)"
+                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-blue-50 cursor-pointer"
+                              title="Imprimir informe oficial (solo si está publicado)"
+                              aria-label="Imprimir informe"
                             >
                               <Printer className="w-3.5 h-3.5 text-blue-600" />
                             </button>
 
-                            {/* Imprimir Boleta / Ticket */}
                             <button
                               onClick={() => handlePrintOrderReceipt(ord)}
-                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-amber-50 text-slate-600 hover:text-amber-700 cursor-pointer shadow-2xs"
-                              title="Imprimir Boleta de Admisión / Ticket de Orden"
+                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-amber-50 cursor-pointer"
+                              title="Imprimir boleta de admisión"
+                              aria-label="Imprimir boleta"
                             >
                               <Receipt className="w-3.5 h-3.5 text-amber-600" />
                             </button>
 
-                            {/* Mover a Carpeta (no aplica a órdenes en Papelera) */}
                             {mode !== 'trash' && (
                               <button
                                 onClick={() => handleOpenMoveModal([ord.id])}
-                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
-                                title="Guardar / Mover a Carpeta"
+                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer"
+                                title="Guardar / mover a carpeta"
+                                aria-label="Mover a carpeta"
                               >
                                 <Folder className="w-3.5 h-3.5 text-amber-600" />
                               </button>
                             )}
 
-                            {/* Archivar / Restaurar / Restaurar de Papelera */}
                             {mode === 'archived' ? (
                               <button
                                 onClick={() => restoreOrder(ord.id)}
-                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 cursor-pointer"
+                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-emerald-50 cursor-pointer"
                                 title="Restaurar a órdenes activas"
+                                aria-label="Restaurar"
                               >
                                 <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
                               </button>
                             ) : mode === 'trash' ? (
                               <button
                                 onClick={() => restoreOrderFromTrash(ord.id)}
-                                className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center gap-1 border border-emerald-200 cursor-pointer shadow-2xs"
+                                className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center gap-1 border border-emerald-200 cursor-pointer"
                                 title="Restaurar desde la Papelera"
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
@@ -1439,14 +1355,14 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                             ) : (
                               <button
                                 onClick={() => archiveOrder(ord.id)}
-                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
+                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer"
                                 title="Archivar orden"
+                                aria-label="Archivar"
                               >
                                 <Archive className="w-3.5 h-3.5 text-slate-500" />
                               </button>
                             )}
 
-                            {/* Eliminar (no aplica a órdenes ya en Papelera -no hay borrado permanente) */}
                             {mode !== 'trash' && (
                               <button
                                 onClick={() => {
@@ -1454,8 +1370,9 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                                     deleteOrder(ord.id);
                                   }
                                 }}
-                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 text-slate-600 hover:text-rose-600 cursor-pointer"
+                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 cursor-pointer"
                                 title="Enviar a la Papelera"
+                                aria-label="Enviar a la Papelera"
                               >
                                 <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                               </button>
