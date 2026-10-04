@@ -138,6 +138,8 @@ export interface Patient {
   fullName: string;
   gender: 'M' | 'F' | 'Otro';
   birthDate: string;
+  /** true si la fecha de nacimiento se calculó desde una edad aproximada. */
+  birthDateEstimated?: boolean;
   age: number;
   phone: string;
   email: string;

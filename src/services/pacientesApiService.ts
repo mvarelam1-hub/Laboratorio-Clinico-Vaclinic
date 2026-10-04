@@ -19,9 +19,20 @@ import { getStaffSessionToken } from './staffSessionToken';
 import { Patient } from '../types';
 
 export class PacientesApiError extends Error {
-  constructor(message: string, public status?: number) {
+  constructor(
+    message: string,
+    public status?: number,
+    public code?: string,
+    /** En 409 DNI_DUPLICADO: el paciente que ya existe con ese documento. */
+    public pacienteExistente?: { id_paciente: number; nombre_completo: string }
+  ) {
     super(message);
     this.name = 'PacientesApiError';
+  }
+
+  /** true si el servidor rechazó los DATOS (4xx): reintentar o guardar en local no los arregla. */
+  get esRechazoDeDatos(): boolean {
+    return typeof this.status === 'number' && this.status >= 400 && this.status < 500 && this.status !== 401 && this.status !== 403;
   }
 }
 
@@ -40,14 +51,14 @@ async function authFetch(path: string, options: RequestInit = {}): Promise<Respo
   });
 }
 
-async function parseErrorBody(res: Response): Promise<string> {
+async function toApiError(res: Response): Promise<PacientesApiError> {
   try {
     const body = await res.json();
-    if (body?.error) return body.error;
+    if (body?.error) return new PacientesApiError(body.error, res.status, body.code, body.paciente);
   } catch {
     /* respuesta sin cuerpo JSON, se usa el status */
   }
-  return `El servidor respondió ${res.status}.`;
+  return new PacientesApiError(`El servidor respondió ${res.status}.`, res.status);
 }
 
 /** Fila cruda tal como la devuelve server/routes/pacientes.ts (snake_case). */
@@ -63,6 +74,7 @@ interface PacienteApiRow {
   es_menor_edad?: boolean | null;
   nombre_encargado_legal?: string | null;
   telefono_encargado_legal?: string | null;
+  fecha_nacimiento_estimada?: boolean | null;
   fecha_registro?: string | null;
 }
 
@@ -89,7 +101,8 @@ export function mapPacienteApiToPatient(row: PacienteApiRow, existing?: Partial<
     pinCode: existing?.pinCode || id.slice(-4).padStart(4, '0'),
     fullName: row.nombre_completo,
     gender: (row.genero as Patient['gender']) || 'Otro',
-    birthDate: row.fecha_nacimiento || '',
+    birthDate: row.fecha_nacimiento ? String(row.fecha_nacimiento).slice(0, 10) : '',
+    birthDateEstimated: row.fecha_nacimiento_estimada === true,
     age: row.fecha_nacimiento ? calcularEdad(row.fecha_nacimiento) : (existing?.age ?? 0),
     phone: row.telefono_whatsapp || '',
     email: row.correo || '',
@@ -118,8 +131,11 @@ export interface CrearPacienteInput {
   nombreCompleto: string;
   dni?: string;
   fechaNacimiento: string;
+  /** true si la fecha se calculó a partir de una edad aproximada, no de un documento. */
+  fechaNacimientoEstimada?: boolean;
   genero?: string;
-  telefonoWhatsApp: string;
+  /** Opcional: basta con teléfono o correo (lo exige el servidor). */
+  telefonoWhatsApp?: string;
   correo?: string;
   direccion?: string;
   esMenorEdad?: boolean;
@@ -129,19 +145,19 @@ export interface CrearPacienteInput {
 
 export async function createPacienteRemote(input: CrearPacienteInput): Promise<PacienteApiRow> {
   const res = await authFetch('/api/pacientes', { method: 'POST', body: JSON.stringify(input) });
-  if (!res.ok) throw new PacientesApiError(await parseErrorBody(res), res.status);
+  if (!res.ok) throw await toApiError(res);
   return res.json();
 }
 
 export async function updatePacienteRemote(idPaciente: string, updates: Partial<CrearPacienteInput>): Promise<PacienteApiRow> {
   const res = await authFetch(`/api/pacientes/${idPaciente}`, { method: 'PATCH', body: JSON.stringify(updates) });
-  if (!res.ok) throw new PacientesApiError(await parseErrorBody(res), res.status);
+  if (!res.ok) throw await toApiError(res);
   return res.json();
 }
 
 export async function fetchPacientesRemote(limite = 200): Promise<PacienteApiRow[]> {
   const res = await authFetch(`/api/pacientes?limite=${limite}`);
-  if (!res.ok) throw new PacientesApiError(await parseErrorBody(res), res.status);
+  if (!res.ok) throw await toApiError(res);
   return res.json();
 }
 

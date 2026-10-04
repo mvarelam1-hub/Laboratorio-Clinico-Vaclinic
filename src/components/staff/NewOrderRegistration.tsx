@@ -35,7 +35,8 @@ import {
   Coins,
   MessageSquare,
   Zap,
-  X
+  X,
+  ChevronDown
 } from 'lucide-react';
 import { WhatsAppMessageModal } from './WhatsAppMessageModal';
 import { playNotificationChime } from '../../utils/audioChime';
@@ -45,8 +46,14 @@ import {
   analyzeTubesForParameters 
 } from '../../utils/sampleTubeRegistry';
 import { TubeBadge } from '../common/TubeBadge';
-import { LabCatalogItem, OriginDepartment, PatientType, MedicalReport, LabOrder } from '../../types';
-import { SmartBirthDatePicker, PreselectedRangeItem } from './SmartBirthDatePicker';
+import { LabCatalogItem, OriginDepartment, PatientType, MedicalReport, LabOrder, Patient } from '../../types';
+import { PacientesApiError } from '../../services/pacientesApiService';
+import {
+  CampoPaciente,
+  edadDesdeFecha,
+  fechaDesdeEdadAproximada,
+  validarDatosPaciente
+} from '../../services/validacionPaciente';
 import { generateDemographicParametersForTests } from '../../utils/referenceRangeEvaluator';
 
 export function getStaffFriendlyCapLabel(tube: TubeDefinition): string {
@@ -144,19 +151,27 @@ export const NewOrderRegistration: React.FC = () => {
   // 2. Clinical Priority
   const [priority, setPriority] = useState<'rutina' | 'urgente' | 'stat_panico'>('rutina');
 
-  // 3. Patient Identification & Demographics
+  // 3. Datos del paciente. Nada se preselecciona ni se inventa: sexo sin valor,
+  // nacimiento o edad lo escribe quien registra, y el contacto es el real.
   const [patientName, setPatientName] = useState('');
   const [nationalId, setNationalId] = useState('');
-  const [gender, setGender] = useState<'Femenino' | 'Masculino' | 'Otro'>('Femenino');
+  const [gender, setGender] = useState<'' | 'M' | 'F' | 'Otro'>('');
   const [age, setAge] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [birthDateEstimated, setBirthDateEstimated] = useState(false);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [guardianName, setGuardianName] = useState('');
+  const [guardianPhone, setGuardianPhone] = useState('');
+  // Paciente ya registrado elegido de forma EXPLÍCITA en la lista. Nunca se
+  // une una orden a un paciente existente solo porque el nombre se parezca.
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [intentoEnvio, setIntentoEnvio] = useState(false);
+  const [errorDocumento, setErrorDocumento] = useState('');
 
-  // Demographic Preselected Reference Ranges state for smart expedited results entry
-  const [preselectedRanges, setPreselectedRanges] = useState<PreselectedRangeItem[]>([]);
-
-  // 4. Clinical Origin & Preanalytical Sample Details
+  // 4. Datos clínicos y preanalíticos (opcionales, plegados por defecto)
+  const [showClinical, setShowClinical] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
   const [origin, setOrigin] = useState<OriginDepartment>('consulta_externa');
   const [patientType, setPatientType] = useState<PatientType>('ambulatorio');
   const [bedRoom, setBedRoom] = useState('');
@@ -164,14 +179,12 @@ export const NewOrderRegistration: React.FC = () => {
   const [clinicalDiagnosis, setClinicalDiagnosis] = useState('');
   const [fastingCondition, setFastingCondition] = useState('Ayuno 8-12 hrs');
   const [sampleType, setSampleType] = useState('Sangre Venosa');
-  const [phlebotomistName, setPhlebotomistName] = useState(
-    currentStaffUser?.fullName || 'Licda. Mily Jeannette Rodríguez'
-  );
+  // Quien toma la muestra por defecto es quien tiene la sesión abierta.
+  const [phlebotomistName, setPhlebotomistName] = useState(currentStaffUser?.fullName || '');
 
   // 5. Test Selection Filters & State
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedTubeFilter, setSelectedTubeFilter] = useState('all');
   const [filterMode, setFilterMode] = useState<'all' | 'tests' | 'profiles'>('all');
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
 
@@ -195,6 +208,7 @@ export const NewOrderRegistration: React.FC = () => {
     orderDate: string;
     orderTime: string;
     barcode: string;
+    patientId: string;
     patientName: string;
     nationalId: string;
     patientAge?: number;
@@ -221,21 +235,16 @@ export const NewOrderRegistration: React.FC = () => {
   } | null>(null);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
-  // Automatically load selectedPatientId if redirected from Quick Search or Patient Manager
+  // Carga el paciente elegido desde la búsqueda rápida o el módulo Pacientes
   useEffect(() => {
     if (selectedPatientId) {
       const p = patients.find(pat => pat.id === selectedPatientId);
       if (p) {
-        setPatientName(p.fullName);
-        setNationalId(p.nationalId);
-        setGender(p.gender === 'F' ? 'Femenino' : p.gender === 'M' ? 'Masculino' : 'Otro');
-        setAge(p.age.toString());
-        setBirthDate(p.birthDate || '');
-        setPhone(p.phone || '');
-        setEmail(p.email || '');
+        handleSelectPatient(p);
         setSelectedPatientId(null);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPatientId, patients, setSelectedPatientId]);
 
   // Keyboard shortcut: Ctrl+S or Cmd+S to submit
@@ -253,14 +262,15 @@ export const NewOrderRegistration: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Filter existing patients as user types
+  // Sugiere pacientes ya registrados mientras se escribe (por nombre o documento)
   const handleNameChange = (val: string) => {
     setPatientName(val);
+    setErrorDocumento('');
     if (val.trim().length >= 2) {
-      const matches = patients.filter(p => 
-        p.fullName.toLowerCase().includes(val.toLowerCase()) ||
-        p.nationalId.includes(val)
-      );
+      const q = val.trim().toLowerCase();
+      const matches = patients
+        .filter(p => p.fullName.toLowerCase().includes(q) || (p.nationalId && p.nationalId.includes(val.trim())))
+        .slice(0, 8);
       setMatchedPatients(matches);
       setShowPatientSuggestions(matches.length > 0);
     } else {
@@ -268,41 +278,94 @@ export const NewOrderRegistration: React.FC = () => {
     }
   };
 
-  // Select an existing patient from suggestions
-  const handleSelectPatient = (p: typeof patients[0]) => {
+  // Elegir un paciente ya registrado (única forma de reutilizar uno existente)
+  function handleSelectPatient(p: Patient) {
+    setSelectedPatient(p);
     setPatientName(p.fullName);
-    setNationalId(p.nationalId);
-    setGender(p.gender === 'F' ? 'Femenino' : p.gender === 'M' ? 'Masculino' : 'Otro');
-    setAge(p.age.toString());
+    setNationalId(p.nationalId || '');
+    setGender(p.gender === 'F' || p.gender === 'M' || p.gender === 'Otro' ? p.gender : '');
     setBirthDate(p.birthDate || '');
+    setBirthDateEstimated(p.birthDateEstimated === true);
+    const edad = p.birthDate ? edadDesdeFecha(p.birthDate) : null;
+    setAge(edad !== null ? String(edad) : (p.age ? String(p.age) : ''));
     setPhone(p.phone || '');
     setEmail(p.email || '');
+    setGuardianName(p.emergencyContact?.relation === 'Encargado legal' ? p.emergencyContact.name : '');
+    setGuardianPhone(p.emergencyContact?.relation === 'Encargado legal' ? p.emergencyContact.phone : '');
     setShowPatientSuggestions(false);
+    setErrorDocumento('');
+  }
+
+  const clearPatientFields = () => {
+    setSelectedPatient(null);
+    setPatientName('');
+    setNationalId('');
+    setGender('');
+    setAge('');
+    setBirthDate('');
+    setBirthDateEstimated(false);
+    setPhone('');
+    setEmail('');
+    setGuardianName('');
+    setGuardianPhone('');
+    setErrorDocumento('');
+    setIntentoEnvio(false);
   };
 
-  // Calculate age from birthDate change
+  // Fecha de nacimiento real -> la edad se calcula sola
   const handleBirthDateChange = (val: string) => {
     setBirthDate(val);
-    if (val) {
-      const bDate = new Date(val);
-      const now = new Date();
-      let calculatedAge = now.getFullYear() - bDate.getFullYear();
-      const m = now.getMonth() - bDate.getMonth();
-      if (m < 0 || (m === 0 && now.getDate() < bDate.getDate())) {
-        calculatedAge--;
-      }
-      if (calculatedAge >= 0 && calculatedAge <= 120) {
-        setAge(calculatedAge.toString());
-      }
+    setBirthDateEstimated(false);
+    const edad = edadDesdeFecha(val);
+    setAge(edad !== null ? String(edad) : '');
+  };
+
+  // Solo se conoce la edad -> se guarda una fecha APROXIMADA y se marca como estimada
+  const handleAgeChange = (val: string) => {
+    const limpio = val.replace(/[^\d]/g, '').slice(0, 3);
+    setAge(limpio);
+    if (limpio === '') {
+      setBirthDate('');
+      setBirthDateEstimated(false);
+      return;
+    }
+    const n = parseInt(limpio, 10);
+    if (n >= 0 && n <= 120) {
+      setBirthDate(fechaDesdeEdadAproximada(n));
+      setBirthDateEstimated(true);
     }
   };
 
-  // Generate temporary ID
-  const handleGenerateTempDni = () => {
-    const temp = `${Math.floor(10000000 + Math.random() * 90000000)}`;
-    setNationalId(temp);
-    showNotification(`Identificador correlativo temporal asignado: ${temp}`, 'info');
-  };
+  const validacion = useMemo(
+    () => validarDatosPaciente({
+      nombre: patientName,
+      sexo: gender,
+      fechaNacimiento: birthDate,
+      telefono: phone,
+      correo: email,
+      encargadoNombre: guardianName,
+      encargadoTelefono: guardianPhone
+    }),
+    [patientName, gender, birthDate, phone, email, guardianName, guardianPhone]
+  );
+
+  // Un paciente ya registrado conserva su contacto y encargado: solo se exige
+  // lo que define los rangos de referencia (sexo y edad) y el nombre.
+  const erroresVisibles: Partial<Record<CampoPaciente, string>> = useMemo(() => {
+    if (!intentoEnvio) return {};
+    if (!selectedPatient) return validacion.errores;
+    const { nombre, sexo, nacimiento } = validacion.errores;
+    return { ...(nombre && { nombre }), ...(sexo && { sexo }), ...(nacimiento && { nacimiento }) };
+  }, [intentoEnvio, selectedPatient, validacion]);
+
+  const sameName = (a: string, b: string) =>
+    a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase();
+
+  // Aviso suave: mismo nombre que un paciente ya registrado, sin haberlo elegido
+  const posibleDuplicado = useMemo(() => {
+    if (selectedPatient || patientName.trim().length < 5) return null;
+    return patients.find(p => sameName(p.fullName, patientName)) || null;
+  }, [patients, patientName, selectedPatient]);
 
   // Combine catalog tests with custom profiles so both can be selected
   const allSelectableItems = useMemo(() => {
@@ -354,24 +417,9 @@ export const NewOrderRegistration: React.FC = () => {
         (filterMode === 'tests' && !test.isProfile);
 
       if (!matchesSearch || !matchesCat || !matchesMode) return false;
-
-      if (selectedTubeFilter !== 'all') {
-        const itemTubes = getItemTubes(test);
-        const matchesTube = itemTubes.some(t => {
-          if (selectedTubeFilter === 'rojo') return t.id === 'rojo_gel' || t.id === 'rojo_seco';
-          if (selectedTubeFilter === 'morada') return t.id === 'lila';
-          if (selectedTubeFilter === 'azul') return t.id === 'celeste' || t.id === 'royal_blue';
-          if (selectedTubeFilter === 'gris') return t.id === 'gris';
-          if (selectedTubeFilter === 'verde') return t.id === 'verde';
-          if (selectedTubeFilter === 'frasco') return t.id.startsWith('frasco') || t.id.startsWith('hisopo');
-          return t.id === selectedTubeFilter;
-        });
-        if (!matchesTube) return false;
-      }
-
       return true;
     });
-  }, [allSelectableItems, searchTerm, selectedCategory, filterMode, selectedTubeFilter]);
+  }, [allSelectableItems, searchTerm, selectedCategory, filterMode]);
 
   // Toggle Test Selection
   const toggleTest = (testId: string) => {
@@ -441,65 +489,105 @@ export const NewOrderRegistration: React.FC = () => {
     }
   };
 
-  // Form Submission: opens pre-liquidation review modal to confirm order and payment details
+  // Envío: valida los datos mínimos del paciente y abre la revisión previa a liquidar
   const handleSubmitOrder = (e: React.FormEvent) => {
     e.preventDefault();
+    setIntentoEnvio(true);
+    setErrorDocumento('');
 
-    if (!patientName.trim()) {
-      showNotification('Por favor ingresa el nombre del paciente', 'error');
+    const errores = selectedPatient
+      ? (({ nombre, sexo, nacimiento }) => ({ nombre, sexo, nacimiento }))(validacion.errores)
+      : validacion.errores;
+    const primerCampo = (['nombre', 'sexo', 'nacimiento', 'contacto', 'correo', 'encargadoNombre', 'encargadoTelefono'] as CampoPaciente[])
+      .find(c => errores[c]);
+    if (primerCampo) {
+      showNotification(errores[primerCampo] as string, 'error');
       playNotificationChime('urgent');
+      const idCampo: Record<CampoPaciente, string> = {
+        nombre: 'input-patient-fullname',
+        sexo: 'btn-gender-M',
+        nacimiento: 'input-patient-birthdate',
+        contacto: 'input-patient-phone',
+        correo: 'input-patient-email',
+        encargadoNombre: 'input-guardian-name',
+        encargadoTelefono: 'input-guardian-phone'
+      };
+      document.getElementById(idCampo[primerCampo])?.focus();
       return;
     }
 
     if (selectedTestIds.length === 0) {
-      showNotification('Por favor selecciona al menos un examen de laboratorio', 'warning');
+      showNotification('Selecciona al menos un examen de laboratorio', 'warning');
       playNotificationChime('urgent');
       return;
     }
 
-    // Default cash tendered to total amount if empty
+    // Por defecto se cobra el neto de la orden
     if (!cashTendered || parseFloat(cashTendered) <= 0) {
       const netToPay = Math.max(0, totalAmount - (parseFloat(pendingBalance) || 0));
       setCashTendered(netToPay > 0 ? netToPay.toFixed(2) : totalAmount.toFixed(2));
     }
 
-    // Open the Pre-Liquidation Review & Confirmation modal
     setIsReviewModalOpen(true);
   };
 
   // Official execution after staff reviews and confirms what is going to be paid
   const handleConfirmAndSaveOrder = async () => {
-    const patientDni = nationalId.trim() || `${Math.floor(10000000 + Math.random() * 90000000)}`;
+    const documento = nationalId.trim();
 
-    // Check if patient exists or create new
-    let patientObj = patients.find(p =>
-      (nationalId.trim() && p.nationalId.toLowerCase() === nationalId.trim().toLowerCase()) ||
-      p.fullName.toLowerCase() === patientName.trim().toLowerCase()
-    );
+    // 1) Paciente ya registrado: solo si se eligió de la lista, o si el documento
+    //    coincide EXACTAMENTE con el de uno registrado a ese mismo nombre.
+    //    Un mismo nombre NO basta (hay homónimos): se crearía una orden en la
+    //    historia clínica de otra persona.
+    let patientObj: Patient | undefined = selectedPatient
+      ? patients.find(p => p.id === selectedPatient.id) || selectedPatient
+      : undefined;
 
-    if (!patientObj) {
-      // `addPatient` intenta crear el paciente de verdad en el backend
-      // (POST /api/pacientes) antes de resolver; se espera aquí para que
-      // `patientObj.id` -usado más abajo para la orden, el episodio 4D y
-      // los manifiestos- sea el id real de la base de datos.
-      patientObj = await addPatient({
-        fullName: patientName.trim(),
-        nationalId: patientDni,
-        gender: gender === 'Femenino' ? 'F' : gender === 'Masculino' ? 'M' : 'Otro',
-        birthDate: birthDate || '1995-01-01',
-        age: parseInt(age) || 28,
-        phone: phone || '502-5555-0000',
-        email: email.trim() || `${patientName.toLowerCase().replace(/[^a-z0-9]/g, '')}@correo.com`,
-        bloodType: 'O+',
-        allergies: [],
-        address: 'Ciudad de Guatemala',
-        emergencyContact: {
-          name: 'Familiar Directo',
-          phone: phone || '502-5555-0000',
-          relation: 'Familiar'
+    if (!patientObj && documento) {
+      const mismoDocumento = patients.find(p => p.nationalId.trim().toLowerCase() === documento.toLowerCase());
+      if (mismoDocumento) {
+        if (sameName(mismoDocumento.fullName, patientName)) {
+          patientObj = mismoDocumento;
+        } else {
+          const msg = `El documento ${documento} ya pertenece a ${mismoDocumento.fullName}. Elígelo de la lista o corrige el documento.`;
+          setErrorDocumento(msg);
+          setIsReviewModalOpen(false);
+          showNotification(msg, 'error');
+          playNotificationChime('urgent');
+          return;
         }
-      });
+      }
     }
+
+    // 2) Paciente nuevo: se guarda tal como se escribió, sin completar nada.
+    if (!patientObj) {
+      try {
+        patientObj = await addPatient({
+          fullName: patientName.trim(),
+          nationalId: documento,
+          gender: gender as 'M' | 'F' | 'Otro',
+          birthDate,
+          birthDateEstimated,
+          age: validacion.edad ?? 0,
+          phone: phone.trim(),
+          email: email.trim(),
+          bloodType: '',
+          allergies: [],
+          address: '',
+          emergencyContact: validacion.esMenor
+            ? { name: guardianName.trim(), phone: guardianPhone.trim(), relation: 'Encargado legal' }
+            : { name: '', phone: '', relation: '' }
+        });
+      } catch (err) {
+        const msg = err instanceof PacientesApiError ? err.message : 'No se pudo registrar al paciente.';
+        if (err instanceof PacientesApiError && err.code === 'DNI_DUPLICADO') setErrorDocumento(msg);
+        setIsReviewModalOpen(false);
+        showNotification(msg, 'error');
+        playNotificationChime('urgent');
+        return;
+      }
+    }
+    const patientDni = patientObj.nationalId || '';
 
     // Compute standardized CLSI tubes based on selected tests & profiles
     const tubesDetailed = phlebotomyAudit.tubesGrouped.map(g => ({
@@ -542,7 +630,7 @@ export const NewOrderRegistration: React.FC = () => {
       patientType,
       healthProgram: 'general',
       origin,
-      referringDoctor: referringDoctor || 'Dr. Médico Tratante',
+      referringDoctor: referringDoctor.trim() || 'No indicado',
       branchId: currentBranch || 'central',
       admissionTime: episodeAdmissionTime,
       currentDimension: 'D1_admision',
@@ -561,10 +649,10 @@ export const NewOrderRegistration: React.FC = () => {
       orderNumber: '',
       patientId: patientObj.id,
       patientName: patientObj.fullName,
-      patientCode: `${Math.floor(100 + Math.random() * 900)}-${orderYear}`,
+      patientCode: patientObj.patientCode || '',
       nationalId: patientDni,
-      phone: patientObj.phone || phone,
-      email: email.trim() || patientObj.email,
+      phone: patientObj.phone || phone.trim(),
+      email: patientObj.email || email.trim(),
       date: orderDate || getTodayStr(),
       time: formattedTime,
       createdAt: episodeAdmissionTime,
@@ -604,22 +692,23 @@ export const NewOrderRegistration: React.FC = () => {
     setIsReviewModalOpen(false);
 
     setCreatedOrderModal({
+      patientId: patientObj.id,
       orderNumber: createdEpisode.episodeNumber,
       orderDate: orderDate || getTodayStr(),
       orderTime: formattedTime,
       barcode: barcodeNumber,
       patientName: patientObj.fullName,
       nationalId: patientDni,
-      patientAge: patientObj.age,
+      patientAge: validacion.edad ?? patientObj.age,
       patientGender: patientObj.gender,
-      preselectedCount: preselectedRanges.length || selectedTests.length,
-      phone: patientObj.phone || phone,
+      preselectedCount: selectedTests.length,
+      phone: patientObj.phone || phone.trim(),
       // Preferir el código único de consulta REAL de esta orden (generado
       // por la API al crearla, fn_generar_codigo_consulta) sobre el PIN de
       // paciente heredado -que la tesis documenta como ya no vigente-; ese
       // PIN solo queda como último recurso si la orden no se pudo
       // sincronizar con el servidor (ver ClinicContext.tsx `addOrder`).
-      accessCode: savedOrder.codigoConsulta || patientObj.accessCode || patientDni.substring(0, 6).toUpperCase(),
+      accessCode: savedOrder.codigoConsulta || undefined,
       priority,
       origin,
       fastingCondition,
@@ -635,13 +724,7 @@ export const NewOrderRegistration: React.FC = () => {
   };
 
   const handleResetForm = () => {
-    setPatientName('');
-    setNationalId('');
-    setGender('Femenino');
-    setAge('');
-    setBirthDate('');
-    setPhone('');
-    setEmail('');
+    clearPatientFields();
     setReferringDoctor('');
     setClinicalDiagnosis('');
     setBedRoom('');
@@ -650,7 +733,6 @@ export const NewOrderRegistration: React.FC = () => {
     setOrderTime(getCurrentTimeStr());
     setPriority('rutina');
     setSelectedTestIds([]);
-    setPreselectedRanges([]);
     setAppliedPromo('');
     setPendingBalance('');
     setIsReviewModalOpen(false);
@@ -660,9 +742,9 @@ export const NewOrderRegistration: React.FC = () => {
 
   // Expedited workflow: Load results into Report Editor with demographic pre-selected reference ranges
   const handleLoadResultsWithPreselectedRanges = (modalData: NonNullable<typeof createdOrderModal>) => {
-    const patientObj = patients.find(p => p.nationalId === modalData.nationalId || p.fullName.toLowerCase() === modalData.patientName.toLowerCase());
-    const effectiveAge = modalData.patientAge ?? (patientObj?.age || parseInt(age, 10) || 35);
-    const effectiveGender = modalData.patientGender ?? (patientObj?.gender || (gender.startsWith('F') ? 'F' : 'M'));
+    const patientObj = patients.find(p => p.id === modalData.patientId);
+    const effectiveAge = modalData.patientAge ?? patientObj?.age ?? 0;
+    const effectiveGender = modalData.patientGender ?? patientObj?.gender ?? 'M';
     
     // Generate demographic parameters pre-calibrated to this patient's age and sex.
     // Se pasan los examCodes reales del catálogo (mismo orden que testsList)
@@ -680,8 +762,8 @@ export const NewOrderRegistration: React.FC = () => {
 
     const draftReport: MedicalReport = {
       id: `rep-ord-${Date.now()}`,
-      reportNumber: `INF-${modalData.orderNumber.replace('#', '')}-2026`,
-      patientId: patientObj?.id || `PAT-${Date.now()}`,
+      reportNumber: `INF-${modalData.orderNumber.replace('#', '')}-${new Date().getFullYear()}`,
+      patientId: modalData.patientId,
       patientName: modalData.patientName,
       patientNationalId: modalData.nationalId,
       patientAge: effectiveAge,
@@ -701,7 +783,8 @@ export const NewOrderRegistration: React.FC = () => {
       recommendations: [
         'Correlacionar hallazgos con la evaluación clínica del médico tratante.'
       ],
-      qrVerificationCode: `https://vaclinic.laboratorio.gt/valida?ord=${modalData.orderNumber.replace('#', '')}&dni=${modalData.nationalId}`,
+      // El código de verificación real lo emite el servidor al publicar el informe (sello verificable).
+      qrVerificationCode: '',
       // Vínculo real con la orden -solo se rellena si la orden se creó de
       // verdad en el backend (savedOrder.id ya es el id real "ord-<n>"); si
       // la orden quedó solo local (servidor caído), orderId queda undefined
@@ -720,945 +803,725 @@ export const NewOrderRegistration: React.FC = () => {
     <div className="w-full max-w-7xl mx-auto pb-28 animate-fade-in text-slate-800">
       
       {/* Main Form Container */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200/90 p-5 sm:p-8">
-        
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-200">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-700 flex items-center justify-center">
-                <FlaskConical className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                  Registrar Nueva Orden de Muestra
-                </h1>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Recepción de muestras, asignación de fecha de toma, datos clínicos preanalíticos y tubos normados CLSI.
-                </p>
-              </div>
-            </div>
-          </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={handleResetForm}
-              className="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-600 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Limpiar Formulario</span>
-            </button>
-          </div>
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <h1 className="text-lg sm:text-xl font-bold text-slate-900">Nueva orden</h1>
+          <button
+            type="button"
+            onClick={handleResetForm}
+            className="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-600 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Limpiar</span>
+          </button>
         </div>
 
-        <form onSubmit={handleSubmitOrder} className="space-y-8">
-          
-          {/* ======================================================== */}
-          {/* SECTION 1: FECHA Y HORA DE LA MUESTRA / ORDEN (HOY, AYER, MAÑANA O CUALQUIER DÍA) */}
-          {/* ======================================================== */}
-          <div className="bg-gradient-to-br from-teal-50/70 via-slate-50 to-cyan-50/50 rounded-2xl p-4 sm:p-5 border border-teal-200/80 shadow-2xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-teal-700" />
-                <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-                  1. Fecha y Hora de Toma de la Muestra
-                </h2>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-slate-500">Muestra programada:</span>
-                <span className="text-xs font-black text-teal-800 bg-teal-100/90 border border-teal-300/80 px-2.5 py-0.5 rounded-full font-mono">
-                  {getDateLabel(orderDate)} • {orderDate}
-                </span>
-              </div>
-            </div>
+        <form onSubmit={handleSubmitOrder} noValidate className="space-y-6">
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              
-              {/* Selector Rápido de Fecha (Ayer, Hoy, Mañana, Otro día) */}
-              <div className="lg:col-span-8 space-y-2">
-                <label className="block text-xs font-bold text-slate-700">
-                  Selecciona la Fecha de la Orden / Muestra *
-                </label>
-                
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Botón Ayer */}
+          {/* ===== TOMA DE MUESTRA: fecha, hora y prioridad en una sola barra ===== */}
+          <div className="flex flex-col lg:flex-row lg:items-end gap-3 rounded-xl bg-slate-50 border border-slate-200 p-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 mb-1">Fecha de toma</label>
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     id="btn-date-yesterday"
                     onClick={() => setOrderDate(getYesterdayStr())}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                      orderDate === getYesterdayStr()
-                        ? 'bg-teal-700 text-white border-teal-800 shadow-xs ring-2 ring-teal-500/20'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer ${
+                      orderDate === getYesterdayStr() ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                     }`}
                   >
-                    <span>⏪ Ayer</span>
-                    <span className="text-[10px] opacity-75 font-mono">({getYesterdayStr()})</span>
+                    Ayer
                   </button>
-
-                  {/* Botón Hoy */}
                   <button
                     type="button"
                     id="btn-date-today"
                     onClick={() => setOrderDate(getTodayStr())}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                      orderDate === getTodayStr()
-                        ? 'bg-teal-700 text-white border-teal-800 shadow-xs ring-2 ring-teal-500/20'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer ${
+                      orderDate === getTodayStr() ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                     }`}
                   >
-                    <span>⭐ Hoy</span>
-                    <span className="text-[10px] opacity-75 font-mono">({getTodayStr()})</span>
+                    Hoy
                   </button>
-
-                  {/* Botón Mañana */}
-                  <button
-                    type="button"
-                    id="btn-date-tomorrow"
-                    onClick={() => setOrderDate(getTomorrowStr())}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                      orderDate === getTomorrowStr()
-                        ? 'bg-teal-700 text-white border-teal-800 shadow-xs ring-2 ring-teal-500/20'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span>⏩ Mañana</span>
-                    <span className="text-[10px] opacity-75 font-mono">({getTomorrowStr()})</span>
-                  </button>
-
-                  {/* Calendario para cualquier otro día */}
-                  <div className="relative flex-1 min-w-[190px]">
-                    <input
-                      id="input-custom-order-date"
-                      type="date"
-                      value={orderDate}
-                      onChange={(e) => setOrderDate(e.target.value)}
-                      title="Elegir cualquier otro día en el calendario"
-                      className="w-full px-3 py-1.5 rounded-xl border border-teal-300 bg-white text-slate-800 text-xs font-bold focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-hidden cursor-pointer"
-                      required
-                    />
-                  </div>
+                  <input
+                    id="input-custom-order-date"
+                    type="date"
+                    value={orderDate}
+                    onChange={(e) => setOrderDate(e.target.value)}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 text-xs focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 outline-hidden"
+                    required
+                  />
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  Puedes elegir rápidamente <strong>Ayer</strong>, <strong>Hoy</strong>, <strong>Mañana</strong> o hacer clic en el calendario para seleccionar <strong>cualquier otra fecha</strong> (pasada o futura programada).
-                </p>
               </div>
-
-              {/* Hora de la Muestra */}
-              <div className="lg:col-span-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Hora de Toma / Ingreso *</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setOrderTime(getCurrentTimeStr())}
-                    className="text-[10px] font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer"
-                  >
-                    Poner hora actual
-                  </button>
-                </div>
+              <div>
+                <label htmlFor="input-order-time" className="block text-[11px] font-semibold text-slate-500 mb-1">Hora</label>
                 <input
                   id="input-order-time"
                   type="time"
                   value={orderTime}
                   onChange={(e) => setOrderTime(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 text-xs font-bold focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-hidden"
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 text-xs focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 outline-hidden"
                   required
                 />
               </div>
-
             </div>
 
-            {/* Selector de Prioridad Clínica de la Muestra */}
-            <div className="pt-3 border-t border-teal-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4 text-slate-600" />
-                <span className="text-xs font-bold text-slate-800">Prioridad Clínica:</span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 w-full sm:w-auto">
-                <button
-                  type="button"
-                  id="btn-priority-rutina"
-                  onClick={() => setPriority('rutina')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border ${
-                    priority === 'rutina'
-                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  <span>Rutina (3h)</span>
-                </button>
-
-                <button
-                  type="button"
-                  id="btn-priority-urgente"
-                  onClick={() => setPriority('urgente')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border ${
-                    priority === 'urgente'
-                      ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                  <span>Urgente (1h)</span>
-                </button>
-
-                <button
-                  type="button"
-                  id="btn-priority-stat"
-                  onClick={() => setPriority('stat_panico')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border ${
-                    priority === 'stat_panico'
-                      ? 'bg-rose-600 text-white border-rose-700 shadow-xs animate-pulse'
-                      : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-50'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-                  <span>STAT / Pánico</span>
-                </button>
+            <div className="lg:ml-auto">
+              <span className="block text-[11px] font-semibold text-slate-500 mb-1">Prioridad</span>
+              <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden bg-white">
+                {([
+                  { id: 'rutina', label: 'Rutina', on: 'bg-slate-900 text-white' },
+                  { id: 'urgente', label: 'Urgente', on: 'bg-amber-600 text-white' },
+                  { id: 'stat_panico', label: 'STAT', on: 'bg-rose-600 text-white' }
+                ] as const).map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    id={`btn-priority-${opt.id === 'stat_panico' ? 'stat' : opt.id}`}
+                    onClick={() => setPriority(opt.id)}
+                    className={`px-3 py-1.5 text-xs font-semibold cursor-pointer border-r border-slate-200 last:border-r-0 ${
+                      priority === opt.id ? opt.on : 'bg-white text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
             </div>
-
           </div>
 
-          {/* ======================================================== */}
-          {/* SECTION 2: DATOS DEL PACIENTE E IDENTIFICACIÓN OFICIAL */}
-          {/* ======================================================== */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-teal-700" />
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-                2. Datos e Identificación del Paciente
-              </h2>
-            </div>
+          {/* ===== 1. PACIENTE ===== */}
+          <section className="space-y-3">
+            <h2 className="text-sm font-bold text-slate-900">1. Paciente</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              
-              {/* Nombre Completo del Paciente */}
-              <div className="md:col-span-8 relative">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Nombre Completo del Paciente *
-                </label>
-                <div className="relative">
+            {selectedPatient ? (
+              <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-teal-700 shrink-0" />
+                    <span className="font-bold text-sm text-slate-900 truncate">{selectedPatient.fullName}</span>
+                    <span className="text-[11px] text-teal-800 bg-teal-100 border border-teal-200 rounded px-1.5 py-0.5">Paciente registrado</span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    {[
+                      selectedPatient.nationalId ? `DPI ${selectedPatient.nationalId}` : 'Sin documento',
+                      age ? `${age} años${birthDateEstimated ? ' (aprox.)' : ''}` : null,
+                      gender === 'M' ? 'Masculino' : gender === 'F' ? 'Femenino' : gender === 'Otro' ? 'Otro' : null,
+                      selectedPatient.phone || selectedPatient.email || null
+                    ].filter(Boolean).join(' · ')}
+                  </p>
+                  {(erroresVisibles.sexo || erroresVisibles.nacimiento) && (
+                    <p className="text-xs text-rose-700 font-semibold mt-1">
+                      Este paciente no tiene {erroresVisibles.sexo ? 'sexo' : 'fecha de nacimiento'} registrado. Cámbialo por un paciente completo o regístralo de nuevo.
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={clearPatientFields}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer self-start sm:self-auto"
+                >
+                  Cambiar paciente
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+
+                {/* Nombre */}
+                <div className="md:col-span-6 relative">
+                  <label htmlFor="input-patient-fullname" className="block text-xs font-semibold text-slate-700 mb-1">
+                    Nombre completo <span className="text-rose-600">*</span>
+                  </label>
                   <input
                     id="input-patient-fullname"
                     type="text"
+                    autoComplete="off"
                     value={patientName}
                     onChange={(e) => handleNameChange(e.target.value)}
                     onFocus={() => {
-                      if (patientName.length >= 2 && matchedPatients.length > 0) {
-                        setShowPatientSuggestions(true);
-                      }
+                      if (patientName.length >= 2 && matchedPatients.length > 0) setShowPatientSuggestions(true);
                     }}
-                    placeholder="Ej. Carmen Sandoval Méndez"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 transition-all outline-hidden bg-white"
-                    required
+                    onBlur={() => setTimeout(() => setShowPatientSuggestions(false), 150)}
+                    placeholder="Escribe para buscar o registrar"
+                    className={`w-full px-3 py-2 rounded-lg border text-slate-800 text-sm placeholder-slate-400 outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 ${
+                      erroresVisibles.nombre ? 'border-rose-500' : 'border-slate-300'
+                    }`}
                   />
+                  {erroresVisibles.nombre && <p className="text-xs text-rose-700 mt-1">{erroresVisibles.nombre}</p>}
 
-                  {/* Suggestions dropdown */}
                   {showPatientSuggestions && matchedPatients.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 z-30 mt-1 bg-white rounded-xl shadow-xl border border-slate-200 py-2 max-h-56 overflow-y-auto">
-                      <div className="px-3 py-1 text-[11px] font-bold uppercase text-slate-400 tracking-wider">
-                        Pacientes Registrados
-                      </div>
+                    <div className="absolute top-full left-0 right-0 z-30 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 py-1 max-h-60 overflow-y-auto">
+                      <div className="px-3 py-1 text-[11px] font-semibold text-slate-400">Pacientes registrados: elige uno para reutilizarlo</div>
                       {matchedPatients.map(p => (
                         <button
                           key={p.id}
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleSelectPatient(p)}
-                          className="w-full px-4 py-2 text-left hover:bg-teal-50 transition-colors flex items-center justify-between text-xs group"
+                          className="w-full px-3 py-2 text-left hover:bg-teal-50 text-xs"
                         >
-                          <div>
-                            <div className="font-semibold text-slate-800 group-hover:text-teal-900">{p.fullName}</div>
-                            <div className="text-[11px] text-slate-500">DPI: {p.nationalId} • {p.age} años • {p.phone}</div>
+                          <div className="font-semibold text-slate-800">{p.fullName}</div>
+                          <div className="text-[11px] text-slate-500">
+                            {[p.nationalId ? `DPI ${p.nationalId}` : 'Sin documento', p.age ? `${p.age} años` : null, p.phone || null].filter(Boolean).join(' · ')}
                           </div>
-                          <span className="text-[11px] font-bold text-teal-600 group-hover:underline">Cargar Datos</span>
                         </button>
                       ))}
                     </div>
                   )}
+                  {posibleDuplicado && !showPatientSuggestions && (
+                    <p className="text-xs text-amber-800 mt-1">
+                      Ya hay un paciente con este nombre.{' '}
+                      <button type="button" className="underline font-semibold cursor-pointer" onClick={() => handleSelectPatient(posibleDuplicado)}>
+                        Usar el registrado
+                      </button>{' '}
+                      si es la misma persona; si no, continúa y se creará uno nuevo.
+                    </p>
+                  )}
                 </div>
-              </div>
 
-              {/* DPI / Cédula / Identificación Oficial */}
-              <div className="md:col-span-4">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-slate-700">
-                    DPI / Cédula / DNI *
+                {/* Documento */}
+                <div className="md:col-span-3">
+                  <label htmlFor="input-patient-dni" className="block text-xs font-semibold text-slate-700 mb-1">
+                    DPI / documento <span className="text-slate-400 font-normal">(si tiene)</span>
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleGenerateTempDni}
-                    className="text-[10px] font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer"
-                    title="Asignar código temporal si el paciente no tiene DPI a la mano"
-                  >
-                    Generar ID temporal
-                  </button>
-                </div>
-                <input
-                  id="input-patient-dni"
-                  type="text"
-                  value={nationalId}
-                  onChange={(e) => setNationalId(e.target.value)}
-                  placeholder="Ej. 2984123400101"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs font-mono placeholder-slate-400 transition-all outline-hidden bg-white"
-                  required
-                />
-              </div>
-
-              {/* Selector Inteligente de Fecha de Nacimiento & Pre-selección de Rangos por Edad y Sexo */}
-              <div className="md:col-span-12">
-                <SmartBirthDatePicker
-                  birthDate={birthDate}
-                  onBirthDateChange={handleBirthDateChange}
-                  age={age}
-                  onAgeChange={setAge}
-                  gender={gender}
-                  onGenderChange={setGender}
-                  selectedTests={selectedTests}
-                  onPreselectedRangesChange={setPreselectedRanges}
-                  showPreviewByDefault={true}
-                />
-              </div>
-
-              {/* Teléfono / WhatsApp */}
-              <div className="md:col-span-6">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                  <Phone className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Teléfono / WhatsApp</span>
-                </label>
-                <input
-                  id="input-patient-phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Ej. 5421-9876"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 transition-all outline-hidden bg-white"
-                />
-              </div>
-
-              {/* Correo Electrónico */}
-              <div className="md:col-span-6">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                  <Mail className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Correo Electrónico (Para envío de resultados)</span>
-                </label>
-                <input
-                  id="input-patient-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Ej. paciente@correo.com"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 transition-all outline-hidden bg-white"
-                />
-              </div>
-
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 3: PROCEDENCIA CLÍNICA Y CONDICIONES PREANALÍTICAS */}
-          {/* ======================================================== */}
-          <div className="pt-5 border-t border-slate-200 space-y-4">
-            <div className="flex items-center gap-2">
-              <Stethoscope className="w-4 h-4 text-teal-700" />
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-                3. Procedencia Clínica y Condiciones Preanalíticas de la Muestra
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              
-              {/* Origen / Departamento Clínico */}
-              <div className="md:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Origen / Servicio Clínico
-                </label>
-                <select
-                  id="select-sample-origin"
-                  value={origin}
-                  onChange={(e) => setOrigin(e.target.value as any)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
-                >
-                  <option value="consulta_externa">Consulta Externa / Ambulatorio</option>
-                  <option value="emergencias">Emergencias / Urgencias Médicas</option>
-                  <option value="medicina_interna">Medicina Interna / Hospitalización</option>
-                  <option value="uci">Unidad de Cuidados Intensivos (UCI)</option>
-                  <option value="pediatria">Pediatría / Neonatología</option>
-                  <option value="cardiologia">Cardiología / Hemodinamia</option>
-                  <option value="oncologia">Oncología / Quimioterapia</option>
-                  <option value="empresa_externa">Salud Ocupacional / Empresa Externa</option>
-                </select>
-              </div>
-
-              {/* Tipo de Paciente */}
-              <div className="md:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Modalidad del Paciente
-                </label>
-                <select
-                  id="select-patient-type"
-                  value={patientType}
-                  onChange={(e) => setPatientType(e.target.value as any)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
-                >
-                  <option value="ambulatorio">Ambulatorio (Presencial en Sede)</option>
-                  <option value="hospitalizado">Hospitalizado (En cama)</option>
-                  <option value="urgencia">Urgencia / Observación</option>
-                  <option value="domicilio">Toma Domiciliar / Ambulancia</option>
-                  <option value="empresa">Jornada Corporativa / Empresa</option>
-                </select>
-              </div>
-
-              {/* Cama / Habitación / Consultorio */}
-              <div className="md:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Cama / Habitación / Consultorio (Opcional)
-                </label>
-                <input
-                  id="input-bed-room"
-                  type="text"
-                  value={bedRoom}
-                  onChange={(e) => setBedRoom(e.target.value)}
-                  placeholder="Ej. Cama 204-B o Clínica 3"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 outline-hidden bg-white"
-                />
-              </div>
-
-              {/* Médico Referente */}
-              <div className="md:col-span-6">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Médico Solicitante / Referente (Opcional)
-                </label>
-                <input
-                  id="input-referring-doctor"
-                  type="text"
-                  value={referringDoctor}
-                  onChange={(e) => setReferringDoctor(e.target.value)}
-                  placeholder="Ej. Dr. Mario Morales (Cardiólogo)"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 outline-hidden bg-white"
-                />
-              </div>
-
-              {/* Diagnóstico Presuntivo / Motivo de Consulta */}
-              <div className="md:col-span-6">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Diagnóstico Presuntivo / Indicación Clínica (Opcional)
-                </label>
-                <input
-                  id="input-clinical-diagnosis"
-                  type="text"
-                  value={clinicalDiagnosis}
-                  onChange={(e) => setClinicalDiagnosis(e.target.value)}
-                  placeholder="Ej. Control de Diabetes Tipo 2 / Síndrome Febril"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 outline-hidden bg-white"
-                />
-              </div>
-
-              {/* Condición Preanalítica de Ayuno */}
-              <div className="md:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Estado de Ayuno del Paciente *
-                </label>
-                <select
-                  id="select-fasting-condition"
-                  value={fastingCondition}
-                  onChange={(e) => setFastingCondition(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
-                >
-                  <option value="Ayuno 8-12 hrs">Ayuno Estricto (8 a 12 horas)</option>
-                  <option value="Ayuno 4-6 hrs">Ayuno Corto (4 a 6 horas)</option>
-                  <option value="Sin Ayuno / Postprandial">Sin Ayuno / Postprandial</option>
-                  <option value="No Requerido">No Requerido para estas pruebas</option>
-                </select>
-              </div>
-
-              {/* Tipo de Muestra Primaria */}
-              <div className="md:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Tipo de Muestra Primaria
-                </label>
-                <select
-                  id="select-sample-type"
-                  value={sampleType}
-                  onChange={(e) => setSampleType(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
-                >
-                  <option value="Sangre Venosa">Sangre Venosa (Múltiples tubos)</option>
-                  <option value="Sangre Arterial">Sangre Arterial (Gasometría)</option>
-                  <option value="Orina Fracción Media">Orina Fracción Media (EGO)</option>
-                  <option value="Orina 24 Horas">Orina de 24 Horas</option>
-                  <option value="Materia Fecal">Materia Fecal (Copro / Sangre oculta)</option>
-                  <option value="Hisopado Nasofaríngeo">Hisopado Nasofaríngeo / PCR</option>
-                  <option value="Exudado Faríngeo">Exudado Faríngeo / Cultivo</option>
-                  <option value="Múltiple según catálogo">Múltiple según exámenes</option>
-                </select>
-              </div>
-
-              {/* Flebotomista / Personal de Toma */}
-              <div className="md:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                  <UserCheck className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Flebotomista Responsable</span>
-                </label>
-                <select
-                  id="select-phlebotomist"
-                  value={phlebotomistName}
-                  onChange={(e) => setPhlebotomistName(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs bg-white outline-hidden cursor-pointer font-medium"
-                >
-                  {staffUsers.map(u => (
-                    <option key={u.id} value={u.fullName}>
-                      {u.fullName} ({u.roleName})
-                    </option>
-                  ))}
-                  <option value="Personal de Enfermería">Personal de Enfermería de Guardia</option>
-                  <option value="Flebotomista Móvil Domicilio">Flebotomista Móvil Domicilio</option>
-                </select>
-              </div>
-
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 4: SELECCIÓN DE EXÁMENES Y PERFILES */}
-          {/* ======================================================== */}
-          <div className="pt-5 border-t border-slate-200">
-            
-            {/* Section Header & Filters */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <FlaskConical className="w-4 h-4 text-teal-700" />
-                  <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-                    4. Selección de Exámenes y Perfiles de Laboratorio
-                  </h2>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Selecciona los análisis solicitados. El sistema calcula en tiempo real los tubos a preparar según norma CLSI.
-                </p>
-              </div>
-
-              {/* Search & Category Filter Controls */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                <div className="relative min-w-[220px] sm:min-w-[260px]">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
-                    id="input-search-tests"
+                    id="input-patient-dni"
                     type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Buscar examen o perfil..."
-                    className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 outline-hidden bg-slate-50/60 focus:bg-white transition-all"
+                    value={nationalId}
+                    onChange={(e) => { setNationalId(e.target.value); setErrorDocumento(''); }}
+                    className={`w-full px-3 py-2 rounded-lg border text-slate-800 text-sm font-mono outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 ${
+                      errorDocumento ? 'border-rose-500' : 'border-slate-300'
+                    }`}
+                  />
+                  {errorDocumento && <p className="text-xs text-rose-700 mt-1">{errorDocumento}</p>}
+                </div>
+
+                {/* Sexo */}
+                <div className="md:col-span-3">
+                  <span className="block text-xs font-semibold text-slate-700 mb-1">
+                    Sexo <span className="text-rose-600">*</span>
+                  </span>
+                  <div className={`inline-flex w-full rounded-lg border overflow-hidden bg-white ${erroresVisibles.sexo ? 'border-rose-500' : 'border-slate-300'}`}>
+                    {([
+                      { v: 'M', label: 'Masculino' },
+                      { v: 'F', label: 'Femenino' },
+                      { v: 'Otro', label: 'Otro' }
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        id={`btn-gender-${opt.v}`}
+                        aria-pressed={gender === opt.v}
+                        onClick={() => setGender(opt.v)}
+                        className={`flex-1 px-2 py-2 text-xs font-semibold cursor-pointer border-r border-slate-200 last:border-r-0 ${
+                          gender === opt.v ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  {erroresVisibles.sexo && <p className="text-xs text-rose-700 mt-1">{erroresVisibles.sexo}</p>}
+                </div>
+
+                {/* Nacimiento / edad */}
+                <div className="md:col-span-4">
+                  <label htmlFor="input-patient-birthdate" className="block text-xs font-semibold text-slate-700 mb-1">
+                    Fecha de nacimiento <span className="text-rose-600">*</span>
+                  </label>
+                  <input
+                    id="input-patient-birthdate"
+                    type="date"
+                    max={getTodayStr()}
+                    value={birthDateEstimated ? '' : birthDate}
+                    onChange={(e) => handleBirthDateChange(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-lg border text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 ${
+                      erroresVisibles.nacimiento ? 'border-rose-500' : 'border-slate-300'
+                    }`}
+                  />
+                  {erroresVisibles.nacimiento && <p className="text-xs text-rose-700 mt-1">{erroresVisibles.nacimiento}</p>}
+                </div>
+                <div className="md:col-span-2">
+                  <label htmlFor="input-patient-age" className="block text-xs font-semibold text-slate-700 mb-1">
+                    Edad <span className="text-slate-400 font-normal">(años)</span>
+                  </label>
+                  <input
+                    id="input-patient-age"
+                    type="text"
+                    inputMode="numeric"
+                    value={age}
+                    onChange={(e) => handleAgeChange(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
                   />
                 </div>
 
-                <select
-                  id="select-category-filter"
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-3 py-2 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs font-semibold bg-slate-50/60 focus:bg-white outline-hidden cursor-pointer"
-                >
-                  <option value="all">Todas las Categorías</option>
-                  {categoriesList.map((cat, idx) => (
-                    <option key={idx} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Quick Filter Chips: Tests vs Profiles & Tube Type Filter */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5 mb-4 p-2.5 rounded-xl bg-slate-100/70 border border-slate-200/80">
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">
-                  Mostrar:
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setFilterMode('all')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    filterMode === 'all' 
-                      ? 'bg-slate-900 text-white shadow-xs' 
-                      : 'bg-white text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Todos ({allSelectableItems.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterMode('tests')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    filterMode === 'tests' 
-                      ? 'bg-slate-900 text-white shadow-xs' 
-                      : 'bg-white text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Pruebas Individuales
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterMode('profiles')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                    filterMode === 'profiles' 
-                      ? 'bg-indigo-600 text-white shadow-xs' 
-                      : 'bg-white text-indigo-700 hover:bg-indigo-50 border border-indigo-200/60'
-                  }`}
-                >
-                  <Sparkles className="w-3 h-3" />
-                  Perfiles Clínicos
-                </button>
-              </div>
-
-              {/* Quick Tube Filters */}
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">
-                  Filtrar por Tubo:
-                </span>
-                {[
-                  { id: 'all', label: 'Todos' },
-                  { id: 'rojo', label: 'Tapa Roja (Gel/Seco)' },
-                  { id: 'morada', label: 'Tapa Morada (EDTA)' },
-                  { id: 'azul', label: 'Tapa Azul (Citrato)' },
-                  { id: 'frasco', label: 'Frascos (Orina/Heces)' },
-                ].map((tb) => (
-                  <button
-                    key={tb.id}
-                    type="button"
-                    onClick={() => setSelectedTubeFilter(tb.id)}
-                    className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-                      selectedTubeFilter === tb.id
-                        ? 'bg-teal-700 text-white shadow-2xs font-bold'
-                        : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                {/* Contacto */}
+                <div className="md:col-span-3">
+                  <label htmlFor="input-patient-phone" className="block text-xs font-semibold text-slate-700 mb-1">Teléfono / WhatsApp</label>
+                  <input
+                    id="input-patient-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-lg border text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 ${
+                      erroresVisibles.contacto ? 'border-rose-500' : 'border-slate-300'
                     }`}
-                  >
-                    {tb.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Test Selection Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-96 overflow-y-auto pr-1 p-1">
-              {filteredTests.map((test) => {
-                const isSelected = selectedTestIds.includes(test.id);
-                const testTubes = getItemTubes(test);
-
-                return (
-                  <div
-                    key={test.id}
-                    id={`test-item-${test.id}`}
-                    onClick={() => toggleTest(test.id)}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-teal-50/80 border-teal-500 shadow-xs ring-1 ring-teal-500'
-                        : 'bg-white hover:bg-slate-50/80 border-slate-200'
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <label htmlFor="input-patient-email" className="block text-xs font-semibold text-slate-700 mb-1">Correo</label>
+                  <input
+                    id="input-patient-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-lg border text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 ${
+                      erroresVisibles.contacto || erroresVisibles.correo ? 'border-rose-500' : 'border-slate-300'
                     }`}
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-                            isSelected ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 bg-white'
-                          }`}>
-                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                          </div>
-                          <div>
-                            <span className="font-bold text-xs text-slate-900 block leading-tight">
-                              {test.name}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              {test.code}
-                            </span>
-                          </div>
-                        </div>
-
-                        <span className="text-xs font-black text-teal-700 font-mono shrink-0">
-                          {test.priceFormatted || `Q${test.price}`}
-                        </span>
-                      </div>
-
-                      {test.description && (
-                        <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">
-                          {test.description}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Tube Indicators */}
-                    <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
-                      <div className="flex flex-wrap items-center gap-1">
-                        {testTubes.map((tb, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
-                            style={{
-                              backgroundColor: tb.badgeBg,
-                              color: tb.badgeText,
-                              borderColor: tb.badgeBorder,
-                              borderWidth: '1px'
-                            }}
-                          >
-                            <span
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{ backgroundColor: tb.capHex }}
-                            />
-                            <span>{tb.shortName}</span>
-                          </span>
-                        ))}
-                      </div>
-
-                      {test.isProfile && (
-                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
-                          Perfil ({test.parametersCount} p.)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Selected Tests Summary Pill Tags */}
-            {selectedTests.length > 0 && (
-              <div className="mt-3 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
-                <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center justify-between">
-                  <span>Pruebas Seleccionadas ({selectedTests.length}):</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTestIds([])}
-                    className="text-[11px] text-rose-600 hover:underline font-bold"
-                  >
-                    Quitar todas
-                  </button>
+                  />
+                  {erroresVisibles.correo && <p className="text-xs text-rose-700 mt-1">{erroresVisibles.correo}</p>}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedTests.map((t) => (
-                    <span
-                      key={t.id}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-teal-100/70 border border-teal-300 text-teal-900 text-xs font-bold"
-                    >
-                      <span>{t.name}</span>
-                      <span className="text-[10px] text-teal-700 font-mono">({t.priceFormatted || `Q${t.price}`})</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleTest(t.id);
-                        }}
-                        className="w-3.5 h-3.5 rounded-full hover:bg-teal-200 text-teal-800 flex items-center justify-center text-[10px] cursor-pointer"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
+
+                <div className="md:col-span-12 -mt-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  {erroresVisibles.contacto
+                    ? <span className="text-rose-700">{erroresVisibles.contacto}</span>
+                    : <span className="text-slate-500">Basta con teléfono o correo. La fecha de nacimiento o la edad son obligatorias porque definen los rangos de referencia.</span>}
+                  {birthDateEstimated && age && (
+                    <span className="text-amber-800">Edad aproximada: se guarda una fecha de nacimiento estimada.</span>
+                  )}
                 </div>
-              </div>
-            )}
 
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 5: FACTURACIÓN, PAGOS Y OBSERVACIONES */}
-          {/* ======================================================== */}
-          <div className="pt-5 border-t border-slate-200 space-y-4">
-            <div className="flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-teal-700" />
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-                5. Facturación, Pagos y Observaciones Preanalíticas
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              
-              {/* Método de Pago */}
-              <div className="md:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Método de Pago
-                </label>
-                <select
-                  id="select-payment-method"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs bg-white outline-hidden cursor-pointer font-medium"
-                >
-                  <option value="efectivo">Efectivo</option>
-                  <option value="tarjeta">Tarjeta de Débito / Crédito</option>
-                  <option value="transferencia">Transferencia Bancaria / POS</option>
-                  <option value="seguro">Seguro Médico / Convenio</option>
-                  <option value="por_cobrar">Crédito / Por Cobrar</option>
-                </select>
-              </div>
-
-              {/* Saldo Pendiente de Pago */}
-              <div className="md:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Saldo Pendiente (Opcional si dejó abono)
-                </label>
-                <input
-                  id="input-pending-balance"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={pendingBalance}
-                  onChange={(e) => setPendingBalance(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 outline-hidden bg-white"
-                />
-              </div>
-
-              {/* Promoción Aplicada */}
-              <div className="md:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Promoción o Convenio Aplicado
-                </label>
-                <input
-                  id="input-applied-promo"
-                  type="text"
-                  value={appliedPromo}
-                  onChange={(e) => setAppliedPromo(e.target.value)}
-                  placeholder="Ej. Chequeo Anual -20%"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 outline-hidden bg-white"
-                />
-              </div>
-
-              {/* Observaciones Preanalíticas de la Muestra */}
-              <div className="md:col-span-12">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                  <FileText className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Observaciones Preanalíticas / Indicaciones Especiales</span>
-                </label>
-                <textarea
-                  id="textarea-order-notes"
-                  value={orderNotes}
-                  onChange={(e) => setOrderNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Ej. Paciente con venas delgadas en brazo derecho; toma realizada con mariposa #23. Muestra protegida de la luz..."
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-slate-800 text-xs placeholder-slate-400 outline-hidden bg-white"
-                />
-              </div>
-
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* SECTION 6: RESUMEN DE FLEBOTOMÍA (TUBOS SEGÚN CLSI) */}
-          {/* ======================================================== */}
-          {selectedTests.length > 0 && phlebotomyAudit.tubesGrouped.length > 0 && (
-            <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 text-white rounded-2xl p-4 sm:p-5 border border-teal-500/40 shadow-xl animate-fade-in space-y-3">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-300 flex items-center justify-center border border-teal-500/30">
-                    <PackageCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-white flex items-center gap-2">
-                      Material de Flebotomía a Preparar
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/25 text-teal-300 border border-teal-400/30">
-                        {phlebotomyAudit.totalTubesRequired} {phlebotomyAudit.totalTubesRequired === 1 ? 'tubo/recipiente' : 'tubos/recipientes'}
-                      </span>
-                    </h3>
-                    <p className="text-[11px] text-slate-300">
-                      Identificación visual de tubos para preparar la gradilla antes de la venopunción.
+                {/* Encargado legal (solo menores de edad) */}
+                {validacion.esMenor && (
+                  <div className="md:col-span-12 rounded-lg border border-amber-300 bg-amber-50/60 p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <p className="md:col-span-2 text-xs font-semibold text-amber-900">
+                      Paciente menor de edad: registra a su encargado legal.
                     </p>
-                  </div>
-                </div>
-                {phlebotomyAudit.estimatedBloodVolumeMl > 0 && (
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-teal-300 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 self-start md:self-auto">
-                    <Droplet className="w-4 h-4 text-rose-400 fill-rose-400" />
-                    <span>Vol. sangre estimado: ~{phlebotomyAudit.estimatedBloodVolumeMl} mL</span>
+                    <div>
+                      <label htmlFor="input-guardian-name" className="block text-xs font-semibold text-slate-700 mb-1">Nombre del encargado <span className="text-rose-600">*</span></label>
+                      <input
+                        id="input-guardian-name"
+                        type="text"
+                        value={guardianName}
+                        onChange={(e) => setGuardianName(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-lg border text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 ${
+                          erroresVisibles.encargadoNombre ? 'border-rose-500' : 'border-slate-300'
+                        }`}
+                      />
+                      {erroresVisibles.encargadoNombre && <p className="text-xs text-rose-700 mt-1">{erroresVisibles.encargadoNombre}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="input-guardian-phone" className="block text-xs font-semibold text-slate-700 mb-1">Teléfono del encargado <span className="text-rose-600">*</span></label>
+                      <input
+                        id="input-guardian-phone"
+                        type="tel"
+                        value={guardianPhone}
+                        onChange={(e) => setGuardianPhone(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-lg border text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 ${
+                          erroresVisibles.encargadoTelefono ? 'border-rose-500' : 'border-slate-300'
+                        }`}
+                      />
+                      {erroresVisibles.encargadoTelefono && <p className="text-xs text-rose-700 mt-1">{erroresVisibles.encargadoTelefono}</p>}
+                    </div>
                   </div>
                 )}
               </div>
+            )}
+          </section>
 
-              {/* Tubes Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-                {phlebotomyAudit.tubesGrouped.map((item, idx) => (
-                  <div 
-                    key={idx}
-                    className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-                  >
-                    <span 
-                      className="w-4 h-4 rounded-full flex-shrink-0 shadow-sm ring-2 ring-white/30"
-                      style={{ backgroundColor: item.tube.capHex }}
+          {/* ===== 2. EXÁMENES + RESUMEN ===== */}
+          <section className="space-y-3 pt-5 border-t border-slate-200">
+            <h2 className="text-sm font-bold text-slate-900">2. Exámenes</h2>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              {/* Lista */}
+              <div className="lg:col-span-8 space-y-2">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="input-search-tests"
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Buscar examen, perfil o código"
+                      className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm placeholder-slate-400 outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
                     />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-black text-white truncate">
-                        {item.count}x {getStaffFriendlyCapLabel(item.tube)}
-                      </div>
-                      <div className="text-[10px] text-slate-300 truncate">
-                        {item.tube.additive} • {item.tube.drawOrder}° Orden CLSI
-                      </div>
-                    </div>
                   </div>
-                ))}
+                  <select
+                    id="select-category-filter"
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
+                  >
+                    <option value="all">Todas las categorías</option>
+                    {categoriesList.map((cat, idx) => (
+                      <option key={idx} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden bg-white shrink-0">
+                    {([
+                      { id: 'all', label: 'Todos' },
+                      { id: 'tests', label: 'Pruebas' },
+                      { id: 'profiles', label: 'Perfiles' }
+                    ] as const).map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setFilterMode(m.id)}
+                        className={`px-3 py-2 text-xs font-semibold cursor-pointer border-r border-slate-200 last:border-r-0 ${
+                          filterMode === m.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-[26rem] overflow-y-auto">
+                  {filteredTests.length === 0 && (
+                    <p className="p-4 text-xs text-slate-500 text-center">No hay exámenes que coincidan con la búsqueda.</p>
+                  )}
+                  {filteredTests.map((test) => {
+                    const isSelected = selectedTestIds.includes(test.id);
+                    const testTubes = getItemTubes(test);
+                    return (
+                      <div
+                        key={test.id}
+                        id={`test-item-${test.id}`}
+                        onClick={() => toggleTest(test.id)}
+                        className={`px-3 py-2 flex items-center gap-3 cursor-pointer text-xs ${
+                          isSelected ? 'bg-teal-50' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                          isSelected ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 bg-white'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-semibold text-slate-900">{test.name}</span>
+                          {test.isProfile && (
+                            <span className="ml-2 text-[10px] font-semibold text-slate-600 border border-slate-300 rounded px-1 py-px">
+                              Perfil · {test.parametersCount} p.
+                            </span>
+                          )}
+                          <span className="ml-2 text-[10px] text-slate-400 font-mono">{test.code}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0" title={testTubes.map(tb => tb.shortName).join(', ')}>
+                          {testTubes.map((tb, idx) => (
+                            <span
+                              key={idx}
+                              className="w-3 h-3 rounded-full ring-1 ring-slate-300"
+                              style={{ backgroundColor: tb.capHex }}
+                            />
+                          ))}
+                        </div>
+                        <span className="w-16 text-right font-mono font-semibold text-slate-800 shrink-0">
+                          {test.priceFormatted || `Q${test.price}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Order of draw note */}
-              {phlebotomyAudit.orderOfDrawList.length > 1 && (
-                <div className="mt-2 pt-2 border-t border-white/10 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-300">
-                  <span className="font-bold text-teal-300">Orden de llenado secuencial CLSI:</span>
-                  {phlebotomyAudit.orderOfDrawList.map((drawStep, idx) => (
-                    <span key={idx} className="flex items-center gap-1">
-                      <span className="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white text-[9px]">{drawStep}</span>
-                      {idx < phlebotomyAudit.orderOfDrawList.length - 1 && <span className="text-teal-400">➔</span>}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* SECTION 7: STICKY BOTTOM ACTION BAR */}
-          {/* ======================================================== */}
-          <div className="sticky bottom-4 z-20 mt-8">
-            <div className="bg-slate-900 rounded-2xl shadow-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-800">
-              
-              {/* Left: Summary, Date & Price */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div>
-                  <div className="text-xs text-slate-400 font-semibold tracking-wide flex items-center gap-2">
-                    <span>Exámenes: <strong className="text-white">{selectedTestIds.length}</strong></span>
-                    <span>•</span>
-                    <span>Fecha: <strong className="text-teal-300 font-mono">{getDateLabel(orderDate)} ({orderDate})</strong></span>
-                    <span>•</span>
-                    <span className="capitalize">Prioridad: <strong className={priority === 'stat_panico' ? 'text-rose-400' : priority === 'urgente' ? 'text-amber-400' : 'text-emerald-400'}>{priority.replace('_', ' ')}</strong></span>
-                  </div>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-xs font-bold text-slate-400">Total a liquidar:</span>
-                    <span className="text-2xl sm:text-3xl font-black text-teal-400 tracking-tight font-mono">
-                      Q{totalAmount.toFixed(2)}
-                    </span>
-                    {pendingBalance && parseFloat(pendingBalance) > 0 && (
-                      <span className="text-xs text-amber-400 font-bold ml-2">
-                        (Saldo Pendiente: Q{parseFloat(pendingBalance).toFixed(2)})
-                      </span>
+              {/* Resumen */}
+              <aside className="lg:col-span-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 lg:sticky lg:top-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-slate-800">Seleccionados ({selectedTests.length})</h3>
+                    {selectedTests.length > 0 && (
+                      <button type="button" onClick={() => setSelectedTestIds([])} className="text-[11px] text-rose-600 hover:underline font-semibold cursor-pointer">
+                        Quitar todos
+                      </button>
                     )}
                   </div>
+
+                  {selectedTests.length === 0 ? (
+                    <p className="text-xs text-slate-500">Aún no hay exámenes seleccionados.</p>
+                  ) : (
+                    <ul className="max-h-48 overflow-y-auto divide-y divide-slate-200 text-xs">
+                      {selectedTests.map((t) => (
+                        <li key={t.id} className="py-1.5 flex items-center gap-2">
+                          <span className="flex-1 min-w-0 truncate text-slate-800">{t.name}</span>
+                          <span className="font-mono text-slate-600 shrink-0">{t.priceFormatted || `Q${t.price}`}</span>
+                          <button
+                            type="button"
+                            onClick={() => toggleTest(t.id)}
+                            aria-label={`Quitar ${t.name}`}
+                            className="w-5 h-5 rounded hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer shrink-0"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {phlebotomyAudit.tubesGrouped.length > 0 && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 mb-1.5">
+                        <span className="flex items-center gap-1"><PackageCheck className="w-3.5 h-3.5" />Tubos a preparar</span>
+                        {phlebotomyAudit.estimatedBloodVolumeMl > 0 && <span>~{phlebotomyAudit.estimatedBloodVolumeMl} mL de sangre</span>}
+                      </div>
+                      <ul className="space-y-1">
+                        {phlebotomyAudit.tubesGrouped.map((item, idx) => (
+                          <li key={idx} className="flex items-center gap-2 text-xs text-slate-800">
+                            <span className="w-3 h-3 rounded-full ring-1 ring-slate-300 shrink-0" style={{ backgroundColor: item.tube.capHex }} />
+                            <span>{item.count}× {getStaffFriendlyCapLabel(item.tube)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {phlebotomyAudit.orderOfDrawList.length > 1 && (
+                        <p className="mt-2 text-[10px] text-slate-500">
+                          Orden de llenado: {phlebotomyAudit.orderOfDrawList.join(' → ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-200 flex items-baseline justify-between">
+                    <span className="text-xs font-semibold text-slate-600">Total</span>
+                    <span className="text-xl font-bold font-mono text-slate-900">Q{totalAmount.toFixed(2)}</span>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          {/* ===== DATOS CLÍNICOS (opcional, plegado) ===== */}
+          <section className="pt-5 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={() => setShowClinical(v => !v)}
+              aria-expanded={showClinical}
+              className="w-full flex items-center justify-between gap-3 text-left cursor-pointer"
+            >
+              <span>
+                <span className="text-sm font-bold text-slate-900">Datos clínicos</span>
+                <span className="ml-2 text-xs text-slate-500">opcional · {referringDoctor.trim() ? `Médico: ${referringDoctor.trim()} · ` : ''}{fastingCondition} · {sampleType}</span>
+              </span>
+              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showClinical ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showClinical && (
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-12 gap-3">
+                <div className="md:col-span-4">
+                  <label htmlFor="select-sample-origin" className="block text-xs font-semibold text-slate-700 mb-1">Origen / servicio</label>
+                  <select
+                    id="select-sample-origin"
+                    value={origin}
+                    onChange={(e) => setOrigin(e.target.value as OriginDepartment)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
+                  >
+                    <option value="consulta_externa">Consulta externa / ambulatorio</option>
+                    <option value="emergencias">Emergencias / urgencias</option>
+                    <option value="medicina_interna">Medicina interna / hospitalización</option>
+                    <option value="uci">Cuidados intensivos (UCI)</option>
+                    <option value="pediatria">Pediatría / neonatología</option>
+                    <option value="cardiologia">Cardiología / hemodinamia</option>
+                    <option value="oncologia">Oncología / quimioterapia</option>
+                    <option value="empresa_externa">Salud ocupacional / empresa externa</option>
+                  </select>
+                </div>
+                <div className="md:col-span-4">
+                  <label htmlFor="select-patient-type" className="block text-xs font-semibold text-slate-700 mb-1">Modalidad</label>
+                  <select
+                    id="select-patient-type"
+                    value={patientType}
+                    onChange={(e) => setPatientType(e.target.value as PatientType)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
+                  >
+                    <option value="ambulatorio">Ambulatorio (en sede)</option>
+                    <option value="hospitalizado">Hospitalizado</option>
+                    <option value="urgencia">Urgencia / observación</option>
+                    <option value="domicilio">Toma domiciliar</option>
+                    <option value="empresa">Jornada corporativa</option>
+                  </select>
+                </div>
+                <div className="md:col-span-4">
+                  <label htmlFor="input-bed-room" className="block text-xs font-semibold text-slate-700 mb-1">Cama / habitación / consultorio</label>
+                  <input
+                    id="input-bed-room"
+                    type="text"
+                    value={bedRoom}
+                    onChange={(e) => setBedRoom(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs outline-hidden bg-white"
+                  />
+                </div>
+                <div className="md:col-span-6">
+                  <label htmlFor="input-referring-doctor" className="block text-xs font-semibold text-slate-700 mb-1">Médico solicitante</label>
+                  <input
+                    id="input-referring-doctor"
+                    type="text"
+                    value={referringDoctor}
+                    onChange={(e) => setReferringDoctor(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs outline-hidden bg-white"
+                  />
+                </div>
+                <div className="md:col-span-6">
+                  <label htmlFor="input-clinical-diagnosis" className="block text-xs font-semibold text-slate-700 mb-1">Diagnóstico presuntivo / indicación</label>
+                  <input
+                    id="input-clinical-diagnosis"
+                    type="text"
+                    value={clinicalDiagnosis}
+                    onChange={(e) => setClinicalDiagnosis(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs outline-hidden bg-white"
+                  />
+                </div>
+                <div className="md:col-span-4">
+                  <label htmlFor="select-fasting-condition" className="block text-xs font-semibold text-slate-700 mb-1">Ayuno</label>
+                  <select
+                    id="select-fasting-condition"
+                    value={fastingCondition}
+                    onChange={(e) => setFastingCondition(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
+                  >
+                    <option value="Ayuno 8-12 hrs">Ayuno estricto (8 a 12 horas)</option>
+                    <option value="Ayuno 4-6 hrs">Ayuno corto (4 a 6 horas)</option>
+                    <option value="Sin Ayuno / Postprandial">Sin ayuno / postprandial</option>
+                    <option value="No Requerido">No requerido para estas pruebas</option>
+                  </select>
+                </div>
+                <div className="md:col-span-4">
+                  <label htmlFor="select-sample-type" className="block text-xs font-semibold text-slate-700 mb-1">Tipo de muestra</label>
+                  <select
+                    id="select-sample-type"
+                    value={sampleType}
+                    onChange={(e) => setSampleType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
+                  >
+                    <option value="Sangre Venosa">Sangre venosa</option>
+                    <option value="Sangre Arterial">Sangre arterial (gasometría)</option>
+                    <option value="Orina Fracción Media">Orina fracción media (EGO)</option>
+                    <option value="Orina 24 Horas">Orina de 24 horas</option>
+                    <option value="Materia Fecal">Materia fecal</option>
+                    <option value="Hisopado Nasofaríngeo">Hisopado nasofaríngeo / PCR</option>
+                    <option value="Exudado Faríngeo">Exudado faríngeo / cultivo</option>
+                    <option value="Múltiple según catálogo">Múltiple según exámenes</option>
+                  </select>
+                </div>
+                <div className="md:col-span-4">
+                  <label htmlFor="select-phlebotomist" className="block text-xs font-semibold text-slate-700 mb-1">Toma la muestra</label>
+                  <select
+                    id="select-phlebotomist"
+                    value={phlebotomistName}
+                    onChange={(e) => setPhlebotomistName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
+                  >
+                    {Array.from(new Set([
+                      ...(currentStaffUser?.fullName ? [currentStaffUser.fullName] : []),
+                      ...staffUsers.map(u => u.fullName)
+                    ])).map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                    <option value="Flebotomista Móvil Domicilio">Flebotomista móvil (domicilio)</option>
+                  </select>
                 </div>
               </div>
+            )}
+          </section>
 
-              {/* Right: Submit Button */}
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <button
-                  id="btn-submit-order"
-                  type="submit"
-                  title="Revisar y Liquidar Orden (Ctrl+S)"
-                  className="w-full sm:w-auto bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-black text-sm sm:text-base px-7 py-3.5 rounded-xl shadow-lg shadow-teal-600/30 transition-all cursor-pointer flex items-center justify-center gap-2.5 hover:scale-[1.02]"
-                >
-                  <Receipt className="w-5 h-5 stroke-[2.5]" />
-                  <span>Revisar y Liquidar Orden</span>
-                  <span className="hidden sm:inline-block text-[11px] font-mono font-bold bg-teal-900/60 text-teal-200 px-2 py-0.5 rounded-md border border-teal-400/30">
-                    Ctrl+S
-                  </span>
-                </button>
+          {/* ===== PAGO Y OBSERVACIONES (plegado) ===== */}
+          <section className="pt-5 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={() => setShowPayment(v => !v)}
+              aria-expanded={showPayment}
+              className="w-full flex items-center justify-between gap-3 text-left cursor-pointer"
+            >
+              <span>
+                <span className="text-sm font-bold text-slate-900">Pago y observaciones</span>
+                <span className="ml-2 text-xs text-slate-500">
+                  {{ efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', seguro: 'Seguro / convenio', por_cobrar: 'Por cobrar' }[paymentMethod]}
+                  {parseFloat(pendingBalance) > 0 ? ` · saldo pendiente Q${parseFloat(pendingBalance).toFixed(2)}` : ''}
+                  {appliedPromo.trim() ? ` · ${appliedPromo.trim()}` : ''}
+                </span>
+              </span>
+              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showPayment ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showPayment && (
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-12 gap-3">
+                <div className="md:col-span-4">
+                  <label htmlFor="select-payment-method" className="block text-xs font-semibold text-slate-700 mb-1">Método de pago</label>
+                  <select
+                    id="select-payment-method"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white outline-hidden cursor-pointer"
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta">Tarjeta de débito / crédito</option>
+                    <option value="transferencia">Transferencia bancaria / POS</option>
+                    <option value="seguro">Seguro médico / convenio</option>
+                    <option value="por_cobrar">Crédito / por cobrar</option>
+                  </select>
+                </div>
+                <div className="md:col-span-4">
+                  <label htmlFor="input-pending-balance" className="block text-xs font-semibold text-slate-700 mb-1">Saldo pendiente (si dejó abono)</label>
+                  <input
+                    id="input-pending-balance"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={pendingBalance}
+                    onChange={(e) => setPendingBalance(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs outline-hidden bg-white"
+                  />
+                </div>
+                <div className="md:col-span-4">
+                  <label htmlFor="input-applied-promo" className="block text-xs font-semibold text-slate-700 mb-1">Promoción o convenio</label>
+                  <input
+                    id="input-applied-promo"
+                    type="text"
+                    value={appliedPromo}
+                    onChange={(e) => setAppliedPromo(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs outline-hidden bg-white"
+                  />
+                </div>
+                <div className="md:col-span-12">
+                  <label htmlFor="textarea-order-notes" className="block text-xs font-semibold text-slate-700 mb-1">Observaciones de la muestra</label>
+                  <textarea
+                    id="textarea-order-notes"
+                    value={orderNotes}
+                    onChange={(e) => setOrderNotes(e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs outline-hidden bg-white"
+                  />
+                </div>
               </div>
+            )}
+          </section>
 
+          {/* ===== BARRA INFERIOR ===== */}
+          <div className="sticky bottom-3 z-20">
+            <div className="bg-slate-900 rounded-xl shadow-xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>{selectedTestIds.length} {selectedTestIds.length === 1 ? 'examen' : 'exámenes'}</span>
+                <span>{getDateLabel(orderDate)} {orderTime}</span>
+                {priority !== 'rutina' && (
+                  <span className={priority === 'stat_panico' ? 'text-rose-300 font-semibold' : 'text-amber-300 font-semibold'}>
+                    {priority === 'stat_panico' ? 'STAT' : 'Urgente'}
+                  </span>
+                )}
+                <span className="text-white font-bold font-mono text-base">Q{totalAmount.toFixed(2)}</span>
+              </div>
+              <button
+                id="btn-submit-order"
+                type="submit"
+                title="Revisar y liquidar (Ctrl+S)"
+                className="w-full sm:w-auto bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm px-5 py-2.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Receipt className="w-4 h-4" />
+                <span>Revisar y liquidar</span>
+              </button>
             </div>
           </div>
 
@@ -1711,14 +1574,14 @@ export const NewOrderRegistration: React.FC = () => {
                     <strong className="text-sm font-black text-slate-900">{patientName}</strong>
                   </div>
                   <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-700">
-                    DPI: {nationalId.trim() || 'Temporal'}
+                    {nationalId.trim() ? `DPI: ${nationalId.trim()}` : 'Sin documento'}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-600 text-[11px] pt-1">
                   <div>
                     <span className="text-slate-400 block">Edad / Sexo:</span>
-                    <strong>{age ? `${age} años` : 'No esp.'} • {gender}</strong>
+                    <strong>{age ? `${age} años${birthDateEstimated ? ' (aprox.)' : ''}` : 'No esp.'} • {gender === 'M' ? 'Masculino' : gender === 'F' ? 'Femenino' : gender}</strong>
                   </div>
                   <div>
                     <span className="text-slate-400 block">Prioridad:</span>
@@ -2014,7 +1877,7 @@ export const NewOrderRegistration: React.FC = () => {
               
               <div className="flex justify-between items-center pb-2 border-b border-slate-200">
                 <span className="font-bold text-slate-500 uppercase">Paciente:</span>
-                <span className="font-bold text-slate-900">{createdOrderModal.patientName} (DPI: {createdOrderModal.nationalId})</span>
+                <span className="font-bold text-slate-900">{createdOrderModal.patientName}{createdOrderModal.nationalId ? ` (DPI: ${createdOrderModal.nationalId})` : ''}</span>
               </div>
 
               <div className="flex justify-between items-center pb-2 border-b border-slate-200">
@@ -2072,7 +1935,7 @@ export const NewOrderRegistration: React.FC = () => {
                   <span className="font-bold uppercase text-[10px]">Rangos Pre-seleccionados:</span>
                 </div>
                 <span className="text-[11px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                  {createdOrderModal.patientAge || 35} años • {createdOrderModal.patientGender || 'F'} (Estándar CLSI C28-A3)
+                  {createdOrderModal.patientAge} años • {createdOrderModal.patientGender} (Estándar CLSI C28-A3)
                 </span>
               </div>
             </div>

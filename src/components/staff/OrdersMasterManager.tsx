@@ -726,7 +726,8 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
         'Mantener hábitos saludables y control médico periódico.',
         'Conservar este informe para su próxima consulta médica.'
       ],
-      qrVerificationCode: `https://vaclinic.laboratorio.gt/valida?ord=${ord.orderNumber.replace('#', '')}&dni=${ord.nationalId}`,
+      // El código de verificación real lo emite el servidor al publicar el informe (sello verificable).
+      qrVerificationCode: '',
       signature: {
         bioanalystName: 'Licda. Elena Morales Cruz',
         bioanalystSpecialty: 'Licenciada en Bioanálisis Clínico & Microbiología',

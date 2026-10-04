@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { edadDesdeFecha, validarDatosPaciente } from '../../services/validacionPaciente';
 import { useClinic } from '../../context/ClinicContext';
 import { Patient } from '../../types';
 import { PatientHistoryPdfModal } from '../patient/PatientHistoryPdfModal';
@@ -76,13 +77,15 @@ export const PatientManager: React.FC = () => {
   // New Patient Form State
   const [fullName, setFullName] = useState('');
   const [nationalId, setNationalId] = useState('');
-  const [birthDate, setBirthDate] = useState('1990-01-01');
-  const [gender, setGender] = useState<'M' | 'F' | 'Otro'>('M');
-  const [age, setAge] = useState<number>(36);
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState<'' | 'M' | 'F' | 'Otro'>('');
+  const [age, setAge] = useState<string>('');
+  const [guardianName, setGuardianName] = useState('');
+  const [guardianPhone, setGuardianPhone] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [bloodType, setBloodType] = useState('O+');
-  const [allergies, setAllergies] = useState('Ninguna');
+  const [bloodType, setBloodType] = useState('');
+  const [allergies, setAllergies] = useState('');
   const [address, setAddress] = useState('');
   const [customRegDate, setCustomRegDate] = useState('2026-08-31');
 
@@ -269,72 +272,73 @@ export const PatientManager: React.FC = () => {
 
   const yearsList = [2026, 2025, 2024, 2023];
 
-  const calculateAge = (dateStr: string) => {
-    try {
-      const birth = new Date(dateStr);
-      const diff = Date.now() - birth.getTime();
-      const ageDate = new Date(diff);
-      return Math.abs(ageDate.getUTCFullYear() - 1970);
-    } catch {
-      return 30;
-    }
-  };
-
   const handleBirthDateChange = (val: string) => {
     setBirthDate(val);
-    setAge(calculateAge(val));
+    const e = edadDesdeFecha(val);
+    setAge(e !== null ? String(e) : '');
   };
 
   const handleCreatePatient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim()) {
-      showNotification('Ingresa el nombre del paciente', 'warning');
+    const v = validarDatosPaciente({
+      nombre: fullName,
+      sexo: gender,
+      fechaNacimiento: birthDate,
+      telefono: phone,
+      correo: email,
+      encargadoNombre: guardianName,
+      encargadoTelefono: guardianPhone
+    });
+    if (!v.valido) {
+      showNotification(Object.values(v.errores)[0] as string, 'warning');
       return;
     }
-
-    const nextSeq = patients.length + 1;
-    const autoCode = `VAC-${String(nextSeq).padStart(6, '0')}`;
 
     const allergyList = allergies
       .split(',')
       .map((a) => a.trim())
       .filter((a) => a.length > 0);
 
-    // `addPatient` ahora es asíncrono: intenta crear el paciente de verdad
-    // en el backend (POST /api/pacientes) antes de devolver el objeto, así
-    // que el `id` que se usa de aquí en adelante (para el modal de
-    // WhatsApp, etc.) es el id real de la base de datos, no uno inventado
-    // en el navegador. Ver el comentario junto a `addPatient` en
-    // ClinicContext.tsx para el detalle del fallback sin conexión.
-    const newPat = await addPatient({
-      fullName: fullName.toUpperCase(),
-      patientCode: autoCode,
-      nationalId: nationalId || '',
-      birthDate,
-      gender,
-      age: Number(age) || calculateAge(birthDate),
-      phone: phone || 'No registrado',
-      email: email || '',
-      bloodType,
-      allergies: allergyList.length > 0 ? allergyList : ['Ninguna'],
-      address: address || 'Barrio El Centro',
-      emergencyContact: {
-        name: 'Contacto Familiar',
-        phone: phone || 'No registrado',
-        relation: 'Familiar'
-      }
-    });
+    // `addPatient` crea el paciente de verdad en el servidor y devuelve el id
+    // real. Si el servidor rechaza los datos, lanza el error y no se guarda
+    // nada en local.
+    let newPat: Patient;
+    try {
+      newPat = await addPatient({
+        fullName: fullName.trim().toUpperCase(),
+        nationalId: nationalId.trim(),
+        birthDate,
+        gender: gender as 'M' | 'F' | 'Otro',
+        age: v.edad ?? 0,
+        phone: phone.trim(),
+        email: email.trim(),
+        bloodType,
+        allergies: allergyList,
+        address: '',
+        emergencyContact: v.esMenor
+          ? { name: guardianName.trim(), phone: guardianPhone.trim(), relation: 'Encargado legal' }
+          : { name: '', phone: '', relation: '' }
+      });
+    } catch (err) {
+      showNotification(err instanceof Error ? err.message : 'No se pudo registrar al paciente.', 'error');
+      return;
+    }
 
-    // Reset Form
     setFullName('');
     setNationalId('');
     setPhone('');
     setEmail('');
+    setBirthDate('');
+    setAge('');
+    setGender('');
+    setGuardianName('');
+    setGuardianPhone('');
+    setAllergies('');
+    setBloodType('');
     setShowAddModal(false);
 
-    // Open WhatsApp Welcome modal for the new patient
     setPatientForWhatsApp(newPat);
-    showNotification(`¡Paciente ${newPat.fullName} registrado con éxito!`, 'success');
+    showNotification(`Paciente ${newPat.fullName} registrado.`, 'success');
   };
 
   const handleCopyCode = (code: string) => {
@@ -1008,9 +1012,10 @@ export const PatientManager: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Fecha de Nacimiento</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Fecha de Nacimiento *</label>
                   <input
                     type="date"
+                    max={new Date().toISOString().slice(0, 10)}
                     value={birthDate}
                     onChange={(e) => handleBirthDateChange(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none"
@@ -1018,22 +1023,23 @@ export const PatientManager: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Edad (Años)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Edad (calculada)</label>
                   <input
-                    type="number"
+                    type="text"
+                    readOnly
                     value={age}
-                    onChange={(e) => setAge(Number(e.target.value))}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Género</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Sexo *</label>
                   <select
                     value={gender}
-                    onChange={(e) => setGender(e.target.value as any)}
+                    onChange={(e) => setGender(e.target.value as '' | 'M' | 'F' | 'Otro')}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none"
                   >
+                    <option value="">Elegir…</option>
                     <option value="M">Masculino</option>
                     <option value="F">Femenino</option>
                     <option value="Otro">Otro</option>
@@ -1041,7 +1047,7 @@ export const PatientManager: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Teléfono / WhatsApp</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Teléfono / WhatsApp (o correo)</label>
                   <input
                     type="text"
                     value={phone}
@@ -1058,6 +1064,7 @@ export const PatientManager: React.FC = () => {
                     onChange={(e) => setBloodType(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none"
                   >
+                    <option value="">No indicado</option>
                     <option value="O+">O Positivo (O+)</option>
                     <option value="O-">O Negativo (O-)</option>
                     <option value="A+">A Positivo (A+)</option>
@@ -1070,7 +1077,7 @@ export const PatientManager: React.FC = () => {
                 </div>
 
                 <div className="col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Correo Electrónico (Opcional)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Correo Electrónico (o teléfono)</label>
                   <input
                     type="email"
                     value={email}
@@ -1086,10 +1093,33 @@ export const PatientManager: React.FC = () => {
                     type="text"
                     value={allergies}
                     onChange={(e) => setAllergies(e.target.value)}
-                    placeholder="ej. Penicilina, Ninguna"
+                    placeholder="ej. Penicilina (vacío si no se conocen)"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none"
                   />
                 </div>
+
+                {birthDate && (edadDesdeFecha(birthDate) ?? 99) < 18 && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Encargado legal (nombre) *</label>
+                      <input
+                        type="text"
+                        value={guardianName}
+                        onChange={(e) => setGuardianName(e.target.value)}
+                        className="w-full bg-amber-50 border border-amber-300 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Encargado legal (teléfono) *</label>
+                      <input
+                        type="tel"
+                        value={guardianPhone}
+                        onChange={(e) => setGuardianPhone(e.target.value)}
+                        className="w-full bg-amber-50 border border-amber-300 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="border-t border-slate-100 pt-4 flex items-center justify-end gap-2">

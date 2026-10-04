@@ -1714,15 +1714,24 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // /api/pacientes (ver src/services/pacientesApiService.ts).
   const patientDataToApiInput = (
     patientData: Partial<Omit<Patient, 'id' | 'createdAt' | 'accessCode' | 'pinCode'>>
-  ): Partial<CrearPacienteInput> => ({
-    nombreCompleto: patientData.fullName,
-    dni: patientData.nationalId || undefined,
-    fechaNacimiento: patientData.birthDate,
-    genero: patientData.gender,
-    telefonoWhatsApp: patientData.phone,
-    correo: patientData.email || undefined,
-    direccion: patientData.address || undefined
-  });
+  ): Partial<CrearPacienteInput> => {
+    const encargado = patientData.emergencyContact;
+    const esEncargadoLegal = encargado?.relation === 'Encargado legal';
+    return {
+      nombreCompleto: patientData.fullName,
+      dni: patientData.nationalId || undefined,
+      fechaNacimiento: patientData.birthDate,
+      fechaNacimientoEstimada: patientData.birthDateEstimated,
+      genero: patientData.gender,
+      telefonoWhatsApp: patientData.phone || undefined,
+      correo: patientData.email || undefined,
+      direccion: patientData.address || undefined,
+      // La condición de menor la decide el servidor por la fecha de
+      // nacimiento; aquí solo se envía el encargado legal si lo hay.
+      nombreEncargadoLegal: esEncargadoLegal ? encargado?.name || undefined : undefined,
+      telefonoEncargadoLegal: esEncargadoLegal ? encargado?.phone || undefined : undefined
+    };
+  };
 
   /**
    * Registro de paciente (Etapa "sistema real"). ANTES: solo escribía a
@@ -1755,6 +1764,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         createBackupSnapshot('save_patient', `Nuevo paciente: ${newPatient.fullName} (${newPatient.patientCode})`);
         return newPatient;
       } catch (err) {
+        // El servidor rechazó los DATOS (falta sexo/contacto, menor sin
+        // encargado, documento duplicado...): guardarlos igual en local
+        // dejaría un paciente "fantasma" que la base real nunca aceptó.
+        // Se devuelve el error a la pantalla para que lo corrija quien registra.
+        if (err instanceof PacientesApiError && err.esRechazoDeDatos) throw err;
         const mensaje = err instanceof PacientesApiError ? err.message : 'Error de red desconocido.';
         console.error('[ClinicContext] No se pudo crear el paciente en el servidor real:', err);
         showNotification(`No se pudo guardar el paciente en el servidor (${mensaje}). Se guardó solo localmente.`, 'warning');

@@ -13,27 +13,101 @@ pacientesRouter.use(requireStaffAuth);
 // ORDEN (tabla `codigo_consulta`, ver server/routes/ordenes.ts), tal como
 // describe el caso de uso "consultar resultado mediante código único" del
 // documento de origen — no hay un segundo factor de PIN en ese diseño.
-pacientesRouter.post('/', requirePermission('admision_pacientes'), asyncHandler(async (req, res) => {
-  const { nombreCompleto, dni, fechaNacimiento, genero, telefonoWhatsApp, correo, direccion,
-    esMenorEdad, nombreEncargadoLegal, telefonoEncargadoLegal } = req.body || {};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const GENEROS_VALIDOS = ['M', 'F', 'Otro'];
 
-  if (!nombreCompleto || !fechaNacimiento || !telefonoWhatsApp) {
-    return res.status(400).json({ error: 'nombreCompleto, fechaNacimiento y telefonoWhatsApp son obligatorios.' });
+/** Texto recortado; cadena vacía o no-texto -> null (nunca se guarda "" ni se inventa un valor). */
+function textoOpcional(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  return t === '' ? null : t;
+}
+
+/** Años cumplidos a `hoy`; null si la fecha no es válida, es futura o implica más de 120 años. */
+export function edadEnAnios(fechaISO: unknown, hoy: Date = new Date()): number | null {
+  if (typeof fechaISO !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(fechaISO)) return null;
+  const [y, m, d] = fechaISO.slice(0, 10).split('-').map(Number);
+  const nac = new Date(Date.UTC(y, m - 1, d));
+  if (Number.isNaN(nac.getTime()) || nac.getUTCMonth() !== m - 1) return null; // p. ej. 2026-02-31
+  let edad = hoy.getUTCFullYear() - y;
+  if (hoy.getUTCMonth() + 1 < m || (hoy.getUTCMonth() + 1 === m && hoy.getUTCDate() < d)) edad--;
+  if (nac.getTime() > hoy.getTime() || edad > 120) return null;
+  return edad;
+}
+
+/** Traduce los CHECK de la base a un mensaje que el personal entienda (en vez del texto crudo de Postgres). */
+function mensajeDeRestriccion(err: any): string {
+  const detalle = `${err?.constraint || ''} ${err?.message || ''}`;
+  if (detalle.includes('chk_paciente_contacto')) return 'Registra al menos un medio de contacto: teléfono o correo.';
+  if (detalle.includes('chk_menor_requiere_encargado')) return 'Un paciente menor de edad requiere nombre y teléfono del encargado legal.';
+  return err?.message || 'No se pudo guardar el paciente.';
+}
+
+pacientesRouter.post('/', requirePermission('admision_pacientes'), asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  const nombreCompleto = textoOpcional(body.nombreCompleto);
+  const dni = textoOpcional(body.dni);
+  const telefono = textoOpcional(body.telefonoWhatsApp);
+  const correo = textoOpcional(body.correo);
+  const direccion = textoOpcional(body.direccion);
+  const nombreEncargado = textoOpcional(body.nombreEncargadoLegal);
+  const telefonoEncargado = textoOpcional(body.telefonoEncargadoLegal);
+  const { genero, fechaNacimiento } = body;
+
+  if (!nombreCompleto) return res.status(400).json({ error: 'El nombre completo es obligatorio.' });
+  // Sexo y edad definen los rangos de referencia con los que se interpretan
+  // sus resultados: no se aceptan vacíos ni valores por defecto.
+  if (!GENEROS_VALIDOS.includes(genero)) {
+    return res.status(400).json({ error: 'Indica el sexo del paciente (M, F u Otro): define los rangos de referencia.' });
+  }
+  const edad = edadEnAnios(fechaNacimiento);
+  if (edad === null) {
+    return res.status(400).json({ error: 'La fecha de nacimiento no es válida (no puede ser futura ni de más de 120 años).' });
+  }
+  if (!telefono && !correo) {
+    return res.status(400).json({ error: 'Registra al menos un medio de contacto: teléfono o correo.' });
+  }
+  if (correo && !EMAIL_RE.test(correo)) {
+    return res.status(400).json({ error: 'El correo no tiene un formato válido.' });
+  }
+  // La condición de menor la decide el SERVIDOR con la fecha de nacimiento,
+  // no un indicador que mande el cliente (que antes nunca se enviaba y dejaba
+  // a los niños registrados como adultos y sin encargado).
+  const esMenor = edad < 18;
+  if (esMenor && (!nombreEncargado || !telefonoEncargado)) {
+    return res.status(400).json({
+      error: 'El paciente es menor de edad: registra el nombre y el teléfono de su encargado legal.',
+      code: 'MENOR_REQUIERE_ENCARGADO'
+    });
   }
 
   try {
+    if (dni) {
+      const { rows: existentes } = await pool.query(
+        'SELECT id_paciente, nombre_completo FROM paciente WHERE lower(dni) = lower($1) LIMIT 1',
+        [dni]
+      );
+      if (existentes.length > 0) {
+        return res.status(409).json({
+          error: `Ya existe un paciente con ese documento: ${existentes[0].nombre_completo}.`,
+          code: 'DNI_DUPLICADO',
+          paciente: existentes[0]
+        });
+      }
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO paciente (nombre_completo, dni, fecha_nacimiento, genero, telefono_whatsapp,
-                              correo, direccion, es_menor_edad, nombre_encargado_legal, telefono_encargado_legal)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                              correo, direccion, es_menor_edad, nombre_encargado_legal, telefono_encargado_legal,
+                              fecha_nacimiento_estimada)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
-      [nombreCompleto, dni || null, fechaNacimiento, genero || null, telefonoWhatsApp,
-        correo || null, direccion || null, !!esMenorEdad, nombreEncargadoLegal || null, telefonoEncargadoLegal || null]
+      [nombreCompleto, dni, fechaNacimiento, genero, telefono,
+        correo, direccion, esMenor, nombreEncargado, telefonoEncargado, body.fechaNacimientoEstimada === true]
     );
     return res.status(201).json(rows[0]);
   } catch (err: any) {
-    // chk_menor_requiere_encargado u otras reglas de negocio de la migración 0002
-    return res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: mensajeDeRestriccion(err) });
   }
 }));
 
@@ -85,13 +159,17 @@ const CAMPOS_PACIENTE_PATCH: Record<string, string> = {
   es_menor_edad: 'esMenorEdad',
   nombre_encargado_legal: 'nombreEncargadoLegal',
   telefono_encargado_legal: 'telefonoEncargadoLegal',
+  fecha_nacimiento_estimada: 'fechaNacimientoEstimada',
 };
 
 pacientesRouter.patch('/:id', requirePermission('admision_pacientes'), asyncHandler(async (req, res) => {
   const idPaciente = Number(req.params.id);
   const campos: Record<string, any> = {};
   for (const [columna, clave] of Object.entries(CAMPOS_PACIENTE_PATCH)) {
-    if (req.body?.[clave] !== undefined) campos[columna] = req.body[clave];
+    if (req.body?.[clave] === undefined) continue;
+    // Texto vacío = "sin dato" (NULL), nunca una cadena vacía ni un valor inventado.
+    const valor = req.body[clave];
+    campos[columna] = typeof valor === 'string' ? textoOpcional(valor) : valor;
   }
   if (Object.keys(campos).length === 0) {
     return res.status(400).json({ error: 'No se envió ningún campo válido para actualizar.' });
@@ -105,6 +183,6 @@ pacientesRouter.patch('/:id', requirePermission('admision_pacientes'), asyncHand
     if (rows.length === 0) return res.status(404).json({ error: 'Paciente no encontrado.' });
     return res.json(rows[0]);
   } catch (err: any) {
-    return res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: mensajeDeRestriccion(err) });
   }
 }));
