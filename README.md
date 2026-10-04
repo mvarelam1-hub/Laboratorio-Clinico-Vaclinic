@@ -22,6 +22,8 @@ Aplicar las migraciones contra una base PostgreSQL (con `DATABASE_URL` en el ent
 npm run migrate          # aplica en orden solo las migraciones de db/migrations/ que falten
 npm run migrate:status   # muestra cuáles están aplicadas y cuáles pendientes, sin cambiar nada
 npm run migrate -- --seed   # SOLO desarrollo: además carga 0099 (datos ficticios); bloqueado si NODE_ENV=production
+npm run backup            # respaldo cifrado de la base real (ver docs/BACKUPS.md)
+npm run backup:verify     # prueba REAL de restauración del último respaldo en una base vacía
 ```
 
 El runner (`scripts/migrate.mjs`) registra cada migración aplicada en la tabla

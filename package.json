@@ -9,6 +9,8 @@
     "start": "node scripts/migrate.mjs && node dist/server.cjs",
     "migrate": "node scripts/migrate.mjs",
     "migrate:status": "node scripts/migrate.mjs --status",
+    "backup": "node scripts/backup-db.mjs",
+    "backup:verify": "node scripts/restore-verify.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",

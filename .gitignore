@@ -9,3 +9,6 @@ coverage/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Respaldos de la base de datos (docs/BACKUPS.md): nunca al repositorio
+backups/
