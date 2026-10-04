@@ -3,7 +3,9 @@ import {
   getAgeCategory,
   parseReferenceRange,
   evaluateParameterStatus,
-  generateDemographicParametersForTests
+  generateDemographicParametersForTests,
+  evaluateParameterDetailed,
+  resolveAgeSexReferenceRange
 } from './referenceRangeEvaluator';
 
 /**
@@ -76,15 +78,15 @@ describe('evaluateParameterStatus', () => {
     // min=70; 0.7*70=49 -> por debajo de 49 es "critical"; entre 49 y 70 es "low"
     expect(evaluateParameterStatus(65, '70-100')).toBe('low');
   });
-  it('valor límite: un valor por debajo del 70% del mínimo es "critical"', () => {
-    expect(evaluateParameterStatus(48, '70-100')).toBe('critical');
+  it('un valor muy por debajo del mínimo sigue siendo "low" (crítico solo por valor de pánico)', () => {
+    expect(evaluateParameterStatus(48, '70-100')).toBe('low');
   });
   it('un valor apenas por encima del máximo es "high", no "critical"', () => {
     // max=100; 1.5*100=150 -> por encima de 150 es "critical"; entre 100 y 150 es "high"
     expect(evaluateParameterStatus(120, '70-100')).toBe('high');
   });
-  it('valor límite: un valor por encima del 150% del máximo es "critical"', () => {
-    expect(evaluateParameterStatus(151, '70-100')).toBe('critical');
+  it('un valor muy por encima del máximo sigue siendo "high" (crítico solo por valor de pánico)', () => {
+    expect(evaluateParameterStatus(151, '70-100')).toBe('high');
   });
   it('un valor cualitativo "Positivo" contra un rango "Negativo" es "high"', () => {
     expect(evaluateParameterStatus('Positivo', 'Negativo')).toBe('high');
@@ -154,5 +156,46 @@ describe('generateDemographicParametersForTests (vínculo con examCode)', () => 
     const resto = params.filter(p => p.name !== 'Glucosa en Ayunas');
     expect(glucosa.every(p => p.examCode === 'GLU-001')).toBe(true);
     expect(resto.every(p => p.examCode === undefined)).toBe(true);
+  });
+});
+
+describe('Severidad y borradores (Fase 11/14)', () => {
+  it('LDL 142 con referencia < 100 es elevado, NO crítico', () => {
+    const r = evaluateParameterDetailed('142', '< 100 mg/dL', undefined, undefined, undefined, { patientAge: 40, patientGender: 'M', parameterName: 'Colesterol LDL' });
+    expect(r.isOutOfRange).toBe(true);
+    expect(r.isCritical).toBe(false);
+    expect(r.status).toBe('high');
+  });
+
+  it('una desviación grande sin valor de pánico definido sigue siendo solo elevada', () => {
+    const r = evaluateParameterDetailed('90', '10 - 40 U/L', 10, 40);
+    expect(r.isCritical).toBe(false);
+    expect(r.status).toBe('high');
+  });
+
+  it('un valor de pánico definido (glucosa 30 mg/dL) sí es crítico', () => {
+    const r = evaluateParameterDetailed('30', '70 - 100 mg/dL', undefined, undefined, undefined, { patientAge: 35, patientGender: 'M', parameterName: 'Glucosa en Ayunas' });
+    expect(r.isCritical).toBe(true);
+  });
+
+  it('lo marcado como crítico por el personal se respeta', () => {
+    const r = evaluateParameterDetailed('120', '70 - 100 mg/dL', 70, 100, 'critical');
+    expect(r.isCritical).toBe(true);
+  });
+
+  it('"Colesterol LDL" y "Colesterol VLDL" usan su propio rango, no el del colesterol total', () => {
+    const ldl = resolveAgeSexReferenceRange('Colesterol LDL', '', 40, 'M', undefined, true);
+    const vldl = resolveAgeSexReferenceRange('Colesterol VLDL', '', 40, 'M', undefined, true);
+    const total = resolveAgeSexReferenceRange('Colesterol Total', '', 40, 'M', undefined, true);
+    expect(ldl.max).toBe(100);
+    expect(vldl.max).toBe(30);
+    expect(total.max).toBe(200);
+  });
+
+  it('el borrador generado desde una orden NO trae resultados de ejemplo precargados', () => {
+    const tests = ['Hemograma Completo', 'Perfil Lipídico', 'Creatinina', 'Glucosa en Ayunas', 'Examen General de Orina', 'Hormona X'];
+    const params = generateDemographicParametersForTests(tests, 40, 'F');
+    expect(params.length).toBeGreaterThan(5);
+    expect(params.every(p => p.value === '')).toBe(true);
   });
 });

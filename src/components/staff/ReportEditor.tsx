@@ -22,7 +22,6 @@ import { OzelleCbcReportView } from '../laboratory/OzelleCbcReportView';
 import { 
   COMMON_LAB_UNITS, 
   COMMON_REFERENCE_PRESETS, 
-  evaluateParameterStatus,
   evaluateParameterDetailed
 } from '../../utils/referenceRangeEvaluator';
 import { 
@@ -88,7 +87,7 @@ export const ReportEditor: React.FC = () => {
   } = useClinic();
 
   // Form states
-  const [patientId, setPatientId] = useState<string>(activeReportToEdit?.patientId || patients[0]?.id || '');
+  const [patientId, setPatientId] = useState<string>(activeReportToEdit?.patientId || '');
   const [category, setCategory] = useState<ReportCategory>(activeReportToEdit?.category || 'bioquimica');
   const [title, setTitle] = useState<string>(activeReportToEdit?.title || 'Perfil Bioquímico General');
   const [sampleDate, setSampleDate] = useState<string>(
@@ -99,20 +98,14 @@ export const ReportEditor: React.FC = () => {
   );
   const [status, setStatus] = useState<ReportStatus>(activeReportToEdit?.status || 'borrador');
   const [parameters, setParameters] = useState<ReportParameter[]>(
-    activeReportToEdit?.parameters || [
-      { id: 'p-1', name: 'Glucosa en Ayunas', value: '95', unit: 'mg/dL', referenceRange: '70 - 100 mg/dL', status: 'normal' },
-      { id: 'p-2', name: 'Colesterol Total', value: '210', unit: 'mg/dL', referenceRange: '< 200 mg/dL', status: 'high' },
-      { id: 'p-3', name: 'Triglicéridos', value: '160', unit: 'mg/dL', referenceRange: '< 150 mg/dL', status: 'high' }
-    ]
+    // Un informe nuevo empieza SIN filas ni valores de ejemplo: los resultados los ingresa el personal.
+    activeReportToEdit?.parameters || []
   );
   const [clinicalFindings, setClinicalFindings] = useState<string>(activeReportToEdit?.clinicalFindings || '');
   const [doctorConclusions, setDoctorConclusions] = useState<string>(activeReportToEdit?.doctorConclusions || '');
   const [patientExplanation, setPatientExplanation] = useState<string>(activeReportToEdit?.patientExplanation || '');
   const [recommendations, setRecommendations] = useState<string[]>(
-    activeReportToEdit?.recommendations || [
-      'Mantener hidratación adecuada.',
-      'Seguimiento médico en consulta externa.'
-    ]
+    activeReportToEdit?.recommendations || []
   );
   const [urgentAlert, setUrgentAlert] = useState<boolean>(activeReportToEdit?.urgentAlert || false);
 
@@ -184,7 +177,8 @@ export const ReportEditor: React.FC = () => {
   const [pendingSaveTargetStatus, setPendingSaveTargetStatus] = useState<ReportStatus>('borrador');
 
   // Selected patient details
-  const currentPatient = patients.find(p => p.id === patientId) || patients[0];
+  // Sin paciente elegido NO se asume ninguno (antes caía en el primero de la lista).
+  const currentPatient = patients.find(p => p.id === patientId);
 
   // List of parameters with values that deviate from reference range or are marked critical
   const outOfRangeParameters = useMemo(() => {
@@ -244,7 +238,7 @@ export const ReportEditor: React.FC = () => {
     return {
       id: activeReportToEdit?.id || `rep-${Date.now()}`,
       reportNumber: activeReportToEdit?.reportNumber || `LAB-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      patientId: currentPatient?.id || 'pat-unknown',
+      patientId: currentPatient?.id || '',
       patientName: currentPatient?.fullName || 'Paciente',
       patientNationalId: currentPatient?.nationalId || 'N/D',
       patientAge: currentPatient?.age || 35,
@@ -310,6 +304,16 @@ export const ReportEditor: React.FC = () => {
     setParameters([...parameters, newParam]);
   };
 
+  // Estado automático de un parámetro: elevado / bajo / crítico (solo por valor de pánico).
+  const autoStatus = (p: ReportParameter): ParameterStatus => {
+    if (!String(p.value ?? '').trim()) return 'normal';
+    return evaluateParameterDetailed(p.value, p.referenceRange, p.minVal, p.maxVal, undefined, {
+      patientAge: currentPatient?.age,
+      patientGender: currentPatient?.gender,
+      parameterName: p.name
+    }).status;
+  };
+
   // Update parameter row
   const handleUpdateParameter = (id: string, field: keyof ReportParameter, val: any) => {
     setParameters(prev =>
@@ -318,7 +322,7 @@ export const ReportEditor: React.FC = () => {
           const updated = { ...p, [field]: val };
           // If updating value or referenceRange, perform smart auto-status evaluation if value is present
           if ((field === 'value' || field === 'referenceRange') && updated.value) {
-            updated.status = evaluateParameterStatus(updated.value, updated.referenceRange, updated.minVal, updated.maxVal);
+            updated.status = autoStatus(updated);
           }
           return updated;
         }
@@ -378,7 +382,7 @@ export const ReportEditor: React.FC = () => {
               sampleType: match.sampleType || p.sampleType
             };
             if (updated.value) {
-              updated.status = evaluateParameterStatus(updated.value, updated.referenceRange, updated.minVal, updated.maxVal);
+              updated.status = autoStatus(updated);
             }
             return updated;
           }
@@ -396,7 +400,7 @@ export const ReportEditor: React.FC = () => {
     let changedCount = 0;
     setParameters(prev =>
       prev.map(p => {
-        const newStatus = evaluateParameterStatus(p.value, p.referenceRange, p.minVal, p.maxVal);
+        const newStatus = autoStatus(p);
         if (newStatus !== p.status) changedCount++;
         return { ...p, status: newStatus };
       })
@@ -425,7 +429,7 @@ export const ReportEditor: React.FC = () => {
             sampleType: match.sampleType || p.sampleType
           };
           if (updated.value) {
-            updated.status = evaluateParameterStatus(updated.value, updated.referenceRange, updated.minVal, updated.maxVal);
+            updated.status = autoStatus(updated);
           }
           return updated;
         }
@@ -643,7 +647,7 @@ export const ReportEditor: React.FC = () => {
     const reportData: MedicalReport = {
       id: activeReportToEdit?.id || `rep-${Date.now()}`,
       reportNumber: activeReportToEdit?.reportNumber || `LAB-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      patientId: currentPatient?.id || 'pat-1',
+      patientId: currentPatient?.id || '',
       patientName: currentPatient?.fullName || 'Paciente',
       patientNationalId: currentPatient?.nationalId || '00000000',
       patientAge: currentPatient?.age || 35,
@@ -737,6 +741,21 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
   // Save report (either as draft, in review, or published) with critical values validation
   const handleSave = async (targetStatus: ReportStatus) => {
+    if (!currentPatient) {
+      showNotification('Elige el paciente del informe antes de guardar.', 'warning');
+      return;
+    }
+    if (targetStatus !== 'borrador') {
+      if (parameters.length === 0) {
+        showNotification('El informe no tiene resultados: agrega al menos una prueba.', 'warning');
+        return;
+      }
+      const sinValor = parameters.filter(p => !String(p.value ?? '').trim());
+      if (sinValor.length > 0) {
+        showNotification(`Faltan resultados en: ${sinValor.map(p => p.name || 'prueba sin nombre').join(', ')}. Complétalos o quita esas filas.`, 'warning');
+        return;
+      }
+    }
     if (!title.trim()) {
       showNotification('El informe debe tener un título de estudio', 'warning');
       return;
@@ -895,10 +914,10 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
       </div>
 
       {/* Main Grid: Left Editor & Right AI / Template Sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_24rem] gap-6">
         
         {/* Left Column (2 Cols): Form Fields and Parameters */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 min-w-0">
           
           {/* Patient and Study Metadata Section */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
@@ -919,9 +938,10 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                   onChange={(e) => setPatientId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none"
                 >
+                  <option value="">Elegir paciente…</option>
                   {patients.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.fullName} • DNI: {p.nationalId} ({p.accessCode})
+                      {p.fullName}{p.nationalId ? ` • DNI: ${p.nationalId}` : ''}
                     </option>
                   ))}
                 </select>
@@ -1192,22 +1212,26 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               <div className="space-y-3">
                 {/* Visual validation alert banner if out-of-range parameters are detected */}
                 {outOfRangeParameters.length > 0 && (
-                  <div className="bg-rose-50 border-2 border-rose-300 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-950 shadow-xs animate-in fade-in">
+                  <div className={`rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs border ${
+                    parameters.some(p => p.status === 'critical')
+                      ? 'bg-rose-50 border-rose-300 text-rose-950'
+                      : 'bg-slate-50 border-slate-300 text-slate-900'
+                  }`}>
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <AlertTriangle className="w-4 h-4 animate-bounce" />
+                        <AlertTriangle className="w-4 h-4" />
                       </div>
                       <div>
                         <div className="font-bold flex items-center gap-2">
-                          <span>Validación de Seguridad: {outOfRangeParameters.length} parámetro(s) fuera del rango de referencia</span>
+                          <span>{outOfRangeParameters.length} resultado(s) fuera del rango de referencia</span>
                           {parameters.filter(p => p.status === 'critical').length > 0 && (
                             <span className="bg-rose-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full shadow-2xs">
-                              {parameters.filter(p => p.status === 'critical').length} Crítico(s) ⚠️
+                              {parameters.filter(p => p.status === 'critical').length} crítico(s)
                             </span>
                           )}
                         </div>
                         <p className="text-[11px] text-rose-700 mt-0.5">
-                          Los valores resaltados en <strong>rojo</strong> han superado los límites esperados. Puede confirmar si son <em>Valores Críticos (Pánico)</em> antes de guardar.
+                          Los de borde negro están altos o bajos; <strong>rojo</strong> = valor crítico (pánico). Revísalos antes de guardar.
                         </p>
                       </div>
                     </div>
@@ -1243,40 +1267,42 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                       {parameters.map((param, idx) => {
                         const isExpanded = expandedParamId === param.id;
                         const evalInfo = evaluateParameterDetailed(
-                          param.value, 
-                          param.referenceRange, 
-                          param.minVal, 
-                          param.maxVal, 
+                          param.value,
+                          param.referenceRange,
+                          param.minVal,
+                          param.maxVal,
                           param.status,
                           {
-                            patientAge: currentPatient?.age || 35,
-                            patientGender: currentPatient?.gender || 'M',
+                            patientAge: currentPatient?.age,
+                            patientGender: currentPatient?.gender,
                             parameterName: param.name
                           }
                         );
-                        const isAmber = evalInfo.alertLevel === 'amber';
-                        const isRed = evalInfo.alertLevel === 'red';
-                        const isOutOfRange = evalInfo.isOutOfRange;
-                        const isCritical = param.status === 'critical' || evalInfo.isCritical || isRed;
+                        // Un solo estado por fila: el que muestra la lista "Estado".
+                        const isCritical = param.status === 'critical';
+                        const isAbnormal = param.status !== 'normal';
+                        const arrow = param.status === 'high' ? '↑' : param.status === 'low' ? '↓' : isCritical ? '!' : '';
+                        const pctText = evalInfo.percentDiff !== undefined && isAbnormal
+                          ? `${param.status === 'low' ? '-' : '+'}${Math.abs(evalInfo.percentDiff)}% del límite`
+                          : '';
+                        const demographicNote = evalInfo.demographicRuleApplied && evalInfo.demographicRuleApplied !== 'Rango Estándar General'
+                          ? evalInfo.demographicRuleApplied
+                          : '';
 
                         return (
                           <React.Fragment key={param.id}>
-                            <tr className={`transition-colors ${
-                              isRed 
-                                ? 'bg-rose-50/70 border-l-4 border-l-rose-600 hover:bg-rose-50/90' 
-                                : isAmber 
-                                  ? 'bg-amber-50/60 border-l-4 border-l-amber-500 hover:bg-amber-50/80' 
-                                  : isExpanded 
-                                    ? 'bg-teal-50/40 border-teal-200' 
-                                    : 'hover:bg-slate-50/70'
+                            <tr className={`transition-colors align-top ${
+                              isCritical
+                                ? 'bg-rose-50 border-l-4 border-l-rose-600'
+                                : isExpanded
+                                  ? 'bg-slate-50'
+                                  : 'hover:bg-slate-50'
                             }`}>
-                              
-                              {/* Order & Move buttons */}
+
+                              {/* Orden */}
                               <td className="py-2 px-1.5 text-center">
                                 <div className="flex items-center justify-center gap-0.5">
-                                  <span className="font-mono font-bold text-[10px] text-slate-400 w-4">
-                                    {idx + 1}
-                                  </span>
+                                  <span className="font-mono text-[11px] text-slate-500 w-4">{idx + 1}</span>
                                   <div className="flex flex-col">
                                     <button
                                       type="button"
@@ -1300,117 +1326,67 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                                 </div>
                               </td>
 
-                              {/* Parameter Name */}
-                              <td className="py-2 px-2.5">
-                                <div className="space-y-0.5">
-                                  <input
-                                    type="text"
-                                    value={param.name}
-                                    onChange={(e) => handleUpdateParameter(param.id, 'name', e.target.value)}
-                                    placeholder="ej. Glucosa en Ayunas, Hemoglobina..."
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-teal-500 focus:outline-none"
-                                  />
-                                  <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                                    <span className="text-teal-700 bg-teal-50/80 px-1.5 py-0.5 rounded font-medium border border-teal-100">
-                                      {param.section || detectParameterSection(param.name, category)}
-                                    </span>
-                                    {param.sampleType && (
-                                      <span className="text-slate-400 font-mono">
-                                        • {param.sampleType}
-                                      </span>
-                                    )}
-                                    {isRed ? (
-                                      <span className="text-white bg-rose-600 px-1.5 py-0.5 rounded font-bold text-[9px] flex items-center gap-0.5 animate-pulse shadow-xs">
-                                        <AlertCircle className="w-2.5 h-2.5" />
-                                        <span>CRÍTICO (ROJO)</span>
-                                      </span>
-                                    ) : isAmber ? (
-                                      <span className="text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded font-bold text-[9px] border border-amber-300 flex items-center gap-0.5">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                        <span>DESVIADO (ÁMBAR)</span>
-                                      </span>
-                                    ) : null}
-                                    {evalInfo.demographicRuleApplied && (
-                                      <span className="text-[9px] text-teal-800 bg-teal-50/90 px-1 py-0.2 rounded border border-teal-200 font-sans font-medium">
-                                        {evalInfo.demographicRuleApplied}
-                                      </span>
-                                    )}
-                                  </div>
+                              {/* Nombre completo (sin etiquetas de colores) */}
+                              <td className="py-2 px-2.5 min-w-[13rem]">
+                                <input
+                                  type="text"
+                                  value={param.name}
+                                  onChange={(e) => handleUpdateParameter(param.id, 'name', e.target.value)}
+                                  title={param.name}
+                                  placeholder="Nombre de la prueba"
+                                  className="w-full bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm font-semibold text-slate-900 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:outline-none"
+                                />
+                                <div className="mt-0.5 text-[11px] text-slate-500">
+                                  {param.section || detectParameterSection(param.name, category)}
                                 </div>
                               </td>
 
-                              {/* Value with Amber or Red highlights based on age & gender */}
-                              <td className="py-2 px-2">
-                                <div className="space-y-1">
-                                  <div className="relative flex items-center">
-                                    <input
-                                      type="text"
-                                      value={param.value}
-                                      onChange={(e) => handleUpdateParameter(param.id, 'value', e.target.value)}
-                                      placeholder="95"
-                                      className={`w-full rounded-lg px-2 py-1 text-xs font-mono font-bold focus:outline-none transition-all ${
-                                        isRed
-                                          ? 'bg-rose-50 border-2 border-rose-600 text-rose-950 font-extrabold focus:ring-2 focus:ring-rose-500 shadow-xs shadow-rose-200 ring-1 ring-rose-300 pr-7'
-                                          : isAmber
-                                            ? 'bg-amber-50 border-2 border-amber-500 text-amber-950 font-extrabold focus:ring-2 focus:ring-amber-400 shadow-xs pr-7 ring-1 ring-amber-300'
-                                            : 'bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:ring-1 focus:ring-teal-500'
-                                      }`}
-                                      title={isOutOfRange ? `Valor fuera de rango: ${evalInfo.alertLevel === 'red' ? 'Crítico (Rojo)' : 'Moderado (Ámbar)'}` : undefined}
-                                    />
-                                    {(isRed || isAmber) && (
-                                      <span className="absolute right-2 pointer-events-none" title={isRed ? 'Alerta Crítica' : 'Alerta Ámbar'}>
-                                        {isRed ? (
-                                          <AlertCircle className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
-                                        ) : (
-                                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs inline-block" />
-                                        )}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Sub-badge indicating deviation and alarm */}
-                                  {isOutOfRange && (
-                                    <div className={`flex items-center justify-between gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border shadow-2xs ${
-                                      isRed 
-                                        ? 'text-rose-900 bg-rose-100/90 border-rose-200' 
-                                        : 'text-amber-900 bg-amber-100/90 border-amber-300'
-                                    }`}>
-                                      <span className="flex items-center gap-1">
-                                        <AlertTriangle className={`w-2.5 h-2.5 shrink-0 ${isRed ? 'text-rose-600' : 'text-amber-600'}`} />
-                                        <span>{evalInfo.badgeLabel}</span>
-                                      </span>
-                                      <span className="font-mono">
-                                        {evalInfo.percentDiff !== undefined ? `${evalInfo.percentDiff > 0 ? '+' : ''}${evalInfo.percentDiff}%` : 'Alerta'}
-                                      </span>
-                                    </div>
+                              {/* Resultado */}
+                              <td className="py-2 px-2 w-36">
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    value={param.value}
+                                    onChange={(e) => handleUpdateParameter(param.id, 'value', e.target.value)}
+                                    placeholder="Resultado"
+                                    className={`w-full rounded-md px-2 py-1.5 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30 ${arrow ? 'pr-7' : ''} ${
+                                      isCritical
+                                        ? 'border-2 border-rose-600 text-rose-800 font-bold'
+                                        : isAbnormal
+                                          ? 'border-2 border-slate-900 text-slate-900 font-bold'
+                                          : 'border border-slate-300 text-slate-900'
+                                    }`}
+                                  />
+                                  {arrow && (
+                                    <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none ${isCritical ? 'text-rose-700' : 'text-slate-900'}`}>
+                                      {arrow}
+                                    </span>
                                   )}
                                 </div>
                               </td>
 
-                              {/* Unit */}
-                              <td className="py-2 px-2">
+                              {/* Unidad */}
+                              <td className="py-2 px-2 w-24">
                                 <input
                                   type="text"
                                   list="common-lab-units"
                                   value={param.unit}
                                   onChange={(e) => handleUpdateParameter(param.id, 'unit', e.target.value)}
-                                  placeholder="mg/dL"
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono focus:bg-white focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                                  placeholder="Unidad"
+                                  className="w-full bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm font-mono text-slate-700 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:outline-none"
                                 />
                               </td>
 
-                              {/* Reference Range with presets button */}
-                              <td className="py-2 px-2">
+                              {/* Valor de referencia */}
+                              <td className="py-2 px-2 w-52">
                                 <div className="relative flex items-center gap-1">
                                   <input
                                     type="text"
                                     value={param.referenceRange}
                                     onChange={(e) => handleUpdateParameter(param.id, 'referenceRange', e.target.value)}
-                                    placeholder="70 - 100 mg/dL"
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono focus:bg-white focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                                    placeholder="Ej. 70 - 100"
+                                    className="w-full bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm font-mono text-slate-700 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 focus:outline-none"
                                   />
-                                  
-                                  {/* Quick presets popover trigger */}
                                   <button
                                     type="button"
                                     onClick={() => setActivePresetParamId(activePresetParamId === param.id ? null : param.id)}
@@ -1420,20 +1396,19 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                                     <BookOpen className="w-3.5 h-3.5" />
                                   </button>
 
-                                  {/* Presets dropdown menu */}
                                   {activePresetParamId === param.id && (
-                                    <div className="absolute right-0 top-8 z-30 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-2 space-y-1">
+                                    <div className="absolute right-0 top-9 z-30 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-2 space-y-1">
                                       <div className="flex items-center justify-between pb-1 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase">
-                                        <span>Rangos Predefinidos</span>
-                                        <button 
-                                          type="button" 
+                                        <span>Rangos predefinidos</span>
+                                        <button
+                                          type="button"
                                           onClick={() => setActivePresetParamId(null)}
                                           className="text-slate-400 hover:text-slate-600"
                                         >
                                           <X className="w-3 h-3" />
                                         </button>
                                       </div>
-                                      
+
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1443,7 +1418,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                                         className="w-full text-left text-[11px] p-1.5 rounded-lg hover:bg-teal-50 text-teal-800 font-semibold flex items-center gap-1.5"
                                       >
                                         <RefreshCw className="w-3 h-3 text-teal-600" />
-                                        <span>Restaurar del Catálogo Oficial</span>
+                                        <span>Restaurar del catálogo oficial</span>
                                       </button>
 
                                       <div className="max-h-40 overflow-y-auto space-y-1">
@@ -1464,55 +1439,36 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                                     </div>
                                   )}
                                 </div>
+                                {demographicNote && (
+                                  <div className="mt-0.5 text-[11px] text-slate-500">{demographicNote}</div>
+                                )}
                               </td>
 
-                              {/* Status with quick critical confirmation button */}
-                              <td className="py-2 px-2 text-center">
-                                <div className="space-y-1">
-                                  <select
-                                    value={param.status}
-                                    onChange={(e) => {
-                                      handleUpdateParameter(param.id, 'status', e.target.value as ParameterStatus);
-                                      if (e.target.value === 'critical') {
-                                        handleUpdateParameter(param.id, 'criticalConfirmed', true);
-                                      }
-                                    }}
-                                    className={`w-full rounded-lg px-1.5 py-1 text-[11px] font-bold focus:outline-none cursor-pointer transition-colors ${
-                                      param.status === 'normal' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
-                                      param.status === 'high' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
-                                      param.status === 'low' ? 'bg-blue-50 text-blue-800 border border-blue-200' :
-                                      'bg-rose-100 text-rose-900 border-2 border-rose-500 font-extrabold animate-pulse'
-                                    }`}
-                                  >
-                                    <option value="normal">Normal</option>
-                                    <option value="high">Elevado ▲</option>
-                                    <option value="low">Bajo ▼</option>
-                                    <option value="critical">Crítico ⚠️</option>
-                                  </select>
-
-                                  {/* Quick toggle/confirmation button for critical value */}
-                                  {isOutOfRange && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const nextStatus: ParameterStatus = param.status === 'critical'
-                                          ? (evalInfo.percentDiff && evalInfo.percentDiff < 0 ? 'low' : 'high')
-                                          : 'critical';
-                                        handleUpdateParameter(param.id, 'status', nextStatus);
-                                        handleUpdateParameter(param.id, 'criticalConfirmed', true);
-                                      }}
-                                      className={`w-full text-[9px] font-bold py-0.5 px-1 rounded transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                                        param.status === 'critical'
-                                          ? 'bg-rose-600 text-white shadow-xs'
-                                          : 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300'
-                                      }`}
-                                      title="Haga clic para confirmar o desmarcar este resultado como Valor Crítico (Pánico)"
-                                    >
-                                      <AlertCircle className="w-2.5 h-2.5" />
-                                      <span>{param.status === 'critical' ? 'Crítico ✓' : '¿Confirmar Crítico?'}</span>
-                                    </button>
-                                  )}
-                                </div>
+                              {/* Estado: UNA sola indicación por fila */}
+                              <td className="py-2 px-2 w-32">
+                                <select
+                                  value={param.status}
+                                  onChange={(e) => {
+                                    handleUpdateParameter(param.id, 'status', e.target.value as ParameterStatus);
+                                    if (e.target.value === 'critical') {
+                                      handleUpdateParameter(param.id, 'criticalConfirmed', true);
+                                    }
+                                  }}
+                                  aria-label={`Estado de ${param.name || 'la prueba'}`}
+                                  className={`w-full rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 cursor-pointer ${
+                                    isCritical
+                                      ? 'bg-rose-600 text-white font-bold border border-rose-700'
+                                      : isAbnormal
+                                        ? 'bg-white text-slate-900 font-bold border-2 border-slate-900'
+                                        : 'bg-white text-slate-600 border border-slate-300'
+                                  }`}
+                                >
+                                  <option value="normal">Normal</option>
+                                  <option value="high">Alto ↑</option>
+                                  <option value="low">Bajo ↓</option>
+                                  <option value="critical">Crítico</option>
+                                </select>
+                                {pctText && <div className="mt-0.5 text-[11px] text-slate-500">{pctText}</div>}
                               </td>
 
                               {/* Row Actions */}

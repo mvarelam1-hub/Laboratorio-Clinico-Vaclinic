@@ -219,9 +219,9 @@ export const CLINICAL_DEMOGRAPHIC_STANDARDS: DemographicTestStandard[] = [
     isAgeSpecific: true,
     evaluate: (age) => {
       if (age < 18) {
-        return { min: 0, max: 170, rangeText: '< 170 mg/dL (Deseable)', panicMax: 240, demographicLabel: 'Pediátrico / Adolescente' };
+        return { min: 0, max: 170, rangeText: '< 170 mg/dL (Deseable)', demographicLabel: 'Pediátrico / Adolescente' };
       }
-      return { min: 0, max: 200, rangeText: '< 200 mg/dL (Deseable)', panicMax: 300, demographicLabel: 'Adultos (< 200 deseable)' };
+      return { min: 0, max: 200, rangeText: '< 200 mg/dL (Deseable)', demographicLabel: 'Adultos' };
     }
   },
 
@@ -233,10 +233,19 @@ export const CLINICAL_DEMOGRAPHIC_STANDARDS: DemographicTestStandard[] = [
     isAgeSpecific: true,
     evaluate: (age) => {
       if (age < 18) {
-        return { min: 0, max: 110, rangeText: '< 110 mg/dL', panicMax: 190, demographicLabel: 'Pediátrico / Adolescente' };
+        return { min: 0, max: 110, rangeText: '< 110 mg/dL', demographicLabel: 'Pediátrico / Adolescente' };
       }
-      return { min: 0, max: 100, rangeText: '< 100 mg/dL (Óptimo)', panicMax: 190, demographicLabel: 'Adultos (< 100 óptimo)' };
+      return { min: 0, max: 100, rangeText: '< 100 mg/dL (Óptimo)', demographicLabel: 'Adultos' };
     }
+  },
+
+  // Colesterol VLDL
+  {
+    aliases: ['colesterol vldl', 'vldl'],
+    unit: 'mg/dL',
+    isSexSpecific: false,
+    isAgeSpecific: false,
+    evaluate: () => ({ min: 5, max: 30, rangeText: '5 - 30 mg/dL', demographicLabel: 'Adultos' })
   },
 
   // Triglicéridos
@@ -605,6 +614,30 @@ export function parseMultiGenderRange(
 /**
  * Resolves the accurate clinical reference range matching the patient's age and sex
  */
+/**
+ * Elige la norma clínica cuyo alias aparece como palabra completa en el nombre
+ * del parámetro, prefiriendo el alias MÁS ESPECÍFICO (el más largo). Antes se
+ * tomaba la primera coincidencia por subcadena: "Colesterol LDL" caía en
+ * "colesterol" (total) y "VLDL" en "ldl", mostrando rangos y etiquetas de otro
+ * parámetro.
+ */
+function findClinicalStandard(normName: string) {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let best: (typeof CLINICAL_DEMOGRAPHIC_STANDARDS)[number] | undefined;
+  let bestLen = 0;
+  for (const std of CLINICAL_DEMOGRAPHIC_STANDARDS) {
+    for (const alias of std.aliases) {
+      if (alias.length <= bestLen) continue;
+      const re = new RegExp(`(^|[^a-z0-9áéíóúñ])${esc(alias)}($|[^a-z0-9áéíóúñ])`, 'i');
+      if (re.test(normName)) {
+        best = std;
+        bestLen = alias.length;
+      }
+    }
+  }
+  return best;
+}
+
 export function resolveAgeSexReferenceRange(
   parameterName: string,
   currentRange: string = '',
@@ -667,9 +700,7 @@ export function resolveAgeSexReferenceRange(
   }
 
   // 3. Match against clinical standard database for ubiquitous laboratory tests
-  const standardMatch = CLINICAL_DEMOGRAPHIC_STANDARDS.find(std =>
-    std.aliases.some(alias => normName.includes(alias))
-  );
+  const standardMatch = findClinicalStandard(normName);
 
   if (standardMatch) {
     const evaluated = standardMatch.evaluate(patientAge, genderNorm);
@@ -749,11 +780,11 @@ export function generateDemographicParametersForTests(
     // Common Hemogram Profile
     if (lower.includes('hemograma') || lower.includes('hematolog') || lower.includes('cbc') || lower.includes('biometria')) {
       const hemoSub = [
-        { name: 'Leucocitos Totales', unit: '/mm³', sampleVal: '6800', sampleType: 'Sangre Total (EDTA)', method: 'Citometría de Flujo / Impedancia' },
-        { name: 'Hemoglobina', unit: 'g/dL', sampleVal: '14.2', sampleType: 'Sangre Total (EDTA)', method: 'Fotometría SLS / Cianometahemoglobina' },
-        { name: 'Hematocrito', unit: '%', sampleVal: '42.5', sampleType: 'Sangre Total (EDTA)', method: 'Impedancia / Cálculo Automatizado' },
-        { name: 'Eritrocitos (RBC)', unit: 'x10^6/µL', sampleVal: '4.80', sampleType: 'Sangre Total (EDTA)', method: 'Conteo Óptico Focalizado' },
-        { name: 'Plaquetas', unit: '/mm³', sampleVal: '240000', sampleType: 'Sangre Total (EDTA)', method: 'Impedancia Eléctrica Apertura' }
+        { name: 'Leucocitos Totales', unit: '/mm³', sampleType: 'Sangre Total (EDTA)', method: 'Citometría de Flujo / Impedancia' },
+        { name: 'Hemoglobina', unit: 'g/dL', sampleType: 'Sangre Total (EDTA)', method: 'Fotometría SLS / Cianometahemoglobina' },
+        { name: 'Hematocrito', unit: '%', sampleType: 'Sangre Total (EDTA)', method: 'Impedancia / Cálculo Automatizado' },
+        { name: 'Eritrocitos (RBC)', unit: 'x10^6/µL', sampleType: 'Sangre Total (EDTA)', method: 'Conteo Óptico Focalizado' },
+        { name: 'Plaquetas', unit: '/mm³', sampleType: 'Sangre Total (EDTA)', method: 'Impedancia Eléctrica Apertura' }
       ];
 
       hemoSub.forEach(sub => {
@@ -761,7 +792,7 @@ export function generateDemographicParametersForTests(
         params.push({
           id: `p-${pId++}`,
           name: sub.name,
-          value: sub.sampleVal,
+          value: '', // el resultado lo ingresa el personal: nunca se precarga un valor de ejemplo
           unit: sub.unit,
           referenceRange: resolved.effectiveRange,
           minVal: resolved.min,
@@ -774,10 +805,10 @@ export function generateDemographicParametersForTests(
       });
     } else if (lower.includes('lipid') || lower.includes('colest') || lower.includes('trigli')) {
       const lipidSub = [
-        { name: 'Colesterol Total', unit: 'mg/dL', sampleVal: '185', sampleType: 'Suero', method: 'CHOD-PAP Enzimático Colorimétrico' },
-        { name: 'Triglicéridos Séricos', unit: 'mg/dL', sampleVal: '135', sampleType: 'Suero', method: 'GPO-PAP Enzimático' },
-        { name: 'Colesterol HDL (Protector)', unit: 'mg/dL', sampleVal: patientGender.toUpperCase().startsWith('F') ? '58' : '46', sampleType: 'Suero', method: 'Inmuno-inhibición Directa' },
-        { name: 'Colesterol LDL', unit: 'mg/dL', sampleVal: '95', sampleType: 'Suero', method: 'Fórmula de Friedewald Modificada' }
+        { name: 'Colesterol Total', unit: 'mg/dL', sampleType: 'Suero', method: 'CHOD-PAP Enzimático Colorimétrico' },
+        { name: 'Triglicéridos Séricos', unit: 'mg/dL', sampleType: 'Suero', method: 'GPO-PAP Enzimático' },
+        { name: 'Colesterol HDL (Protector)', unit: 'mg/dL', sampleType: 'Suero', method: 'Inmuno-inhibición Directa' },
+        { name: 'Colesterol LDL', unit: 'mg/dL', sampleType: 'Suero', method: 'Fórmula de Friedewald Modificada' }
       ];
 
       lipidSub.forEach(sub => {
@@ -785,7 +816,7 @@ export function generateDemographicParametersForTests(
         params.push({
           id: `p-${pId++}`,
           name: sub.name,
-          value: sub.sampleVal,
+          value: '', // el resultado lo ingresa el personal: nunca se precarga un valor de ejemplo
           unit: sub.unit,
           referenceRange: resolved.effectiveRange,
           minVal: resolved.min,
@@ -798,9 +829,9 @@ export function generateDemographicParametersForTests(
       });
     } else if (lower.includes('creat') || lower.includes('urea') || lower.includes('renal') || lower.includes('bun')) {
       const renalSub = [
-        { name: 'Creatinina en Suero', unit: 'mg/dL', sampleVal: patientGender.toUpperCase().startsWith('F') ? '0.75' : '0.95', sampleType: 'Suero', method: 'Cinética Jaffé Compensada IDMS' },
-        { name: 'Nitrógeno de Urea (BUN)', unit: 'mg/dL', sampleVal: '14.0', sampleType: 'Suero', method: 'Ureasa / GLDH UV' },
-        { name: 'Ácido Úrico', unit: 'mg/dL', sampleVal: patientGender.toUpperCase().startsWith('F') ? '4.2' : '5.5', sampleType: 'Suero', method: 'Uricasa-PAP Enzimático' }
+        { name: 'Creatinina en Suero', unit: 'mg/dL', sampleType: 'Suero', method: 'Cinética Jaffé Compensada IDMS' },
+        { name: 'Nitrógeno de Urea (BUN)', unit: 'mg/dL', sampleType: 'Suero', method: 'Ureasa / GLDH UV' },
+        { name: 'Ácido Úrico', unit: 'mg/dL', sampleType: 'Suero', method: 'Uricasa-PAP Enzimático' }
       ];
 
       renalSub.forEach(sub => {
@@ -808,7 +839,7 @@ export function generateDemographicParametersForTests(
         params.push({
           id: `p-${pId++}`,
           name: sub.name,
-          value: sub.sampleVal,
+          value: '', // el resultado lo ingresa el personal: nunca se precarga un valor de ejemplo
           unit: sub.unit,
           referenceRange: resolved.effectiveRange,
           minVal: resolved.min,
@@ -824,7 +855,7 @@ export function generateDemographicParametersForTests(
       params.push({
         id: `p-${pId++}`,
         name: 'Glucosa en Ayunas',
-        value: '92',
+        value: '',
         unit: 'mg/dL',
         referenceRange: resolved.effectiveRange,
         minVal: resolved.min,
@@ -839,7 +870,7 @@ export function generateDemographicParametersForTests(
         {
           id: `p-${pId++}`,
           name: 'Aspecto y Color',
-          value: 'Transparente / Amarillo Paja',
+          value: '',
           unit: '-',
           referenceRange: 'Transparente / Amarillo',
           status: 'normal',
@@ -849,7 +880,7 @@ export function generateDemographicParametersForTests(
         {
           id: `p-${pId++}`,
           name: 'Densidad Específica',
-          value: '1.018',
+          value: '',
           unit: '-',
           referenceRange: '1.005 - 1.030',
           minVal: 1.005,
@@ -861,7 +892,7 @@ export function generateDemographicParametersForTests(
         {
           id: `p-${pId++}`,
           name: 'Proteínas y Glucosa en Orina',
-          value: 'Negativo (Normal)',
+          value: '',
           unit: 'mg/dL',
           referenceRange: 'Negativo (< 15 mg/dL)',
           status: 'normal',
@@ -871,7 +902,7 @@ export function generateDemographicParametersForTests(
         {
           id: `p-${pId++}`,
           name: 'Sedimento Microscópico (Leucocitos)',
-          value: '1 - 2 por campo',
+          value: '',
           unit: 'x campo 40x',
           referenceRange: '0 - 3 por campo',
           status: 'normal',
@@ -884,7 +915,7 @@ export function generateDemographicParametersForTests(
       params.push({
         id: `p-${pId++}`,
         name: catalogMatch.name,
-        value: 'NORMAL',
+        value: '',
         unit: catalogMatch.unit || 'mg/dL',
         referenceRange: resolved.effectiveRange,
         minVal: resolved.min,
@@ -899,7 +930,7 @@ export function generateDemographicParametersForTests(
       params.push({
         id: `p-${pId++}`,
         name: tName,
-        value: 'NORMAL / NEGATIVO',
+        value: '',
         unit: 'Resultado',
         referenceRange: resolved.effectiveRange !== '—' ? resolved.effectiveRange : 'Valores de Referencia Estándar',
         minVal: resolved.min,
@@ -974,6 +1005,9 @@ export function parseReferenceRange(rangeStr: string): { min?: number; max?: num
 /**
  * Automatically evaluates numerical and text test values against reference ranges
  */
+// NOTA: aquí nunca se devuelve 'critical'. Crítico = valor de pánico definido para el
+// análisis (evaluateParameterDetailed) o decisión del personal; una desviación grande
+// del rango NO basta (LDL 142 con referencia < 100 es solo elevado).
 export function evaluateParameterStatus(
   value: string | number, 
   referenceRange: string, 
@@ -1014,11 +1048,9 @@ export function evaluateParameterStatus(
 
   if (min !== undefined && max !== undefined) {
     if (numVal < min) {
-      if (min > 0 && numVal < min * 0.7) return 'critical';
       return 'low';
     }
     if (numVal > max) {
-      if (numVal > max * 1.5) return 'critical';
       return 'high';
     }
     return 'normal';
@@ -1026,7 +1058,6 @@ export function evaluateParameterStatus(
 
   if (max !== undefined) {
     if (numVal > max) {
-      if (numVal > max * 1.5) return 'critical';
       return 'high';
     }
     return 'normal';
@@ -1034,7 +1065,6 @@ export function evaluateParameterStatus(
 
   if (min !== undefined) {
     if (numVal < min) {
-      if (min > 0 && numVal < min * 0.7) return 'critical';
       return 'low';
     }
     return 'normal';
@@ -1153,46 +1183,49 @@ export function evaluateParameterDetailed(
       percentDiff = max > 0 ? Math.round(((numVal - max) / max) * 100) : 100;
       
       // Determine if Red (severe/critical/panic) or Amber (moderate out-of-range)
-      const isPanic = (panicMax !== undefined && numVal >= panicMax) || percentDiff >= 40 || computedStatus === 'critical';
+      // Crítico = valor de pánico definido para el análisis, o marcado así por el personal.
+      // La desviación porcentual NO convierte un resultado en crítico (LDL 142 con
+      // referencia < 100 es elevado, no una emergencia).
+      const isPanic = (panicMax !== undefined && numVal >= panicMax) || computedStatus === 'critical';
       
       if (isPanic) {
         alertLevel = 'red';
         computedStatus = 'critical';
-        badgeLabel = 'CRÍTICO ▲ (ROJO)';
+        badgeLabel = 'Crítico alto';
         gaugeZone = 'high-red';
         gaugePosition = Math.min(100, 85 + Math.round((percentDiff / 100) * 15));
-        deviationText = `+${percentDiff}% sobre el límite máximo (${max}). Alerta Crítica (Rojo).`;
+        deviationText = `+${percentDiff}% sobre el límite máximo (${max}). Valor crítico.`;
       } else {
         alertLevel = 'amber';
         computedStatus = 'high';
-        badgeLabel = 'ELEVADO ▲ (ÁMBAR)';
+        badgeLabel = 'Elevado';
         gaugeZone = 'high-amber';
         gaugePosition = Math.min(84, 70 + Math.round((percentDiff / 40) * 14));
-        deviationText = `+${percentDiff}% sobre el límite máximo (${max}). Alerta Moderada (Ámbar).`;
+        deviationText = `+${percentDiff}% sobre el límite máximo (${max}).`;
       }
     } else if (min !== undefined && numVal < min) {
       percentDiff = min > 0 ? Math.round(((min - numVal) / min) * 100) : undefined;
       
-      const isPanic = (panicMin !== undefined && numVal <= panicMin) || (percentDiff !== undefined && percentDiff >= 30) || computedStatus === 'critical';
+      const isPanic = (panicMin !== undefined && numVal <= panicMin) || computedStatus === 'critical';
       
       if (isPanic) {
         alertLevel = 'red';
         computedStatus = 'critical';
-        badgeLabel = 'CRÍTICO ▼ (ROJO)';
+        badgeLabel = 'Crítico bajo';
         gaugeZone = 'low-red';
         gaugePosition = Math.max(0, 15 - Math.round(((percentDiff || 40) / 100) * 15));
         deviationText = percentDiff 
-          ? `-${percentDiff}% bajo el límite mínimo (${min}). Alerta Crítica (Rojo).`
-          : `Bajo el mínimo (${min}). Alerta Crítica (Rojo).`;
+          ? `-${percentDiff}% bajo el límite mínimo (${min}). Valor crítico.`
+          : `Bajo el mínimo (${min}). Valor crítico.`;
       } else {
         alertLevel = 'amber';
         computedStatus = 'low';
-        badgeLabel = 'BAJO ▼ (ÁMBAR)';
+        badgeLabel = 'Bajo';
         gaugeZone = 'low-amber';
         gaugePosition = Math.max(16, 30 - Math.round(((percentDiff || 15) / 30) * 14));
         deviationText = percentDiff
-          ? `-${percentDiff}% bajo el límite mínimo (${min}). Alerta Moderada (Ámbar).`
-          : `Bajo el mínimo (${min}). Alerta Moderada (Ámbar).`;
+          ? `-${percentDiff}% bajo el límite mínimo (${min}).`
+          : `Bajo el mínimo (${min}).`;
       }
     } else {
       // Normal inside range
@@ -1211,13 +1244,14 @@ export function evaluateParameterDetailed(
   } else {
     // Qualitative evaluation
     if (strVal === 'positivo' || strVal === 'reactivo' || strVal === 'detectado' || strVal === 'anormal') {
-      const isCriticalQual = strVal === 'reactivo' || computedStatus === 'critical';
+      // Un resultado reactivo/positivo es anormal, no un valor de pánico por sí mismo.
+      const isCriticalQual = computedStatus === 'critical';
       alertLevel = isCriticalQual ? 'red' : 'amber';
       computedStatus = isCriticalQual ? 'critical' : 'high';
-      badgeLabel = isCriticalQual ? 'REACTIVO (ROJO)' : 'ANORMAL (ÁMBAR)';
+      badgeLabel = isCriticalQual ? 'Crítico' : 'Anormal';
       gaugeZone = isCriticalQual ? 'high-red' : 'high-amber';
       gaugePosition = isCriticalQual ? 95 : 80;
-      deviationText = 'Resultado reactivo fuera de lo esperado clínicamente';
+      deviationText = 'Resultado anormal (reactivo / positivo / detectado).';
     }
   }
 
@@ -1241,10 +1275,10 @@ export function evaluateParameterDetailed(
     gaugeZone,
     ageGroupLabel: getAgeGroupDescription(options?.patientAge),
     clinicalInterpretation: isOutOfRange 
-      ? (alertLevel === 'red' 
-          ? `Alerta Severa / Crítica (Rojo): Desviación acentuada respecto al intervalo de referencia de ${options?.patientGender === 'M' ? 'varón' : 'mujer'} de ${options?.patientAge || 35} años.`
-          : `Alerta Moderada (Ámbar): Valor fuera de rango con desviación leve a moderada según edad y sexo.`)
-      : 'Parámetro biológicamente adecuado según grupo etario y sexo.'
+      ? (alertLevel === 'red'
+          ? 'Valor crítico: supera el límite de pánico definido para este análisis.'
+          : 'Fuera del intervalo de referencia.')
+      : 'Dentro del intervalo de referencia.'
   };
 }
 
