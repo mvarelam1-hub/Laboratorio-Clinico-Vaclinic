@@ -378,6 +378,52 @@ export const ReportEditor: React.FC = () => {
   };
 
   // Move parameter up or down
+  // Navegación con el teclado en la tabla de resultados: ↑/↓ (y Enter) pasan a
+  // la misma celda de la fila anterior/siguiente; ←/→ pasan a la celda vecina
+  // de la fila (en un campo de texto solo cuando el cursor está al borde, para
+  // no estorbar la edición). En listas desplegables ↑/↓ siguen cambiando la opción.
+  const moverConFlechas = (e: React.KeyboardEvent<HTMLTableSectionElement>) => {
+    const el = e.target as HTMLElement;
+    const esInput = el instanceof HTMLInputElement;
+    const esSelect = el instanceof HTMLSelectElement;
+    if (!esInput && !esSelect) return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const k = e.key;
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(k)) return;
+    const fila = el.closest('tr[data-fila-param]') as HTMLTableRowElement | null;
+    if (!fila) return;
+    const campos = (tr: Element) => Array.from(tr.querySelectorAll<HTMLElement>('input:not([disabled]), select:not([disabled])'));
+    const enFila = campos(fila);
+    const col = enFila.indexOf(el);
+    if (col < 0) return;
+
+    const irA = (dest: HTMLElement | undefined) => {
+      if (!dest) return;
+      e.preventDefault();
+      dest.focus();
+      if (dest instanceof HTMLInputElement) dest.select();
+    };
+
+    if (k === 'ArrowUp' || k === 'ArrowDown' || k === 'Enter') {
+      if (esSelect && k !== 'Enter') return; // la lista usa ↑/↓ para cambiar de opción
+      const tbody = fila.parentElement!;
+      const filas = Array.from(tbody.querySelectorAll('tr[data-fila-param]'));
+      const vecina = filas[filas.indexOf(fila) + (k === 'ArrowUp' ? -1 : 1)];
+      if (vecina) irA(campos(vecina)[col]);
+      else if (k === 'Enter') e.preventDefault();
+      return;
+    }
+    if (esInput) {
+      const inp = el as HTMLInputElement;
+      const alInicio = inp.selectionStart === 0 && inp.selectionEnd === 0;
+      const alFinal = inp.selectionStart === inp.value.length && inp.selectionEnd === inp.value.length;
+      const todoSeleccionado = inp.selectionStart === 0 && inp.selectionEnd === inp.value.length;
+      if (k === 'ArrowLeft' && !(alInicio || todoSeleccionado)) return;
+      if (k === 'ArrowRight' && !(alFinal || todoSeleccionado)) return;
+    }
+    irA(enFila[col + (k === 'ArrowLeft' ? -1 : 1)]);
+  };
+
   const handleMoveParameter = (index: number, direction: 'up' | 'down') => {
     const newParams = [...parameters];
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
@@ -1447,6 +1493,9 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                   </div>
                 )}
 
+                <p className="px-3 pt-2 text-[11px] text-slate-500">
+                  Navega con el teclado: <kbd className="font-mono">↑</kbd> <kbd className="font-mono">↓</kbd> cambian de fila, <kbd className="font-mono">←</kbd> <kbd className="font-mono">→</kbd> de celda y <kbd className="font-mono">Enter</kbd> baja al siguiente resultado.
+                </p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs text-left border-collapse">
                     <thead>
@@ -1460,7 +1509,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                         <th className="py-2 px-2 text-center w-24">Acciones</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100" onKeyDown={moverConFlechas}>
                       {parameters.map((param, idx) => {
                         const isExpanded = expandedParamId === param.id;
                         const evalInfo = evaluateParameterDetailed(
@@ -1488,7 +1537,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
                         return (
                           <React.Fragment key={param.id}>
-                            <tr className={`transition-colors align-top ${
+                            <tr data-fila-param="1" className={`transition-colors align-top ${
                               isCritical
                                 ? 'bg-rose-50 border-l-4 border-l-rose-600'
                                 : isExpanded
