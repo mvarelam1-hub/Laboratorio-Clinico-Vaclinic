@@ -217,3 +217,61 @@ describe('PATCH /api/examenes/:id (migración 0017)', () => {
     expect(res.status).toBe(409);
   });
 });
+
+
+describe('POST /api/examenes/asegurar-perfil', () => {
+  const cuerpo = { codigo: 'PRF-COP', nombre: 'EXAMEN DE HECES COMPLETA', precio: 30, includedParameters: ['Color', 'Consistencia'] };
+
+  it('crea el perfil en el catálogo cuando no existe y lo deja en bitácora', async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [] }) // no existe
+      .mockResolvedValueOnce({ rows: [] }) // no está en perfil_personalizado
+      .mockResolvedValueOnce({ rows: [{ id_examen: 900, precio: 30 }] }) // INSERT
+      .mockResolvedValueOnce({ rows: [] }); // bitácora
+    const app = await buildApp();
+    const res = await request(app).post('/api/examenes/asegurar-perfil').send(cuerpo);
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id_examen: 900, precio: 30, creado: true });
+    const [sql, params] = queryMock.mock.calls[2];
+    expect(sql).toMatch(/INSERT INTO examen/);
+    expect(params[0]).toBe('PRF-COP');
+    expect(params[5]).toBe(30);
+    expect(JSON.parse(params[6]).includedParameters).toEqual(['Color', 'Consistencia']);
+    expect(queryMock.mock.calls[3][0]).toMatch(/historial_auditoria/);
+  });
+
+  it('si el código ya existe no modifica nada y devuelve el precio del servidor', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id_examen: 12, precio: '35.00' }] });
+    const app = await buildApp();
+    const res = await request(app).post('/api/examenes/asegurar-perfil').send({ ...cuerpo, precio: 1 });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id_examen: 12, precio: 35, creado: false });
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('usa el precio guardado en perfil_personalizado, no el enviado por el cliente', async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ precio: '45.00', nombre: 'X' }] })
+      .mockResolvedValueOnce({ rows: [{ id_examen: 901, precio: 45 }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const app = await buildApp();
+    const res = await request(app).post('/api/examenes/asegurar-perfil').send({ ...cuerpo, precio: 1 });
+    expect(res.status).toBe(201);
+    expect(queryMock.mock.calls[2][1][5]).toBe(45);
+  });
+
+  it('rechaza sin código o nombre, y rechaza precios inválidos', async () => {
+    const app = await buildApp();
+    expect((await request(app).post('/api/examenes/asegurar-perfil').send({ nombre: 'X' })).status).toBe(400);
+    queryMock.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
+    expect((await request(app).post('/api/examenes/asegurar-perfil').send({ codigo: 'PRF-X', nombre: 'X', precio: -5 })).status).toBe(400);
+  });
+
+  it('rechaza con 403 a un rol sin permiso de crear órdenes', async () => {
+    currentStaffUser = { idUsuario: 9, roleId: 'auditor', status: 'activo', nombreCompleto: 'Aud' };
+    const app = await buildApp();
+    const res = await request(app).post('/api/examenes/asegurar-perfil').send(cuerpo);
+    expect([401, 403]).toContain(res.status);
+  });
+});

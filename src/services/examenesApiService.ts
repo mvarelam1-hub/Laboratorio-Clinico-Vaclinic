@@ -84,8 +84,8 @@ export async function obtenerMapaCodigoExamenAId(forzarRecarga = false): Promise
  * omitirlos en silencio -eso escondería un examen completo de la orden sin
  * que nadie se diera cuenta-.
  */
-export async function resolverCodigosAIdsExamen(codigos: string[]): Promise<{ ids: number[]; noEncontrados: string[] }> {
-  const mapa = await obtenerMapaCodigoExamenAId();
+export async function resolverCodigosAIdsExamen(codigos: string[], forzarRecarga = false): Promise<{ ids: number[]; noEncontrados: string[] }> {
+  const mapa = await obtenerMapaCodigoExamenAId(forzarRecarga);
   const ids: number[] = [];
   const noEncontrados: string[] = [];
   for (const codigo of codigos) {
@@ -226,6 +226,39 @@ export async function crearExamenRemoto(item: LabCatalogItem): Promise<ExamenFul
 
 export async function actualizarExamenRemoto(idExamen: number, updates: Partial<LabCatalogItem>): Promise<ExamenFullApiRow> {
   const res = await authFetchJson(`/api/examenes/${idExamen}`, { method: 'PATCH', body: JSON.stringify(aBodyApi(updates)) });
+  if (!res.ok) throw new ExamenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+
+export interface PerfilParaServidor {
+  code: string;
+  name: string;
+  price: number;
+  categoryName?: string;
+  description?: string;
+  includedParameters?: string[];
+  tubeType?: string;
+}
+
+/**
+ * Asegura que un perfil (orina completa, heces completa, paneles…) exista
+ * como examen del catálogo real. Idempotente: si ya existe devuelve el precio
+ * que tiene el servidor, que es el que se cobra al registrar la orden.
+ */
+export async function asegurarPerfilRemoto(perfil: PerfilParaServidor): Promise<{ id_examen: number; precio: number; creado: boolean }> {
+  const res = await authFetchJson('/api/examenes/asegurar-perfil', {
+    method: 'POST',
+    body: JSON.stringify({
+      codigo: perfil.code,
+      nombre: perfil.name,
+      precio: perfil.price,
+      categoriaNombre: perfil.categoryName,
+      descripcion: perfil.description,
+      includedParameters: perfil.includedParameters,
+      contenedorRequerido: perfil.tubeType
+    })
+  });
   if (!res.ok) throw new ExamenesApiError(await parseErrorBody(res), res.status);
   return res.json();
 }

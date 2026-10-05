@@ -61,6 +61,75 @@ examenesRouter.get('/', asyncHandler(async (_req, res) => {
   return res.json(rows);
 }));
 
+/**
+ * POST /api/examenes/asegurar-perfil — da de alta (si falta) un perfil
+ * personalizado como examen del catálogo real, para poder pedirlo en una
+ * orden. Los perfiles de fábrica ("EXAMEN DE HECES COMPLETA", PRF-COP…) y los
+ * personalizados nacen en el navegador; sin esta fila, POST /api/ordenes no
+ * podía resolver su código y la orden no se registraba ("todavía no existen
+ * en el catálogo real del servidor").
+ *
+ * Es idempotente y NO es un camino para cambiar precios:
+ *  - si el código ya existe, no se modifica nada y se devuelve el precio del
+ *    servidor (que es el que se cobra);
+ *  - si no existe, se crea con el precio del perfil guardado en
+ *    `perfil_personalizado` cuando está ahí, o con el enviado por el cliente.
+ * Exige `admision_crear_ordenes` (quien puede crear órdenes).
+ */
+examenesRouter.post('/asegurar-perfil', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const { codigo, nombre, precio, categoriaNombre, tipoMuestra, contenedorRequerido, descripcion, includedParameters } = req.body || {};
+  if (!codigo || !String(codigo).trim() || !nombre || !String(nombre).trim()) {
+    return res.status(400).json({ error: 'codigo y nombre del perfil son obligatorios.' });
+  }
+  const cod = String(codigo).trim();
+
+  const existente = await pool.query('SELECT id_examen, precio FROM examen WHERE codigo_examen = $1', [cod]);
+  if (existente.rows.length > 0) {
+    return res.json({ id_examen: existente.rows[0].id_examen, precio: Number(existente.rows[0].precio) || 0, creado: false });
+  }
+
+  const guardado = await pool.query('SELECT precio, nombre FROM perfil_personalizado WHERE codigo = $1', [cod]);
+  const precioFinal = guardado.rows.length > 0 ? Number(guardado.rows[0].precio) : Number(precio);
+  if (!Number.isFinite(precioFinal) || precioFinal < 0) {
+    return res.status(400).json({ error: 'El precio del perfil no es válido.' });
+  }
+  const parametros = Array.isArray(includedParameters) ? includedParameters.map(String) : [];
+
+  const { rows } = await pool.query(
+    `INSERT INTO examen (
+       codigo_examen, nombre_examen, categoria, categoria_nombre, tipo_muestra, contenedor_requerido,
+       precio, tipo_resultado, estado, visible_venta, es_perfil, es_fabrica, datos_adicionales, id_usuario_ultima_mod
+     )
+     VALUES ($1, $2, 'perfiles_personalizados', $3, $4, $5, $6, 'Texto', 'Activo', TRUE, TRUE, FALSE, $7::jsonb, $8)
+     ON CONFLICT (codigo_examen) DO NOTHING
+     RETURNING id_examen, precio`,
+    [
+      cod, String(nombre).trim(), categoriaNombre || 'Perfiles Clínicos Personalizados',
+      tipoMuestra || 'Según perfil', contenedorRequerido || null, precioFinal,
+      JSON.stringify({ origen: 'perfil_personalizado', description: descripcion || '', includedParameters: parametros, parametersCount: parametros.length }),
+      req.staffUser!.idUsuario
+    ]
+  );
+  let fila = rows[0];
+  if (!fila) {
+    // Otra petición lo creó al mismo tiempo.
+    fila = (await pool.query('SELECT id_examen, precio FROM examen WHERE codigo_examen = $1', [cod])).rows[0];
+    return res.json({ id_examen: fila.id_examen, precio: Number(fila.precio) || 0, creado: false });
+  }
+  try {
+    await registrarBitacora({
+      idUsuario: req.staffUser!.idUsuario,
+      accion: 'Perfil registrado en el catálogo del servidor',
+      modulo: 'catalogo',
+      severidad: 'info',
+      valorNuevo: `${String(nombre).trim()} (${cod}, precio: ${precioFinal})`
+    });
+  } catch (err) {
+    console.error('No se pudo registrar el alta del perfil en la bitácora:', err);
+  }
+  return res.status(201).json({ id_examen: fila.id_examen, precio: Number(fila.precio) || 0, creado: true });
+}));
+
 examenesRouter.get('/:id', asyncHandler(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM examen WHERE id_examen = $1', [Number(req.params.id)]);
   if (rows.length === 0) return res.status(404).json({ error: 'Examen no encontrado.' });

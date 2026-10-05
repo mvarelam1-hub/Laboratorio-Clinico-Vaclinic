@@ -1,4 +1,4 @@
-import { LabCatalogItem, ReportParameter } from '../types';
+import { LabCatalogItem, LabCustomProfile, ReportParameter } from '../types';
 import { COMPOSICION_POR_CODIGO, ALIAS_COMPONENTE } from '../data/composicionPerfiles';
 import { FACTORY_CATALOG_TESTS } from '../data/factoryCatalog';
 import { resolveAgeSexReferenceRange, nombreTieneNormaDemografica, parseMultiGenderRange, parseReferenceRange } from './referenceRangeEvaluator';
@@ -121,7 +121,8 @@ export function parametrosDeExamenes(
   edad: number | undefined,
   genero: string | undefined,
   catalogo: LabCatalogItem[] = FACTORY_CATALOG_TESTS,
-  testCodes?: Array<string | undefined>
+  testCodes?: Array<string | undefined>,
+  perfiles: LabCustomProfile[] = []
 ): ReportParameter[] {
   const filas: ReportParameter[] = [];
   let n = 1;
@@ -129,6 +130,25 @@ export function parametrosDeExamenes(
     const codigo = testCodes?.[idx];
     const examen = (codigo ? buscarExamen(codigo, catalogo) : undefined) || buscarExamen(pedido, catalogo);
     const inicio = filas.length;
+
+    // Perfil personalizado (EXAMEN DE HECES COMPLETA, ORINA COMPLETA…): una fila
+    // por cada prueba que define el perfil, con su unidad y rango.
+    const perfil = !examen
+      ? perfiles.find((p) => (codigo && p.code === codigo) || normalizarNombre(p.name) === normalizarNombre(pedido))
+      : undefined;
+    if (perfil && (perfil.tests || []).length > 0) {
+      for (const t of perfil.tests!.filter((x) => x.status !== 'Inactiva')) {
+        const comoExamen = {
+          name: t.name,
+          unit: t.unit,
+          referenceRange: t.referenceRange || (t.minRange !== undefined && t.maxRange !== undefined && t.minRange !== '' ? `${t.minRange} - ${t.maxRange}` : ''),
+          methodology: t.methodology
+        } as unknown as LabCatalogItem;
+        filas.push(filaDeCaptura(t.name, comoExamen, edad, genero, perfil.name, `p-${n++}`));
+      }
+      for (let i = inicio; i < filas.length; i++) filas[i].examCode = codigo || perfil.code;
+      return;
+    }
 
     const componentes = examen ? componentesDePerfil(examen, catalogo) : [];
     if (examen && componentes.length > 0) {

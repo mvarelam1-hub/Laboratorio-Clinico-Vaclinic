@@ -77,6 +77,7 @@ import {
 } from '../services/pacientesApiService';
 import {
   resolverCodigosAIdsExamen,
+  asegurarPerfilRemoto,
   crearExamenRemoto,
   actualizarExamenRemoto,
   fromExamenApiRow,
@@ -3442,7 +3443,31 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (isEffectiveOnline && idPacienteRemoto && orderData.examCodes && orderData.examCodes.length > 0) {
       try {
-        const { ids, noEncontrados } = await resolverCodigosAIdsExamen(orderData.examCodes);
+        // Los perfiles (heces/orina completa, paneles) nacen en el navegador:
+        // se dan de alta en el catálogo real antes de pedirlos en la orden. El
+        // precio que se cobra es el del servidor; si difiere del mostrado se
+        // avisa en vez de cobrar distinto en silencio.
+        const perfilesPedidos = orderData.examCodes
+          .map(c => customProfiles.find(p => p.code === c))
+          .filter((p): p is LabCustomProfile => !!p);
+        let huboAltas = false;
+        for (const perfil of perfilesPedidos) {
+          const r = await asegurarPerfilRemoto({
+            code: perfil.code,
+            name: perfil.name,
+            price: perfil.price,
+            categoryName: perfil.categoryName,
+            description: perfil.description,
+            includedParameters: perfil.testNames
+          });
+          if (r.creado) huboAltas = true;
+          if (Math.abs(r.precio - Number(perfil.price || 0)) > 0.005) {
+            throw new OrdenesApiError(
+              `El precio del perfil "${perfil.name}" en el servidor (Q${r.precio.toFixed(2)}) no coincide con el mostrado (Q${Number(perfil.price || 0).toFixed(2)}). Pide a quien administra el catálogo que lo actualice antes de registrar la orden.`
+            );
+          }
+        }
+        const { ids, noEncontrados } = await resolverCodigosAIdsExamen(orderData.examCodes, huboAltas);
         if (noEncontrados.length > 0) {
           throw new OrdenesApiError(
             `Estos exámenes todavía no existen en el catálogo real del servidor: ${noEncontrados.join(', ')}.`

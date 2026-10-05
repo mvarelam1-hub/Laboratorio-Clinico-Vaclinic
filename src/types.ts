@@ -477,6 +477,8 @@ export type LabResultType = 'Numérico' | 'Texto' | 'Opciones';
 
 export interface LabCatalogItem {
   id: string;
+  /** Solo perfiles personalizados: examen en el que se basa (orienta el contenedor). */
+  basedOn?: string;
   code: string;
   name: string;
   technicalName?: string;

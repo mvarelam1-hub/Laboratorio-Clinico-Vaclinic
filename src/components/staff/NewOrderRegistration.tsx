@@ -43,7 +43,9 @@ import { playNotificationChime } from '../../utils/audioChime';
 import { 
   TubeDefinition, 
   inferTubeForTest, 
-  analyzeTubesForParameters 
+  analyzeTubesForParameters,
+  parametrosParaTubos,
+  type ItemParaTubos
 } from '../../utils/sampleTubeRegistry';
 import { TubeBadge } from '../common/TubeBadge';
 import { LabCatalogItem, OriginDepartment, PatientType, MedicalReport, LabOrder, Patient } from '../../types';
@@ -72,35 +74,8 @@ export function getStaffFriendlyCapLabel(tube: TubeDefinition): string {
   return tube.shortName;
 }
 
-export function getItemTubes(item: {
-  name: string;
-  category?: string;
-  categoryName?: string;
-  sampleType?: string;
-  tubeType?: string;
-  isProfile?: boolean;
-  includedParameters?: string[];
-}): TubeDefinition[] {
-  if (item.isProfile && item.includedParameters && item.includedParameters.length > 0) {
-    const analysis = analyzeTubesForParameters(
-      item.includedParameters.map(p => ({
-        name: p,
-        category: item.categoryName || item.category,
-        sampleType: item.sampleType,
-        tubeType: item.tubeType
-      })),
-      item.categoryName || item.category
-    );
-    return analysis.tubesGrouped.map(g => g.tube);
-  }
-
-  const singleTube = inferTubeForTest(
-    item.name,
-    item.categoryName || item.category,
-    item.sampleType,
-    item.tubeType
-  );
-  return [singleTube];
+export function getItemTubes(item: ItemParaTubos): TubeDefinition[] {
+  return analyzeTubesForParameters(parametrosParaTubos(item)).tubesGrouped.map(g => g.tube);
 }
 
 // Helpers for Date & Time calculation
@@ -382,6 +357,7 @@ export const NewOrderRegistration: React.FC = () => {
       isProfile: true,
       parametersCount: p.testNames?.length || p.testIds?.length || 0,
       includedParameters: p.testNames || [],
+      basedOn: p.basedOn,
       sampleType: 'Múltiple según perfil',
       isFactory: false
     }));
@@ -450,26 +426,7 @@ export const NewOrderRegistration: React.FC = () => {
       };
     }
 
-    const flattenedParams: Array<{ name: string; sampleType?: string; category?: string; tubeType?: string }> = [];
-    selectedTests.forEach(t => {
-      if (t.isProfile && t.includedParameters && t.includedParameters.length > 0) {
-        t.includedParameters.forEach(p => {
-          flattenedParams.push({
-            name: p,
-            category: t.categoryName || t.category,
-            sampleType: t.sampleType,
-            tubeType: (t as any).tubeType
-          });
-        });
-      } else {
-        flattenedParams.push({
-          name: t.name,
-          category: t.categoryName || t.category,
-          sampleType: t.sampleType,
-          tubeType: (t as any).tubeType
-        });
-      }
-    });
+    const flattenedParams = selectedTests.flatMap(t => parametrosParaTubos(t as any));
 
     return analyzeTubesForParameters(flattenedParams);
   }, [selectedTests]);
@@ -767,6 +724,7 @@ export const NewOrderRegistration: React.FC = () => {
       testsList: modalData.testsList,
       examCodes: modalData.examCodes,
       catalogTests,
+      customProfiles,
       sampleDate: modalData.orderDate,
       laboratoryName: currentBranch?.name ? `VACLINIC - ${currentBranch.name}` : 'VACLINIC LABORATORIO CLÍNICO',
       tubeType: modalData.tubesRequired.map(t => t.label).join(', ')

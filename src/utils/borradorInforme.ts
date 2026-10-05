@@ -1,4 +1,4 @@
-import { MedicalReport, LabCatalogItem } from '../types';
+import { MedicalReport, LabCatalogItem, LabCustomProfile } from '../types';
 import { parametrosDeExamenes } from './parametrosDeExamen';
 
 export interface DatosBorrador {
@@ -14,6 +14,8 @@ export interface DatosBorrador {
   testsList: string[];
   examCodes?: string[];
   catalogTests?: LabCatalogItem[];
+  /** Perfiles personalizados (heces/orina completa…) para expandir sus pruebas. */
+  customProfiles?: LabCustomProfile[];
   sampleDate: string;
   laboratoryName: string;
   tubeType?: string;
@@ -32,7 +34,7 @@ export function construirBorradorDeOrden(d: DatosBorrador): MedicalReport {
   const edad = d.patientAge ?? 0;
   const esFemenino = (d.patientGender || '').toUpperCase().startsWith('F');
   const parameters = parametrosDeExamenes(
-    d.testsList, d.patientAge, d.patientGender, d.catalogTests && d.catalogTests.length ? d.catalogTests : undefined, d.examCodes
+    d.testsList, d.patientAge, d.patientGender, d.catalogTests && d.catalogTests.length ? d.catalogTests : undefined, d.examCodes, d.customProfiles || []
   );
   return {
     id: `rep-ord-${Date.now()}`,

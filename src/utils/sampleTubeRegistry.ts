@@ -1,3 +1,4 @@
+import { COMPOSICION_POR_CODIGO } from '../data/composicionPerfiles';
 export type ContainerCategory = 'tubo' | 'recipiente' | 'hisopo';
 
 export interface TubeDefinition {
@@ -501,11 +502,21 @@ export function getContainerClassificationLabel(tube: TubeDefinition): string {
  * Returns detailed tube or container information based on test name, category, sample type, or explicit tube id/name.
  * Automatically determines if a sample requires a vacuum TUBE or a collection RECIPIENTE (Heces, Orina, Urocultivo).
  */
+/** Contenedor de cada componente de EGO / EGH / panel de parásitos, según la composición oficial. */
+export function contenedorUroCoproPorCodigo(codigo: string): 'frasco_orina' | 'frasco_heces' | null {
+  const orina = new Set([...(COMPOSICION_POR_CODIGO['URO-33'] || []), 'URO-33']);
+  const heces = new Set([...(COMPOSICION_POR_CODIGO['URO-24'] || []), ...(COMPOSICION_POR_CODIGO['URO-34'] || []), 'URO-24', 'URO-34']);
+  if (orina.has(codigo)) return 'frasco_orina';
+  if (heces.has(codigo)) return 'frasco_heces';
+  return null;
+}
+
 export function inferTubeForTest(
   testName: string,
   category?: string,
   sampleTypeStr?: string,
-  explicitTubeType?: string
+  explicitTubeType?: string,
+  extra?: { description?: string; code?: string }
 ): TubeDefinition {
   // If explicit tube id or tube name provided
   if (explicitTubeType) {
@@ -568,9 +579,27 @@ export function inferTubeForTest(
     return LAB_TUBE_REGISTRY.find(t => t.id === 'galon_orina')!;
   }
 
+  // 2b. Categoría combinada "Uroanálisis y Coprología": el nombre de la categoría
+  // NO dice cuál es la muestra (antes TODO examen de esa categoría —Densidad,
+  // Nitritos, Proteínas…— salía en frasco de heces). Se decide por la
+  // composición oficial de EGO/EGH/parásitos y, si no está, por la descripción.
+  if (normCat.includes('uroanalisis') && normCat.includes('coprologia')) {
+    const porCodigo = extra?.code ? contenedorUroCoproPorCodigo(extra.code) : null;
+    if (porCodigo) return LAB_TUBE_REGISTRY.find(t => t.id === porCodigo)!;
+    const normDesc = (extra?.description || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const texto = `${normName} ${normDesc} ${normSample}`;
+    const sugiereHeces = /heces|fecal|coprolog|parasit|helmint|protozoar|esteatorrea/.test(texto);
+    const sugiereOrina = /orina|urinari|glucosuria|proteinuria|sedimento|\bego\b/.test(texto);
+    if (sugiereHeces && !sugiereOrina) return LAB_TUBE_REGISTRY.find(t => t.id === 'frasco_heces')!;
+    if (sugiereOrina && !sugiereHeces) return LAB_TUBE_REGISTRY.find(t => t.id === 'frasco_orina')!;
+    if (sugiereHeces && sugiereOrina) {
+      return LAB_TUBE_REGISTRY.find(t => t.id === (/heces|fecal|copro/.test(normName) ? 'frasco_heces' : 'frasco_orina'))!;
+    }
+  }
+
   // 3. Heces / Coprología / Parásitos / Sangre Oculta -> RECIPIENTE CON CUCHARILLA PARA HECES
   if (
-    normCat.includes('coprologia') ||
+    (normCat.includes('coprologia') && !normCat.includes('uroanalisis')) ||
     normCat.includes('fecal') ||
     normName.includes('heces') ||
     normName.includes('egh') ||
@@ -611,13 +640,31 @@ export function inferTubeForTest(
     return LAB_TUBE_REGISTRY.find(t => t.id === 'frasco_hemocultivo')!;
   }
 
+  // 5b. Tiempo de coagulación (sangre total fresca, sin aditivo) -> tubo rojo seco
+  if (normName.includes('tiempo de coagulacion')) {
+    return LAB_TUBE_REGISTRY.find(t => t.id === 'rojo_seco')!;
+  }
+
+  // 7. VSG Westergren (Tubo Negro - Citrato 4:1)
+  if (
+    normName.includes('vsg') ||
+    normName.includes('sedimentacion globular') ||
+    normName.includes('westergren') ||
+    normSample.includes('tubo negro') ||
+    /velocidad de sedimentacion|\bves\b/.test(normName)
+  ) {
+    return LAB_TUBE_REGISTRY.find(t => t.id === 'negro') || LAB_TUBE_REGISTRY.find(t => t.id === 'lila')!;
+  }
+
   // 6. Coagulación (Tubo Celeste - Citrato de Sodio 3.2% 1:9)
   if (
     normCat.includes('coagulacion') ||
     normName.includes('protrombina') ||
-    normName.includes('tp ') ||
+    (/\btp\b/.test(normName) && !/sifilis|treponema/.test(normName)) ||
+    normName.includes('tromboplastina') ||
+    /\baptt\b/.test(normName) ||
     normName.includes('t.p') ||
-    normName.includes('inr') ||
+    /\binr\b/.test(normName) ||
     normName.includes('ttpa') ||
     normName.includes('ttp ') ||
     normName.includes('t.t.p') ||
@@ -628,29 +675,22 @@ export function inferTubeForTest(
     normName.includes('factor viii') ||
     normName.includes('factor ix') ||
     normName.includes('hemostasia') ||
-    normSample.includes('citrato') ||
+    normSample.includes('citrat') ||
     normSample.includes('celeste')
   ) {
     return LAB_TUBE_REGISTRY.find(t => t.id === 'celeste')!;
   }
 
-  // 7. VSG Westergren (Tubo Negro - Citrato 4:1)
-  if (
-    normName.includes('vsg') ||
-    normName.includes('sedimentacion globular') ||
-    normName.includes('westergren') ||
-    normSample.includes('tubo negro')
-  ) {
-    return LAB_TUBE_REGISTRY.find(t => t.id === 'negro') || LAB_TUBE_REGISTRY.find(t => t.id === 'lila')!;
-  }
-
   // 8. Hematología & EDTA (Tubo Lila - K2/K3 EDTA)
   if (
-    normCat.includes('hematologia') ||
+    (normCat.includes('hematologia') && !/suero/.test(normSample)) ||
     normName.includes('hemograma') ||
     normName.includes('biometria hematica') ||
     normName.includes('cbc') ||
     normName.includes('leucocito') ||
+    normName.includes('globulos blancos') ||
+    normName.includes('globulos rojos') ||
+    /\b(wbc|rbc)\b/.test(normName) ||
     normName.includes('linfocito') ||
     normName.includes('neutrofilo') ||
     normName.includes('eosinofilo') ||
@@ -685,7 +725,7 @@ export function inferTubeForTest(
     normName.includes('curva de tolerancia') ||
     normName.includes('ptog') ||
     normName.includes('o\'sullivan') ||
-    normName.includes('lactato') ||
+    /lactato(?! deshidrogenasa)/.test(normName) ||
     normName.includes('curva glucosa') ||
     normSample.includes('fluoruro') ||
     normSample.includes('gris')
@@ -712,6 +752,7 @@ export function inferTubeForTest(
     normName.includes('cultivo de herida') ||
     normName.includes('cultivo vaginal') ||
     normName.includes('hisopado') ||
+    normSample.includes('hisopado') ||
     normName.includes('antibiograma') ||
     normSample.includes('hisopo')
   ) {
@@ -867,15 +908,38 @@ export interface TemplateTubeAuditSummary {
   preanalyticalWarning?: string;
 }
 
+/**
+ * Perfil cuyo material es un solo recipiente de recolección (orina, heces,
+ * urocultivo, orina de 24 h…). Sus componentes ("Color", "pH", "Glucosa",
+ * "Leucocitos"…) se miden en ESA muestra: inferir el tubo componente por
+ * componente los confundía con analitos de sangre y pedía decenas de tubos.
+ * Devuelve null si el perfil es de sangre o mezcla muestras (entonces se
+ * analiza componente por componente).
+ */
+export function contenedorUnicoDePerfil(perfil: {
+  name?: string;
+  basedOn?: string;
+  description?: string;
+  sampleType?: string;
+  tubeType?: string;
+}): TubeDefinition | null {
+  const nombre = `${perfil.name || ''} ${perfil.basedOn || ''}`;
+  const norm = nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // Perfiles que mezclan muestras ("orina + sangre", "hematología y orina"…) no son de un solo recipiente.
+  if (/\+|\bsangre\b|hemat|quimica|suero|plasma|hemograma|serolog/.test(norm)) return null;
+  const tubo = inferTubeForTest(nombre, undefined, perfil.sampleType, perfil.tubeType);
+  return tubo && tubo.containerType === 'recipiente' ? tubo : null;
+}
+
 export function analyzeTubesForParameters(
-  parameters: Array<{ name: string; sampleType?: string; category?: string; tubeType?: string }>,
+  parameters: Array<{ name: string; sampleType?: string; category?: string; tubeType?: string; description?: string; code?: string }>,
   defaultCategory?: string
 ): TemplateTubeAuditSummary {
   const parametersMap: TemplateTubeAuditSummary['parametersMap'] = [];
   const tubeMap = new Map<string, { tube: TubeDefinition; parameters: string[]; count: number }>();
 
   parameters.forEach(p => {
-    const tubeDef = inferTubeForTest(p.name, p.category || defaultCategory, p.sampleType, p.tubeType);
+    const tubeDef = inferTubeForTest(p.name, p.category || defaultCategory, p.sampleType, p.tubeType, { description: p.description, code: p.code });
     parametersMap.push({
       parameterName: p.name,
       tube: tubeDef,
@@ -947,4 +1011,50 @@ export function analyzeTubesForParameters(
     estimatedBloodVolumeMl: Math.round(estimatedBloodVolumeMl * 10) / 10,
     preanalyticalWarning
   };
+}
+
+
+export interface ItemParaTubos {
+  name: string;
+  code?: string;
+  category?: string;
+  categoryName?: string;
+  sampleType?: string;
+  tubeType?: string;
+  description?: string;
+  basedOn?: string;
+  isProfile?: boolean;
+  includedParameters?: string[];
+}
+
+type ParametroParaTubo = { name: string; sampleType?: string; category?: string; tubeType?: string; description?: string; code?: string };
+
+/**
+ * Lista de "muestras a considerar" de un examen o perfil, de la que se deduce
+ * qué tubo/recipiente se prepara. Única fuente para el panel "Tubos a
+ * preparar" y para cada fila de la lista de exámenes:
+ *  - perfil de un solo recipiente (orina, heces): solo ese recipiente;
+ *  - paquete que declara varias muestras (sangre + orina + heces): uno por muestra;
+ *  - perfil de sangre: componente por componente;
+ *  - examen individual: su propio tubo/recipiente.
+ */
+export function parametrosParaTubos(item: ItemParaTubos): ParametroParaTubo[] {
+  const category = item.categoryName || item.category;
+  const muestra = (item.sampleType || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const declaradas = [
+    /sangre|suero|plasma/.test(muestra) && { name: `${item.name} (sangre)`, tubeType: 'rojo_gel' },
+    /orina/.test(muestra) && { name: `${item.name} (orina)`, tubeType: 'frasco_orina' },
+    /heces|fecal/.test(muestra) && { name: `${item.name} (heces)`, tubeType: 'frasco_heces' }
+  ].filter(Boolean) as Array<{ name: string; tubeType: string }>;
+  if (item.isProfile && declaradas.length > 1 && !item.tubeType) {
+    return declaradas.map(d => ({ name: d.name, category, sampleType: item.sampleType, tubeType: d.tubeType }));
+  }
+  if (item.isProfile) {
+    const unico = contenedorUnicoDePerfil(item);
+    if (unico) return [{ name: item.name, category, sampleType: item.sampleType, tubeType: unico.id }];
+  }
+  if (item.isProfile && item.includedParameters && item.includedParameters.length > 0) {
+    return item.includedParameters.map(p => ({ name: p, category, sampleType: item.sampleType, tubeType: item.tubeType }));
+  }
+  return [{ name: item.name, category, sampleType: item.sampleType, tubeType: item.tubeType, description: item.description, code: item.code }];
 }

@@ -113,3 +113,15 @@ describe('composición de perfiles', () => {
     }
   });
 });
+
+
+describe('perfiles personalizados en el borrador de informe', () => {
+  it('expande EXAMEN DE HECES COMPLETA en una fila por prueba, con el código del perfil', async () => {
+    const { DEFAULT_VACLINIC_PROFILES } = await import('./profileTestUtils');
+    const filas = parametrosDeExamenes(['EXAMEN DE HECES COMPLETA'], 30, 'F', undefined, ['PRF-COP'], DEFAULT_VACLINIC_PROFILES);
+    expect(filas.length).toBe(19);
+    expect(filas.every((f) => f.examCode === 'PRF-COP')).toBe(true);
+    expect(filas.every((f) => f.value === '')).toBe(true);
+    expect(filas.map((f) => f.name)).toContain('Flora Bacteriana');
+  });
+});

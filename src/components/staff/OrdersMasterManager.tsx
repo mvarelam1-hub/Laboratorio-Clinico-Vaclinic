@@ -217,6 +217,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
     reports,
     patients,
     catalogTests,
+    customProfiles,
     labSettings,
     currentStaffUser
   } = useClinic();
@@ -519,7 +520,9 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
       patientAge: paciente?.age,
       patientGender: paciente?.gender,
       testsList: ord.testsList,
+      examCodes: ord.examCodes,
       catalogTests,
+      customProfiles,
       sampleDate: ord.createdAt || ord.date,
       laboratoryName: labSettings.labName || 'VACLINIC LABORATORIO CLÍNICO'
     });

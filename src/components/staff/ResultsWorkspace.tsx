@@ -19,6 +19,7 @@ export const ResultsWorkspace: React.FC = () => {
     reports,
     patients,
     catalogTests,
+    customProfiles,
     labSettings,
     activeReportToEdit,
     setActiveReportToEdit
@@ -69,7 +70,9 @@ export const ResultsWorkspace: React.FC = () => {
         patientAge: paciente?.age,
         patientGender: paciente?.gender,
         testsList: o.testsList,
+        examCodes: o.examCodes,
         catalogTests,
+        customProfiles,
         sampleDate: o.createdAt || o.date,
         laboratoryName: labSettings.labName || 'VACLINIC LABORATORIO CLÍNICO'
       })
