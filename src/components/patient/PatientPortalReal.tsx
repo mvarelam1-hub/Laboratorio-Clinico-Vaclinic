@@ -112,29 +112,77 @@ export const PatientPortalReal: React.FC = () => {
   }
 
   // ---------------- Resultados ----------------
+  const pasos = datos.seguimiento?.pasos ?? [];
+  const fechaCorta = (v: string | null | undefined) =>
+    v ? new Date(v).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  const hayPublicados = datos.informes.length > 0;
+
   return (
-    <div className="max-w-4xl mx-auto py-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-300 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">{datos.paciente}</h1>
-          <p className="text-sm text-slate-600">Orden {datos.numeroOrden}</p>
+    <div className="max-w-3xl mx-auto py-6 space-y-5">
+      <div className="flex items-center justify-between gap-3 bg-white rounded-3xl shadow-md border border-slate-200/70 px-6 py-5">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Bienvenido/a</p>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 uppercase break-words">{datos.paciente}</h1>
         </div>
-        <button onClick={() => cerrarSesion()} className="text-sm font-semibold border border-slate-400 rounded-lg px-3 py-2 hover:bg-slate-100 cursor-pointer">
-          Cerrar sesión
+        <button onClick={() => cerrarSesion()} className="text-sm font-bold text-slate-500 hover:text-slate-800 px-2 py-1 cursor-pointer shrink-0">
+          Salir
         </button>
       </div>
 
-      {error && <p role="alert" className="mt-4 text-sm font-semibold text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm font-semibold text-red-700">{error}</p>}
 
-      {datos.informes.length === 0 ? (
-        <div className="mt-8 border border-slate-300 rounded-lg p-6 text-slate-700">
-          <p className="font-semibold">Tus resultados todavía no están publicados.</p>
-          <p className="text-sm mt-1">Cuando el laboratorio los publique aparecerán aquí. Si ya pasó el tiempo indicado en tu orden, comunícate con el laboratorio.</p>
-        </div>
-      ) : (
-        datos.informes.map((inf) => (
-          <section key={inf.id} className="mt-8 border border-slate-300 rounded-lg overflow-hidden">
-            <header className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-3 border-b border-slate-300">
+      <section className="bg-white rounded-3xl shadow-md border border-slate-200/70 px-6 py-6" aria-label="Seguimiento de tu orden">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Orden {datos.numeroOrden}</p>
+        {datos.seguimiento?.fechaOrden && <p className="text-sm text-slate-500">Fecha: {fechaCorta(datos.seguimiento.fechaOrden)}</p>}
+
+        {pasos.length > 0 && (
+          <ol className="mt-5">
+            {pasos.map((paso, i) => (
+              <li key={paso.clave} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <span
+                    aria-hidden="true"
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0 ${paso.completado ? 'bg-emerald-600' : 'bg-white border-2 border-slate-300'}`}
+                  >
+                    {paso.completado ? '✓' : ''}
+                  </span>
+                  {i < pasos.length - 1 && <span className={`w-0.5 flex-1 min-h-5 ${paso.completado && pasos[i + 1].completado ? 'bg-emerald-600' : 'bg-slate-200'}`} />}
+                </div>
+                <div className="pb-4">
+                  <p className={`text-sm font-bold leading-6 ${paso.completado ? 'text-emerald-800' : 'text-slate-500'}`}>
+                    {paso.etiqueta}
+                    <span className="sr-only">{paso.completado ? ' (completado)' : ' (pendiente)'}</span>
+                  </p>
+                  {paso.completado && paso.fecha && <p className="text-xs text-slate-500">{fechaCorta(paso.fecha)}</p>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        {hayPublicados ? (
+          <div className="border-t border-slate-200 pt-4 mt-1 flex flex-wrap gap-2">
+            {datos.informes.map((inf) => (
+              <button
+                key={inf.id}
+                onClick={() => bajarPdf(inf)}
+                disabled={descargando === inf.id}
+                className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white text-sm font-bold rounded-full px-5 py-2.5 cursor-pointer"
+              >
+                {descargando === inf.id ? 'Abriendo…' : datos.informes.length > 1 ? `Ver / Descargar / Imprimir PDF · ${inf.titulo}` : 'Ver / Descargar / Imprimir PDF'}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="border-t border-slate-200 pt-4 mt-1 text-sm text-slate-600">
+            Tus resultados aparecerán aquí cuando el laboratorio los publique. Si ya pasó el tiempo indicado en tu orden, comunícate con el laboratorio.
+          </p>
+        )}
+      </section>
+
+      {datos.informes.map((inf) => (
+          <section key={inf.id} className="bg-white rounded-3xl shadow-md border border-slate-200/70 overflow-hidden">
+            <header className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-5 py-3 border-b border-slate-200">
               <div>
                 <h2 className="font-bold text-slate-900">{inf.titulo}</h2>
                 <p className="text-xs text-slate-600">
@@ -142,13 +190,6 @@ export const PatientPortalReal: React.FC = () => {
                   {inf.publicadoPor ? ` · Firma: ${inf.publicadoPor}` : ''}
                 </p>
               </div>
-              <button
-                onClick={() => bajarPdf(inf)}
-                disabled={descargando === inf.id}
-                className="bg-teal-700 hover:bg-teal-800 disabled:opacity-60 text-white text-sm font-bold rounded-lg px-4 py-2 cursor-pointer"
-              >
-                {descargando === inf.id ? 'Abriendo…' : 'Abrir PDF oficial'}
-              </button>
             </header>
 
             {inf.parametros.length > 0 && (
@@ -194,10 +235,9 @@ export const PatientPortalReal: React.FC = () => {
               </div>
             )}
           </section>
-        ))
-      )}
+      ))}
 
-      <p className="text-xs text-slate-500 mt-8">
+      <p className="text-xs text-slate-500 pt-2">
         Estos resultados deben ser interpretados por tu médico. No sustituyen una consulta médica.
         Si algún valor aparece como crítico, comunícate con tu médico o con el laboratorio de inmediato.
       </p>

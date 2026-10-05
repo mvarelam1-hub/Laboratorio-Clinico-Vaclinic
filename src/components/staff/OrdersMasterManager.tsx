@@ -52,11 +52,17 @@ import {
   Fingerprint,
   Banknote,
   Coins,
-  ArrowLeft
+  ArrowLeft,
+  Route as RouteIcon,
+  ClipboardList,
+  PackageCheck,
+  ShieldCheck,
+  Send
 } from 'lucide-react';
 import { BiometricAuthModal } from './BiometricAuthModal';
 import { BiometricAuthResult } from '../../services/biometricService';
 import { construirBorradorDeOrden } from '../../utils/borradorInforme';
+import { seguimientoDePedido } from '../../utils/seguimientoPedido';
 import { coincidePeriodo, Periodo } from '../../utils/periodoOrdenes';
 
 interface OrdersMasterManagerProps {
@@ -252,6 +258,7 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
 
   // Details Modal state
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState<LabOrder | null>(null);
+  const [ordenSeguimiento, setOrdenSeguimiento] = useState<LabOrder | null>(null);
 
   // Print Order Receipt / Ticket Modal State
   const [orderTicketToPrint, setOrderTicketToPrint] = useState<LabOrder | null>(null);
@@ -1296,6 +1303,15 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                               <Eye className="w-3.5 h-3.5" />
                             </button>
 
+                            <button
+                              onClick={() => setOrdenSeguimiento(ord)}
+                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-violet-50 text-violet-600 cursor-pointer"
+                              title="Seguimiento del pedido"
+                              aria-label="Seguimiento del pedido"
+                            >
+                              <RouteIcon className="w-3.5 h-3.5" />
+                            </button>
+
                             {mostrarBiometria && (<button
                               onClick={() => setOrderForBiometricAuth(ord)}
                               className={`p-1.5 rounded-lg border cursor-pointer transition-colors ${
@@ -1396,6 +1412,49 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
       {/* ========================================================
           MODAL 1: DETALLE COMPLETO DE ORDEN & EXÁMENES CARGADOS
          ======================================================== */}
+      {ordenSeguimiento && (() => {
+        const pasos = seguimientoDePedido(ordenSeguimiento, informeDeLaOrden(ordenSeguimiento));
+        const iconos = { registrada: ClipboardList, recibida: PackageCheck, capturados: FlaskConical, validado: ShieldCheck, enviado: Send } as const;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60" role="dialog" aria-modal="true" aria-label="Seguimiento del pedido" onClick={() => setOrdenSeguimiento(null)}>
+            <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-slate-900 text-white px-6 py-4 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="font-bold flex items-center gap-2"><RouteIcon className="w-4 h-4 text-teal-300" /> Seguimiento del Pedido</h3>
+                  <p className="text-xs text-slate-300 uppercase truncate">{ordenSeguimiento.patientName} · Orden {ordenSeguimiento.orderNumber}</p>
+                </div>
+                <button onClick={() => setOrdenSeguimiento(null)} className="text-slate-300 hover:text-white text-lg leading-none cursor-pointer" aria-label="Cerrar">×</button>
+              </div>
+              <ol className="px-6 py-5">
+                {pasos.map((p, i) => {
+                  const Icono = iconos[p.clave];
+                  return (
+                    <li key={p.clave} className="flex gap-4">
+                      <div className="flex flex-col items-center">
+                        <span className={`w-10 h-10 rounded-full flex items-center justify-center border-2 shrink-0 ${p.hecho ? 'border-teal-400 text-teal-600 bg-white' : 'border-slate-200 text-slate-300 bg-slate-50'}`}>
+                          <Icono className="w-4 h-4" />
+                        </span>
+                        {i < pasos.length - 1 && <span className={`w-0.5 flex-1 min-h-4 ${p.hecho && pasos[i + 1].hecho ? 'bg-teal-400' : 'bg-slate-200'}`} />}
+                      </div>
+                      <div className="pb-5">
+                        <p className={`font-bold text-sm ${p.hecho ? 'text-slate-900' : 'text-slate-400'}`}>
+                          {p.titulo} {p.hecho && <Check className="inline w-3.5 h-3.5 text-teal-600" aria-label="completado" />}
+                        </p>
+                        {p.hecho && p.fecha && <p className="text-xs text-slate-500">{p.fecha.split('-').reverse().join('/')}</p>}
+                        {p.detalle && <p className="text-xs text-slate-500">{p.detalle}</p>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+              <div className="px-6 pb-5 flex justify-end">
+                <button onClick={() => setOrdenSeguimiento(null)} className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-bold text-slate-800 cursor-pointer">Cerrar</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {selectedOrderForDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 max-h-[90vh] overflow-y-auto">

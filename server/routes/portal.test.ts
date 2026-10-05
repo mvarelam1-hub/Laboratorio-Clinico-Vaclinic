@@ -155,13 +155,16 @@ describe('GET /api/portal/informes', () => {
             parameters: [{ name: 'Hemoglobina', value: 13, unit: 'g/dL', referenceRange: '12 - 16', status: 'normal' }]
           }
         }]
-      });
+      })
+      .mockResolvedValueOnce({ rows: [{ estado: 'publicado', fecha_creacion: '2026-10-02T12:00:00Z', fecha_publicacion: '2026-10-02T15:00:00Z' }] });
     const app = await buildApp();
     const res = await request(app).get('/api/portal/informes').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.informes).toHaveLength(1);
     expect(res.body.informes[0].parametros[0]).toMatchObject({ nombre: 'Hemoglobina', valor: 13, estado: 'normal' });
     expect(JSON.stringify(res.body)).not.toContain('NO DEBE SALIR');
+    expect(res.body.seguimiento.pasos.map((p: any) => p.clave)).toEqual(['registrado', 'solicitud', 'muestra', 'ingresados', 'validados', 'disponibles']);
+    expect(res.body.seguimiento.pasos.every((p: any) => p.completado)).toBe(true);
     const sqlInformes = String(queryMock.mock.calls[1][0]);
     expect(sqlInformes).toMatch(/estado IN \('publicado', 'entregado'\)/);
     expect(queryMock.mock.calls[1][1]).toEqual([10]);
@@ -174,7 +177,8 @@ describe('GET /api/portal/informes', () => {
       .mockResolvedValueOnce({ rows: [{ numero_orden: 'ORD-10', nombre_completo: 'Paciente Real' }] })
       .mockResolvedValueOnce({
         rows: [{ id_informe: 5, numero_informe: 'INF-5', titulo: 'X', conclusiones_medico: 'Reservada', recomendaciones: ['r'], datos_json: { includeConclusionsInReport: false, includeRecommendationsInReport: false } }]
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
     const app = await buildApp();
     const res = await request(app).get('/api/portal/informes').set('Authorization', `Bearer ${token}`);
     expect(res.body.informes[0].conclusion).toBeNull();

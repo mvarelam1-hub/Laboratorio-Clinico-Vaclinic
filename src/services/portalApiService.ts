@@ -38,9 +38,17 @@ export interface InformePortal {
   recomendaciones: string[];
 }
 
+export interface PasoSeguimientoPortal {
+  clave: string;
+  etiqueta: string;
+  completado: boolean;
+  fecha: string | null;
+}
+
 export interface RespuestaInformesPortal {
   numeroOrden: string;
   paciente: string;
+  seguimiento?: { fechaOrden: string | null; pasos: PasoSeguimientoPortal[] };
   informes: InformePortal[];
 }
 

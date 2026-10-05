@@ -30,6 +30,7 @@ import { pool } from '../db';
 import { signPortalToken, verifyPortalToken } from '../token';
 import { asyncHandler } from '../asyncHandler';
 import { emitirPdfInforme } from '../informeEmision';
+import { calcularSeguimiento } from '../seguimientoOrden';
 
 export const portalRouter = Router();
 
@@ -143,7 +144,8 @@ portalRouter.get('/orden', requirePortalToken, asyncHandler(async (req: any, res
 portalRouter.get('/informes', requirePortalToken, asyncHandler(async (req: any, res) => {
   const { idPaciente, idOrden } = req.portalAuth;
   const { rows: ord } = await pool.query(
-    `SELECT o.numero_orden, p.nombre_completo
+    `SELECT o.numero_orden, p.nombre_completo, o.fecha_registro, o.estado_flujo,
+            (SELECT COUNT(*) FROM detalle_orden d WHERE d.id_orden = o.id_orden) AS total_examenes
      FROM orden o JOIN paciente p ON p.id_paciente = o.id_paciente
      WHERE o.id_orden = $1 AND o.id_paciente = $2`,
     [idOrden, idPaciente]
@@ -159,9 +161,27 @@ portalRouter.get('/informes', requirePortalToken, asyncHandler(async (req: any, 
     [idOrden]
   );
 
+  // Estado de TODOS los informes de la orden (solo estado y fechas, nunca su
+  // contenido) para la línea de tiempo: el paciente ve el avance, no borradores.
+  const { rows: estados } = await pool.query(
+    `SELECT estado, fecha_creacion, fecha_publicacion
+     FROM informe_clinico WHERE id_orden = $1 AND eliminado = FALSE`,
+    [idOrden]
+  );
+  const seguimiento = {
+    fechaOrden: ord[0].fecha_registro,
+    pasos: calcularSeguimiento({
+      fechaRegistro: ord[0].fecha_registro,
+      estadoFlujo: ord[0].estado_flujo,
+      totalExamenes: Number(ord[0].total_examenes) || 0,
+      informes: estados.map((r: any) => ({ estado: r.estado, fechaCreacion: r.fecha_creacion, fechaPublicacion: r.fecha_publicacion }))
+    })
+  };
+
   return res.json({
     numeroOrden: ord[0].numero_orden,
     paciente: ord[0].nombre_completo,
+    seguimiento,
     informes: rows.map((r: any) => {
       const d = r.datos_json || {};
       const incluirConclusion = d.includeConclusionsInReport !== false;
