@@ -3,6 +3,8 @@ import type { Request, Response, NextFunction } from 'express';
 import { requireStaffAuth } from '../auth-staff';
 import { authRouter } from './auth';
 import { portalRouter } from './portal';
+import { publicoRouter } from './publico';
+import { contenidoPublicoRouter } from './contenidoPublico';
 import { preferenciasRouter } from './preferencias';
 import { verificarApiRouter } from './verificar';
 import { pacientesRouter } from './pacientes';
@@ -28,6 +30,10 @@ export const apiRouter = Router();
 // Portal del paciente: SIN requireStaffAuth (no es personal), usa su propio
 // token de portal (ver portal.ts).
 apiRouter.use('/portal', portalRouter);
+
+// Información pública del laboratorio para el portal (catálogo, contacto,
+// noticias y promociones publicadas): solo lectura, sin sesión.
+apiRouter.use('/publico', publicoRouter);
 
 // Preferencias de notificación del paciente: igual que /portal, patient-facing,
 // sin requireStaffAuth — usa el mismo requirePortalToken (ver preferencias.ts).
@@ -93,4 +99,5 @@ apiRouter.use('/plantillas', plantillasRouter);
 apiRouter.use('/chat', chatRouter);
 apiRouter.use('/informes', informesRouter);
 apiRouter.use('/config-lab', configLabRouter);
+apiRouter.use('/contenido-publico', contenidoPublicoRouter);
 apiRouter.use('/ia', iaRouter);

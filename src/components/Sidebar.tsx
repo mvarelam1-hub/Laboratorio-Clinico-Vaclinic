@@ -182,7 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'catalogo', titulo: 'Catálogo',
       items: [
         { tab: 'catalogo_perfiles', etiqueta: 'Catálogo y perfiles', icono: Layers },
-        { tab: 'promociones', etiqueta: 'Promociones', icono: BadgePercent },
+        { tab: 'promociones', etiqueta: 'Noticias y promociones', icono: BadgePercent, titulo: 'Lo que se muestra en el Portal del Paciente' },
         { tab: 'atlas_microscopico', etiqueta: 'Atlas microscópico', icono: Microscope, domId: 'btn-nav-atlas-microscopico' }
       ]
     },

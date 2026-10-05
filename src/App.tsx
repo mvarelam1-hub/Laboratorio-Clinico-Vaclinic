@@ -15,7 +15,7 @@ import { QualityControlQC } from './components/staff/QualityControlQC';
 import { UserManagement } from './components/staff/UserManagement';
 import { InternalChatView } from './components/chat/InternalChatView';
 import { InternalChatDrawer } from './components/chat/InternalChatDrawer';
-import { PatientPortalReal } from './components/patient/PatientPortalReal';
+import { PortalPublico } from './components/patient/publico/PortalPublico';
 import { DEMO_MODE } from './config/demoMode';
 
 // El portal de demostración (datos de ejemplo) solo se descarga si se compiló con VITE_DEMO_MODE=true.
@@ -150,7 +150,7 @@ const MainContent: React.FC = () => {
                 {DEMO_MODE ? (
                   <Suspense fallback={null}><PatientPortalDemo /></Suspense>
                 ) : (
-                  <PatientPortalReal />
+                  <PortalPublico />
                 )}
               </div>
             )}

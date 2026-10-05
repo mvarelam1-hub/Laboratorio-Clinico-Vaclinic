@@ -5,7 +5,8 @@ import {
 } from '../../services/portalApiService';
 
 /**
- * Portal del Paciente REAL: el paciente escribe el código único de consulta
+ * Consulta de resultados del Portal del Paciente REAL (se muestra dentro de
+ * PortalPublico, junto al catálogo, la guía y las noticias): el paciente escribe el código único de consulta
  * que le dio recepción y ve SOLO los informes ya publicados de su orden.
  * Sin pacientes de ejemplo, sin simuladores y sin texto generado por IA:
  * lo que se muestra es lo que firmó el laboratorio.
@@ -14,7 +15,7 @@ import {
 const formatoFecha = (v: string | null) =>
   v ? new Date(v).toLocaleDateString('es-GT', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
 
-export const PatientPortalReal: React.FC = () => {
+export const ConsultaResultados: React.FC = () => {
   const [codigo, setCodigo] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [datos, setDatos] = useState<RespuestaInformesPortal | null>(null);
@@ -76,12 +77,12 @@ export const PatientPortalReal: React.FC = () => {
   if (!token || !datos) {
     return (
       <div className="max-w-md mx-auto py-10 sm:py-16">
-        <h1 className="text-2xl font-bold text-slate-900">Consulta tus resultados</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Consultar mis resultados</h1>
         <p className="text-sm text-slate-600 mt-2">
-          Escribe el código de consulta que aparece en tu orden o que te entregó recepción.
+          Escribe tu código de consulta (PIN): el que aparece en tu orden o que te entregó recepción.
         </p>
         <form onSubmit={entrar} className="mt-6 space-y-3" noValidate>
-          <label htmlFor="codigo-consulta" className="block text-sm font-semibold text-slate-800">Código de consulta</label>
+          <label htmlFor="codigo-consulta" className="block text-sm font-semibold text-slate-800">Código de consulta (PIN)</label>
           <input
             id="codigo-consulta"
             value={codigo}
