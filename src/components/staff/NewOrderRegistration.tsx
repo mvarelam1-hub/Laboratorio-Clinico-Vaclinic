@@ -1096,6 +1096,12 @@ export const NewOrderRegistration: React.FC = () => {
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="Buscar examen, perfil o código"
                       className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm placeholder-slate-400 outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                    onKeyDown={(ev) => {
+                      if (ev.key === 'ArrowDown') {
+                        const primera = document.querySelector<HTMLElement>('[data-fila-examen]');
+                        if (primera) { ev.preventDefault(); primera.focus(); }
+                      }
+                    }}
                     />
                   </div>
                   <select
@@ -1140,8 +1146,22 @@ export const NewOrderRegistration: React.FC = () => {
                       <div
                         key={test.id}
                         id={`test-item-${test.id}`}
+                        data-fila-examen="1"
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        tabIndex={0}
                         onClick={() => toggleTest(test.id)}
-                        className={`px-3 py-2 flex items-center gap-3 cursor-pointer text-xs ${
+                        onKeyDown={(ev) => {
+                          if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); toggleTest(test.id); return; }
+                          if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
+                          const filas = Array.from(ev.currentTarget.parentElement!.querySelectorAll<HTMLElement>('[data-fila-examen]'));
+                          const i = filas.indexOf(ev.currentTarget);
+                          const dest = filas[i + (ev.key === 'ArrowDown' ? 1 : -1)];
+                          ev.preventDefault();
+                          if (dest) { dest.focus(); dest.scrollIntoView({ block: 'nearest' }); }
+                          else if (ev.key === 'ArrowUp') document.getElementById('input-search-tests')?.focus();
+                        }}
+                        className={`px-3 py-2 flex items-center gap-3 cursor-pointer text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-teal-500 ${
                           isSelected ? 'bg-teal-50' : 'hover:bg-slate-50'
                         }`}
                       >

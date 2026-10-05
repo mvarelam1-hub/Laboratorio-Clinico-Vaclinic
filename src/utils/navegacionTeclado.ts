@@ -7,17 +7,18 @@
  *             el cursor está al inicio / al final, para no estorbar la edición
  *  Listas desplegables: ↑ / ↓ siguen cambiando la opción; ← / → y Enter salen de la lista.
  *
+ * En TODA la aplicación: campos, casillas, botones, enlaces y filas de lista.
  * Funciona con campos, listas, casillas, botones y enlaces dentro de filas
  * (`<tr>` o `role="row"`) de una `<table>` o `role="grid"`. Fuera de las tablas,
  * en cualquier formulario o ventana de la aplicación, ↑ / ↓ en un campo de texto
- * pasan al campo anterior / siguiente (←, → y Enter conservan su función normal). Se desactiva con
+ * pasan al campo vecino según su posición en pantalla: ↑ ↓ ← → (← → solo al borde del texto; Enter conserva su función normal). Se desactiva con
  * `data-sin-flechas` en el control o en un contenedor, y no actúa en áreas de
  * texto, en elementos editables ni en listas de sugerencias abiertas.
  */
 
 const TIPOS_TEXTO = new Set(['', 'text', 'number', 'search', 'tel', 'email', 'url', 'password']);
 const SELECTOR_ENFOCABLES =
-  'input:not([type="hidden"]):not([disabled]), select:not([disabled]), button:not([disabled]), a[href]';
+  'input:not([type="hidden"]):not([disabled]), select:not([disabled]), button:not([disabled]), a[href], [tabindex="0"]';
 
 const visible = (el: HTMLElement) => el.getClientRects().length > 0;
 
@@ -53,18 +54,74 @@ function filaVecina(fila: Element, direccion: 1 | -1): Element | null {
   return null;
 }
 
-const SELECTOR_CAMPOS = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])';
-const TIPOS_CAMPO_LINEA = new Set(['text', 'search', 'tel', 'email', 'url', 'password']);
+const SELECTOR_NAVEGABLES =
+  'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href], [tabindex="0"], [role="checkbox"]:not([aria-disabled="true"])';
+const TIPOS_CAMPO_LINEA = new Set(['text', 'search', 'tel', 'email', 'url', 'password', 'number']);
+const TIPOS_FECHA_HORA = new Set(['date', 'time', 'datetime-local', 'month', 'week']);
 
-/** Fuera de tablas: ↑ / ↓ en un campo de una sola línea pasan al campo anterior / siguiente. */
+interface Caja { el: HTMLElement; x: number; y: number; w: number; h: number; izq: number; der: number }
+
+function caja(el: HTMLElement): Caja {
+  const r = el.getBoundingClientRect();
+  return { el, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, izq: r.left, der: r.right };
+}
+
+/**
+ * Siguiente control según su POSICIÓN en pantalla (no según el orden del código):
+ * ←/→ buscan el más cercano en la misma línea; ↑/↓ el de la línea de
+ * arriba/abajo que mejor se alinea. Sin candidato en esa dirección no se mueve.
+ */
+export function campoEnDireccion(actual: Caja, otros: Caja[], tecla: string): HTMLElement | null {
+  const tolerancia = Math.max(actual.h * 0.6, 8);
+  if (tecla === 'ArrowLeft' || tecla === 'ArrowRight') {
+    const signo = tecla === 'ArrowRight' ? 1 : -1;
+    const enLinea = otros.filter((c) => Math.abs(c.y - actual.y) <= tolerancia && (c.x - actual.x) * signo > 2);
+    enLinea.sort((a, b) => Math.abs(a.x - actual.x) - Math.abs(b.x - actual.x));
+    return enLinea[0]?.el ?? null;
+  }
+  const signo = tecla === 'ArrowDown' ? 1 : -1;
+  const solape = (c: Caja) => Math.min(c.der, actual.der) - Math.max(c.izq, actual.izq);
+  const lineas = otros.filter((c) => (c.y - actual.y) * signo > tolerancia);
+  if (lineas.length === 0) return null;
+  // Se prefieren los controles que quedan realmente arriba/abajo (se solapan en horizontal).
+  const alineados = lineas.filter((c) => solape(c) > 0);
+  const grupo = alineados.length > 0 ? alineados : lineas;
+  const dyMin = Math.min(...grupo.map((c) => Math.abs(c.y - actual.y)));
+  const siguienteLinea = grupo.filter((c) => Math.abs(c.y - actual.y) - dyMin <= tolerancia);
+  siguienteLinea.sort((a, b) => solape(b) - solape(a) || Math.abs(a.x - actual.x) - Math.abs(b.x - actual.x));
+  return siguienteLinea[0]?.el ?? null;
+}
+
+/** Fuera de tablas: las cuatro flechas pasan al control vecino según su posición en pantalla. */
 function moverEntreCampos(e: KeyboardEvent, el: HTMLElement): void {
-  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-  if (!(el instanceof HTMLInputElement) || !TIPOS_CAMPO_LINEA.has(el.type)) return;
-  if (el.hasAttribute('list') || el.hasAttribute('aria-autocomplete') || el.hasAttribute('aria-controls')) return;
-  const contenedor = el.closest('form, [role="dialog"], dialog, main') || document.body;
-  const campos = Array.from(contenedor.querySelectorAll<HTMLElement>(SELECTOR_CAMPOS)).filter(visible);
-  const i = campos.indexOf(el);
-  const dest = campos[i + (e.key === 'ArrowUp' ? -1 : 1)];
+  const k = e.key;
+  if (k !== 'ArrowUp' && k !== 'ArrowDown' && k !== 'ArrowLeft' && k !== 'ArrowRight') return;
+  if (el instanceof HTMLSelectElement) return; // la lista usa las flechas para cambiar de opción
+  const esCampo = el instanceof HTMLInputElement;
+  if (esCampo) {
+    const inp = el as HTMLInputElement;
+    const esCasilla = inp.type === 'checkbox';
+    const esFechaHora = TIPOS_FECHA_HORA.has(inp.type);
+    // En fechas y horas ← / → siguen moviendo entre día, mes y año; ↑ / ↓ pasan al campo de arriba/abajo.
+    if (esFechaHora && (k === 'ArrowLeft' || k === 'ArrowRight')) return;
+    if (!esCasilla && !esFechaHora && !TIPOS_CAMPO_LINEA.has(inp.type)) return;
+    if (inp.hasAttribute('list') || inp.hasAttribute('aria-autocomplete') || inp.hasAttribute('aria-controls')) return;
+    // ← / → en un campo de texto: solo cuando el cursor está al borde.
+    if (!esCasilla && !esFechaHora && (k === 'ArrowLeft' || k === 'ArrowRight') && inp.selectionStart !== null && inp.selectionEnd !== null) {
+      const alInicio = inp.selectionStart === 0 && inp.selectionEnd === 0;
+      const alFinal = inp.selectionStart === inp.value.length && inp.selectionEnd === inp.value.length;
+      const todo = inp.selectionStart === 0 && inp.selectionEnd === inp.value.length;
+      if (k === 'ArrowLeft' && !(alInicio || todo)) return;
+      if (k === 'ArrowRight' && !(alFinal || todo)) return;
+    }
+  }
+  // Dentro de una ventana emergente el foco no sale de ella.
+  const contenedor = el.closest('[role="dialog"], [aria-modal="true"], dialog') || document.body;
+  const otros = Array.from(contenedor.querySelectorAll<HTMLElement>(SELECTOR_NAVEGABLES))
+    .filter((c) => c !== el && visible(c) && !c.closest('[data-sin-flechas]') && !c.contains(el) && !el.contains(c)
+      && c.getAttribute('tabindex') !== '-1' && !c.closest('[aria-hidden="true"], [inert]'))
+    .map(caja);
+  const dest = campoEnDireccion(caja(el), otros, k);
   if (!dest) return;
   e.preventDefault();
   dest.focus();
@@ -83,8 +140,11 @@ export function manejarFlechasEnTabla(e: KeyboardEvent): void {
   if (!el || !(el instanceof HTMLElement)) return;
   if (el.isContentEditable || el instanceof HTMLTextAreaElement) return;
   if (el.closest('[data-sin-flechas]')) return;
-  if (el.getAttribute('role') === 'combobox' || el.getAttribute('aria-expanded') === 'true') return;
-  if (el.closest('[role="listbox"], [role="menu"]')) return;
+  const rol = el.getAttribute('role') || '';
+  // Controles con su propio manejo de flechas (pestañas, menús, deslizadores, listas…).
+  if (['combobox', 'tab', 'radio', 'slider', 'spinbutton', 'option', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'treeitem', 'scrollbar', 'separator'].includes(rol)) return;
+  if (el instanceof HTMLInputElement && el.getAttribute('aria-expanded') === 'true') return;
+  if (el.closest('[role="listbox"], [role="menu"], [role="tablist"], [role="radiogroup"], [role="tree"], [role="toolbar"][aria-orientation]')) return;
 
   const esInput = el instanceof HTMLInputElement;
   const esSelect = el instanceof HTMLSelectElement;
@@ -92,7 +152,8 @@ export function manejarFlechasEnTabla(e: KeyboardEvent): void {
   if (esInput && tipo === 'radio') return; // las flechas ya eligen opción
   const esTexto = esInput && TIPOS_TEXTO.has(tipo);
   const esControlSimple = !esTexto && !esSelect; // casilla, botón, enlace…
-  if (!esInput && !esSelect && !(el instanceof HTMLButtonElement) && !(el instanceof HTMLAnchorElement)) return;
+  const esEnfocableGenerico = el instanceof HTMLButtonElement || el instanceof HTMLAnchorElement || el.matches('[tabindex="0"], [role="checkbox"], [role="button"], [role="switch"], [role="link"]');
+  if (!esInput && !esSelect && !esEnfocableGenerico) return;
 
   const fila = el.closest('tr, [role="row"]');
   if (!fila || !fila.closest('table, [role="grid"], [role="table"]')) {
