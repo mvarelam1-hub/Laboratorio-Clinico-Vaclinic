@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
+import { seguimientoDePedido } from '../../utils/seguimientoPedido';
 import { 
   Clock, 
   Search, 
@@ -12,15 +13,31 @@ import {
 } from 'lucide-react';
 
 export const OrderHistoryView: React.FC = () => {
-  const { episodes, showNotification, setStaffActiveTab } = useClinic();
+  const { orders, reports, setStaffActiveTab } = useClinic();
   const [searchTerm, setSearchTerm] = useState('');
 
-  const historyEvents = [
-    { id: 'ev-1', orderNumber: '4D-2026-EP842', patient: 'Carlos Mendoza Ramos', event: 'Muestra procesada en Mindray BS-240 y validada por Dra. Morales', time: 'Hace 12 min', status: 'Validado' },
-    { id: 'ev-2', orderNumber: '4D-2026-EP843', patient: 'Lucía Fernández Morales', event: 'Tubo Citrato centrifugado a 3000 RPM (Flebotomía)', time: 'Hace 38 min', status: 'En Proceso' },
-    { id: 'ev-3', orderNumber: '4D-2026-EP844', patient: 'Roberto Gómez Suárez', event: 'Admisión registrada en ventanilla y código Barcode impreso', time: 'Hace 1h 10m', status: 'Admitido' },
-    { id: 'ev-4', orderNumber: '4D-2026-EP845', patient: 'Elena Soto Villalobos', event: 'Resultados de Uroanálisis enviados por WhatsApp', time: 'Hace 2h', status: 'Entregado' }
-  ];
+  // Historial REAL: la etapa más avanzada de cada orden, según lo que el sistema
+  // guarda (orden, informe y firma). Sin eventos de ejemplo ni horas inventadas.
+  const historyEvents = useMemo(() => {
+    const t = searchTerm.trim().toLowerCase();
+    return orders
+      .filter((o) => !o.isDeleted)
+      .filter((o) => !t || `${o.orderNumber} ${o.patientName}`.toLowerCase().includes(t))
+      .sort((a, b) => (b.createdAt || b.date).localeCompare(a.createdAt || a.date) || b.seqNumber - a.seqNumber)
+      .slice(0, 50)
+      .map((o) => {
+        const informe = reports.find((r) => r.orderId === o.id);
+        const hechos = seguimientoDePedido(o, informe).filter((p) => p.hecho);
+        const ultimo = hechos[hechos.length - 1];
+        return {
+          id: o.id,
+          orderNumber: o.orderNumber,
+          patient: o.patientName,
+          event: `${ultimo.titulo}${ultimo.detalle ? ` · ${ultimo.detalle}` : ''}`,
+          time: [ultimo.fecha || o.date, ultimo.clave === 'registrada' ? o.time : ''].filter(Boolean).join(' '),
+        };
+      });
+  }, [orders, reports, searchTerm]);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 animate-fade-in text-slate-800">
@@ -35,7 +52,7 @@ export const OrderHistoryView: React.FC = () => {
             <div>
               <h1 className="text-2xl font-black text-slate-900">Historial de Órdenes & Trazabilidad</h1>
               <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                Línea de tiempo detallada de eventos, movimientos de tubos y firmas electrónicas.
+                Última etapa registrada de cada orden. Abre "Ver Flujo" para el detalle.
               </p>
             </div>
           </div>
@@ -44,6 +61,15 @@ export const OrderHistoryView: React.FC = () => {
 
       {/* Timeline List */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
+        <label className="sr-only" htmlFor="buscar-historial">Buscar por paciente o número de orden</label>
+        <input
+          id="buscar-historial" type="search" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Buscar por paciente o número de orden"
+          className="w-full sm:w-96 mb-5 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+        />
+        {historyEvents.length === 0 && (
+          <p className="text-sm text-slate-500 py-6 text-center">Todavía no hay órdenes en el historial.</p>
+        )}
         <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
           {historyEvents.map((ev) => (
             <div key={ev.id} className="relative flex items-start justify-between gap-4">

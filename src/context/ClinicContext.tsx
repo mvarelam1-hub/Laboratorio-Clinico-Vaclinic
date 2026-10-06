@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { mapMensajeRemoto, combinarMensajesRemotos } from '../utils/chatRemoto';
 import { validarInformeContraOrden } from '../utils/validarInformeContraOrden';
 import { 
@@ -210,6 +210,14 @@ export type StaffTabType =
   | 'biometria'
   | 'atlas_microscopico';
 
+/**
+ * Resultado de publicar un informe: 'ok' = ya lo ve el paciente (publicado en el
+ * servidor); 'solo_local' = quedó publicado solo en esta pantalla porque algo
+ * falló en el servidor (el paciente NO lo ve); 'detenido' = no se publicó (por
+ * ejemplo, falta la segunda verificación de un valor crítico).
+ */
+export type ResultadoPublicacion = 'ok' | 'solo_local' | 'detenido';
+
 interface ClinicContextType {
   role: UserRole;
   setRole: (role: UserRole) => void;
@@ -248,7 +256,7 @@ interface ClinicContextType {
     bioanalystName?: string,
     bioanalystSpecialty?: string,
     bioanalystLicense?: string
-  ) => Promise<void>;
+  ) => Promise<ResultadoPublicacion>;
   activeReportToPrint: MedicalReport | null;
   setActiveReportToPrint: (report: MedicalReport | null) => void;
   activeReportToEdit: MedicalReport | null;
@@ -623,6 +631,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     return soloEnDemo(INITIAL_REPORTS);
   });
+  // Copia siempre al día de `reports`: addReport + publishReport se llaman en la
+  // misma pasada y publishReport necesita ver el informe recién creado (el
+  // estado de React aún no se actualizó dentro de esa misma función async).
+  const reportsRef = useRef<MedicalReport[]>(reports);
+  reportsRef.current = reports;
 
   // Load 4D episodes
   const [episodes, setEpisodes] = useState<LabEpisode[]>(() => {
@@ -2297,6 +2310,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
 
+    reportsRef.current = [newReport, ...reportsRef.current];
     setReports((prev) => [newReport, ...prev]);
 
     if (!isEffectiveOnline) {
@@ -2437,7 +2451,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     bioanalystName = '',
     bioanalystSpecialty = '',
     bioanalystLicense = ''
-  ): Promise<void> => {
+  ): Promise<ResultadoPublicacion> => {
+    let soloLocal = false;
     // Ya NO se inventa un hash en el navegador (antes: 24 hex con
     // Math.random(), imposible de verificar). El único sello válido lo emite
     // el servidor al publicar (`selloServidor`, abajo); si no hay servidor el
@@ -2452,7 +2467,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       signedAt: new Date().toISOString()
     };
     if (!DEMO_MODE) {
-      const aPublicar = reports.find((r) => r.id === id);
+      const aPublicar = reportsRef.current.find((r) => r.id === id);
       if (aPublicar) {
         const v = validarInformeContraOrden(orders.find((o) => o.id === aPublicar.orderId), aPublicar.parameters || []);
         if (!v.ok) {
@@ -2473,8 +2488,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // separación de roles real que exige la tesis (cap. 4), no un bug a
     // evadir: se reporta honestamente y el informe queda "publicado" solo en
     // la vista local del staff, no en el backend real.
-    const objetivo = reports.find(r => r.id === id);
+    const objetivo = reportsRef.current.find(r => r.id === id);
     const resultadosRemotosObjetivo: Record<string, number> | undefined = objetivo?.resultadosRemotos;
+    if (!DEMO_MODE && !(isEffectiveOnline && resultadosRemotosObjetivo)) soloLocal = true;
     if (isEffectiveOnline && resultadosRemotosObjetivo) {
       const entradas: Array<[string, number]> = Object.entries(resultadosRemotosObjetivo);
       let algunoFallo = false;
@@ -2495,6 +2511,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             continue;
           }
           algunoFallo = true;
+          soloLocal = true;
           const mensaje = err instanceof ResultadosApiError ? err.message : 'Error de red desconocido.';
           console.error(`[ClinicContext] No se pudo validar/publicar el resultado real de "${examCode}" (id ${idResultado}):`, err);
           showNotification(
@@ -2508,7 +2525,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           `Publicación detenida: ${pendientesVerificacion.join(', ')} está fuera de rango y requiere la verificación de un segundo bioanalista (en "Verificación de críticos"). Cuando la haga, vuelve a publicar el informe.`,
           'warning'
         );
-        return;
+        return 'detenido';
       }
       if (!algunoFallo && entradas.length > 0) {
         showNotification('Resultados validados y publicados en el servidor real (Borrador → Validado → Publicado).', 'success');
@@ -2521,6 +2538,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // que los agrupa. Mismo honesto-si-falla que el bloque de arriba: un
     // 403 (sin 'validacion_publicacion') se avisa pero no bloquea la vista
     // local.
+    if (!DEMO_MODE && !(isEffectiveOnline && objetivo?.remoteId)) soloLocal = true;
     if (isEffectiveOnline && objetivo?.remoteId) {
       try {
         const filaPublicada = await publicarInformeRemoto(objetivo.remoteId, signature);
@@ -2528,6 +2546,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const huella = filaPublicada.hash_contenido;
         if (typeof codigo === 'string' && typeof huella === 'string') selloServidor = { codigo, hash: huella };
       } catch (err) {
+        soloLocal = true;
         const mensaje = err instanceof InformesApiError ? err.message : 'Error de red desconocido.';
         console.error('[ClinicContext] No se pudo publicar el informe en el servidor:', err);
         showNotification(`No se pudo publicar el informe en el servidor (${mensaje}). Quedó "publicado" solo en esta pantalla.`, 'warning');
@@ -2552,7 +2571,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       })
     );
 
-    showNotification('¡Informe firmado digitalmente y publicado para el paciente!', 'success');
+    if (soloLocal) {
+      showNotification('El informe NO llegó al servidor: el paciente todavía no puede verlo. Revisa los avisos anteriores y vuelve a publicar.', 'warning');
+    } else {
+      showNotification('¡Informe firmado digitalmente y publicado para el paciente!', 'success');
+    }
 
     // Automatic push notification trigger (Firebase Messaging & Web Push)
     if (publishedRep) {
@@ -2585,6 +2608,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         urgent: rep.urgentAlert
       });
     }
+    return soloLocal ? 'solo_local' : 'ok';
   };
 
   // NOTA DE ALCANCE REAL, reiterada aquí porque el noveno módulo de la

@@ -97,6 +97,7 @@ export const ReportEditor: React.FC = () => {
     templates, 
     catalogTests,
     customProfiles,
+    reports,
     activeReportToEdit, 
     setActiveReportToEdit, 
     addReport, 
@@ -743,22 +744,25 @@ export const ReportEditor: React.FC = () => {
       resultadosRemotos: activeReportToEdit?.resultadosRemotos
     };
 
-    if (activeReportToEdit && activeReportToEdit.id) {
-      await updateReport(activeReportToEdit.id, reportData);
-      if (targetStatus === 'publicado') {
-        await publishReport(activeReportToEdit.id);
-        showNotification('Informe firmado y publicado. El paciente lo consulta con el código de su orden.', 'success');
-      } else {
-        showNotification('Informe actualizado correctamente', 'success');
-      }
+    // Un borrador nuevo (armado desde la orden) trae un id temporal pero todavía
+    // NO existe en el sistema: hay que crearlo, no "actualizarlo" (antes se
+    // intentaba actualizar un informe inexistente y no se guardaba nada).
+    const yaExiste = !!activeReportToEdit?.id && reports.some((r) => r.id === activeReportToEdit.id);
+    let reportId = activeReportToEdit?.id || '';
+    if (yaExiste) {
+      await updateReport(reportId, reportData);
     } else {
-      const created = await addReport(reportData);
-      if (targetStatus === 'publicado' && created) {
-        await publishReport(created.id);
-        showNotification('Nuevo informe registrado y publicado con notificación push Firebase al paciente', 'success');
-      } else {
-        showNotification('Nuevo informe registrado con éxito', 'success');
+      const created = await addReport({ ...reportData, status: targetStatus === 'publicado' ? 'borrador' : targetStatus });
+      reportId = created.id;
+    }
+    if (targetStatus === 'publicado') {
+      const resultado = await publishReport(reportId);
+      if (resultado === 'ok') {
+        showNotification('Informe firmado y publicado. El paciente lo consulta con el código de su orden.', 'success');
       }
+      // 'solo_local' y 'detenido' ya mostraron su propio aviso: no se afirma que el paciente lo ve.
+    } else {
+      showNotification(yaExiste ? 'Informe actualizado correctamente' : 'Informe guardado como borrador', 'success');
     }
 
     setActiveReportToEdit(null);

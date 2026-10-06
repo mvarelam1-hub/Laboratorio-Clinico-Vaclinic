@@ -199,3 +199,13 @@ describe('PATCH /api/config-lab', () => {
     expect(res.body.updated).toBe(false);
   });
 });
+
+describe('fila inicial de configuración (email NOT NULL)', () => {
+  it('al crear la fila por defecto envía email vacío para no violar NOT NULL', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ id_laboratorio: 1 }] });
+    const app = await buildApp();
+    const res = await request(app).get('/api/config-lab');
+    expect(res.status).toBe(200);
+    expect(String(queryMock.mock.calls[1][0])).toMatch(/\(id_laboratorio, email\)\s+VALUES \(1, ''\)/);
+  });
+});

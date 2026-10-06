@@ -34,10 +34,10 @@ configLabRouter.get('/', async (req: Request, res: Response) => {
     );
 
     if (result.rows.length === 0) {
-      // Crear fila con defaults si no existe
+      // Crear fila con defaults si no existe (email es NOT NULL sin valor por defecto en 0015: sin '' el INSERT fallaba en una base nueva)
       const inserted = await pool.query(
-        `INSERT INTO configuracion_laboratorio (id_laboratorio)
-         VALUES (1)
+        `INSERT INTO configuracion_laboratorio (id_laboratorio, email)
+         VALUES (1, '')
          RETURNING *`
       );
       return res.status(200).json(inserted.rows[0]);
@@ -210,8 +210,8 @@ configLabRouter.patch('/', async (req: Request, res: Response) => {
     if (result.rows.length === 0) {
       // No existe aún, crear
       const inserted = await pool.query(
-        `INSERT INTO configuracion_laboratorio (id_laboratorio, id_usuario_ultima_mod)
-         VALUES (1, $1)
+        `INSERT INTO configuracion_laboratorio (id_laboratorio, email, id_usuario_ultima_mod)
+         VALUES (1, '', $1)
          RETURNING *`,
         [req.staffUser?.idUsuario || null]
       );
