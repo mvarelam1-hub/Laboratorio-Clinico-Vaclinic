@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hashPassword, verifyPassword } from './password';
+import { hashPassword, verifyPassword, generarContrasenaTemporal } from './password';
 
 /**
  * Pruebas unitarias de server/password.ts (hash de contraseñas de personal,
@@ -32,5 +32,25 @@ describe('hashPassword / verifyPassword', () => {
 
   it('verifyPassword rechaza un hash con formato corrupto (sin ":")', () => {
     expect(verifyPassword('Demo12345!', 'no-tiene-separador')).toBe(false);
+  });
+});
+
+describe('generarContrasenaTemporal', () => {
+  it('genera 12 caracteres con mayúscula, minúscula y dígito, sin caracteres ambiguos', () => {
+    for (let i = 0; i < 200; i++) {
+      const c = generarContrasenaTemporal();
+      expect(c).toHaveLength(12);
+      expect(c).toMatch(/[A-Z]/);
+      expect(c).toMatch(/[a-z]/);
+      expect(c).toMatch(/[0-9]/);
+      expect(c).not.toMatch(/[01OIl]/);
+    }
+  });
+
+  it('no repite valores (aleatoriedad real) y sirve con hashPassword/verifyPassword', () => {
+    const vistos = new Set(Array.from({ length: 500 }, () => generarContrasenaTemporal()));
+    expect(vistos.size).toBe(500);
+    const c = generarContrasenaTemporal();
+    expect(verifyPassword(c, hashPassword(c))).toBe(true);
   });
 });
