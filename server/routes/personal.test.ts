@@ -93,6 +93,142 @@ describe('POST /api/personal', () => {
   });
 });
 
+describe('POST /api/personal — contraseña temporal', () => {
+  it('guarda solo el hash scrypt, fuerza el cambio y devuelve la contraseña temporal UNA vez', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id_usuario: 11, nombre_completo: 'Nueva Recepción', rol: 'recepcionista' }] });
+    const app = await buildApp();
+    const res = await request(app).post('/api/personal').send({
+      fullName: 'Nueva Recepción', email: 'recepcion@vaclinic.test', roleId: 'recepcionista'
+    });
+    expect(res.status).toBe(201);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(typeof res.body.contrasenaTemporal).toBe('string');
+    expect(res.body.contrasenaTemporal.length).toBeGreaterThanOrEqual(12);
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(sql).toContain('contrasena_hash');
+    expect(sql).toContain('must_change_password');
+    // El parámetro guardado es un hash "salt:hash", jamás la contraseña en claro.
+    const guardado = params.find((p: any) => typeof p === 'string' && /^[0-9a-f]{32}:[0-9a-f]{128}$/.test(p));
+    expect(guardado).toBeDefined();
+    expect(params).not.toContain(res.body.contrasenaTemporal);
+    const { verifyPassword } = await import('../password');
+    expect(verifyPassword(res.body.contrasenaTemporal, guardado)).toBe(true);
+  });
+
+  it('acepta una contraseña inicial elegida por el administrador (mín. 8) y rechaza una corta', async () => {
+    const app = await buildApp();
+    const corta = await request(app).post('/api/personal').send({
+      fullName: 'X', email: 'x@vaclinic.test', roleId: 'bioanalista', initialPassword: 'corta'
+    });
+    expect(corta.status).toBe(400);
+    expect(queryMock).not.toHaveBeenCalled();
+
+    queryMock.mockResolvedValueOnce({ rows: [{ id_usuario: 12, nombre_completo: 'X', rol: 'bioanalista' }] });
+    const ok = await request(app).post('/api/personal').send({
+      fullName: 'X', email: 'x@vaclinic.test', roleId: 'bioanalista', initialPassword: 'ClaveInicial9'
+    });
+    expect(ok.status).toBe(201);
+    expect(ok.body.contrasenaTemporal).toBe('ClaveInicial9');
+  });
+
+  it('un director no puede crear una cuenta administrador_ti (403)', async () => {
+    const app = await buildApp();
+    const res = await request(app).post('/api/personal').send({
+      fullName: 'Falso Admin', email: 'falso@vaclinic.test', roleId: 'administrador_ti'
+    });
+    expect(res.status).toBe(403);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('un administrador_ti sí puede crear otra cuenta administrador_ti', async () => {
+    currentStaffUser = { idUsuario: 1, roleId: 'administrador_ti', status: 'activo', nombreCompleto: 'Admin' };
+    queryMock.mockResolvedValueOnce({ rows: [{ id_usuario: 13, nombre_completo: 'Otro Admin', rol: 'administrador_ti' }] });
+    const app = await buildApp();
+    const res = await request(app).post('/api/personal').send({
+      fullName: 'Otro Admin', email: 'otro@vaclinic.test', roleId: 'administrador_ti'
+    });
+    expect(res.status).toBe(201);
+  });
+});
+
+describe('POST /api/personal/:id/restablecer-contrasena', () => {
+  it('rechaza con 403 a un rol sin admin_usuarios_roles', async () => {
+    currentStaffUser = { idUsuario: 2, roleId: 'bioanalista', status: 'activo', nombreCompleto: 'Bio' };
+    const app = await buildApp();
+    const res = await request(app).post('/api/personal/5/restablecer-contrasena').send({});
+    expect(res.status).toBe(403);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('rechaza restablecerse a uno mismo (400) y un id inválido', async () => {
+    const app = await buildApp();
+    const self = await request(app).post('/api/personal/3/restablecer-contrasena').send({});
+    expect(self.status).toBe(400);
+    const malo = await request(app).post('/api/personal/abc/restablecer-contrasena').send({});
+    expect(malo.status).toBe(400);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('responde 404 si el usuario no existe y 403 con la cuenta interna del sistema', async () => {
+    const app = await buildApp();
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    expect((await request(app).post('/api/personal/99/restablecer-contrasena').send({})).status).toBe(404);
+    queryMock.mockResolvedValueOnce({ rows: [{ id_usuario: 7, nombre_completo: 'Sistema', rol: 'sistema' }] });
+    expect((await request(app).post('/api/personal/7/restablecer-contrasena').send({})).status).toBe(403);
+  });
+
+  it('un director no puede restablecer a un administrador_ti (403, sin escalada de privilegios)', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id_usuario: 1, nombre_completo: 'Admin', rol: 'administrador_ti' }] });
+    const app = await buildApp();
+    const res = await request(app).post('/api/personal/1/restablecer-contrasena').send({});
+    expect(res.status).toBe(403);
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('emite una contraseña temporal, guarda solo el hash, fuerza el cambio y revoca las sesiones', async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ id_usuario: 5, nombre_completo: 'Laboratorista', rol: 'bioanalista' }] })
+      .mockResolvedValue({ rows: [], rowCount: 1 });
+    const app = await buildApp();
+    const res = await request(app).post('/api/personal/5/restablecer-contrasena').send({});
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body.ok).toBe(true);
+    expect(res.body.totpReiniciado).toBe(false);
+    expect(res.body.contrasenaTemporal.length).toBeGreaterThanOrEqual(12);
+
+    const sqls = queryMock.mock.calls.map(([sql]) => String(sql));
+    const update = queryMock.mock.calls.find(([sql]) => String(sql).includes('contrasena_hash'))!;
+    expect(String(update[0])).toContain('must_change_password = TRUE');
+    expect(String(update[0])).not.toContain('totp_secret');
+    expect(update[1]).not.toContain(res.body.contrasenaTemporal);
+    expect(sqls.some((q) => q.includes('UPDATE sesion_personal SET revocado_en'))).toBe(true);
+    // La bitácora nunca recibe la contraseña.
+    const bitacora = queryMock.mock.calls.find(([sql]) => String(sql).includes('historial_auditoria'))!;
+    expect(JSON.stringify(bitacora[1])).not.toContain(res.body.contrasenaTemporal);
+  });
+
+  it('con reiniciarTotp:true también desactiva el autenticador', async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ id_usuario: 5, nombre_completo: 'Lab', rol: 'bioanalista' }] })
+      .mockResolvedValue({ rows: [], rowCount: 1 });
+    const app = await buildApp();
+    const res = await request(app).post('/api/personal/5/restablecer-contrasena').send({ reiniciarTotp: true });
+    expect(res.status).toBe(200);
+    expect(res.body.totpReiniciado).toBe(true);
+    const update = queryMock.mock.calls.find(([sql]) => String(sql).includes('contrasena_hash'))!;
+    expect(String(update[0])).toContain('totp_enabled = FALSE');
+    expect(String(update[0])).toContain('totp_secret = NULL');
+  });
+
+  it('rechaza una contraseña elegida de menos de 8 caracteres', async () => {
+    const app = await buildApp();
+    const res = await request(app).post('/api/personal/5/restablecer-contrasena').send({ newPassword: 'corta' });
+    expect(res.status).toBe(400);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('PATCH /api/personal/:id/estado', () => {
   it('rechaza con 400 un estado desconocido', async () => {
     const app = await buildApp();
