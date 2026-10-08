@@ -1,0 +1,85 @@
+name: Respaldo diario de la base de datos (con prueba de restauración)
+
+# Respaldo automático de la base de datos real (Neon) de VACLINIC.
+# Cada corrida: (1) pg_dump + cifrado AES-256-GCM + manifiesto, y
+# (2) PRUEBA DE RESTAURACIÓN real en un PostgreSQL desechable, comparando los
+# conteos de filas de todas las tablas contra el manifiesto. Si la
+# restauración falla o no coincide, el job falla y GitHub avisa por correo:
+# nunca se queda con un respaldo del que no se sabe si sirve.
+# Ver docs/BACKUPS.md (configuración de secretos, restauración de emergencia).
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 08:00 UTC = 02:00 en Guatemala (poca actividad)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-diario
+  cancel-in-progress: false
+
+jobs:
+  respaldo:
+    name: Respaldar + probar restauración
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      restore_db:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: restore
+          POSTGRES_DB: restore_check
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar cliente de PostgreSQL 17 (pg_dump debe ser >= versión del servidor)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+
+      - name: Comprobar que los secretos están configurados
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          test -n "$DATABASE_URL" || { echo "::error::Falta el secreto DATABASE_URL (cadena DIRECTA de Neon, sin -pooler)"; exit 1; }
+          test -n "$BACKUP_ENCRYPTION_KEY" || { echo "::error::Falta el secreto BACKUP_ENCRYPTION_KEY"; exit 1; }
+
+      - name: Respaldar (pg_dump + cifrado + manifiesto)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: node scripts/backup-db.mjs --out backups --keep 1
+
+      - name: Probar la restauración en una base desechable
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          RESTORE_DATABASE_URL: postgres://postgres:restore@localhost:5432/restore_check
+          PGSSLMODE: disable
+          PGPASSWORD: restore
+        run: node scripts/restore-verify.mjs --dir backups
+
+      - name: Guardar el respaldo cifrado (30 días)
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-vaclinic-${{ github.run_id }}
+          path: backups/
+          retention-days: 30
+          if-no-files-found: error
