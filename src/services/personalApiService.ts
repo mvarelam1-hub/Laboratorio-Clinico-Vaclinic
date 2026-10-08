@@ -41,7 +41,16 @@ export interface PersonalApiRow {
   rol: LabStaffRole | 'sistema';
   estado: boolean;
   pin_code: string | null;
+  /** Solo viene en la respuesta de crear personal (POST): se muestra UNA vez y no se guarda en claro. */
+  contrasenaTemporal?: string;
   [key: string]: unknown;
+}
+
+export interface RestablecerContrasenaResultado {
+  ok: boolean;
+  idUsuario: number;
+  contrasenaTemporal: string;
+  totpReiniciado: boolean;
 }
 
 export interface CrearPersonalInput {
@@ -87,6 +96,23 @@ export async function cambiarEstadoPersonalRemoto(idUsuario: number, status: Use
 
 export async function reiniciarPinPersonalRemoto(idUsuario: number, pinCode: string): Promise<PersonalApiRow> {
   const res = await authFetch(`/api/personal/${idUsuario}/pin`, { method: 'PATCH', body: JSON.stringify({ pinCode }) });
+  if (!res.ok) throw new PersonalApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}
+
+/**
+ * El administrador emite una contraseña TEMPORAL nueva para otra persona del
+ * personal (el servidor guarda solo el hash, fuerza el cambio en el primer
+ * ingreso y cierra sus sesiones abiertas). Devuelve la contraseña UNA vez.
+ */
+export async function restablecerContrasenaPersonalRemoto(
+  idUsuario: number,
+  opciones: { reiniciarTotp?: boolean } = {}
+): Promise<RestablecerContrasenaResultado> {
+  const res = await authFetch(`/api/personal/${idUsuario}/restablecer-contrasena`, {
+    method: 'POST',
+    body: JSON.stringify({ reiniciarTotp: opciones.reiniciarTotp === true })
+  });
   if (!res.ok) throw new PersonalApiError(await parseErrorBody(res), res.status);
   return res.json();
 }
