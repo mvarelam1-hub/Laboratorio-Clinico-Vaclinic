@@ -165,7 +165,15 @@ export function verifyTotpToken(secret: string, token: string, at: Date = new Da
  * constante exportada para que cambiarla en el futuro sea un diff de una
  * línea, no una búsqueda por todo el backend.
  */
-export const MANDATORY_TOTP_ROLES: readonly string[] = ['director_laboratorio', 'administrador_ti'];
+export const MANDATORY_TOTP_ROLES: readonly string[] = [
+  'director_laboratorio',
+  'administrador_ti',
+  'bioanalista_senior',
+  'bioanalista',
+  'tecnico_flebotomista',
+  'recepcionista',
+  'auditor_calidad'
+];
 
 export function isTotpMandatoryForRole(roleId: string): boolean {
   return MANDATORY_TOTP_ROLES.includes(roleId);
