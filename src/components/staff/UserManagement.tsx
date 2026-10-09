@@ -70,6 +70,7 @@ export const UserManagement: React.FC = () => {
     deleteStaffUser, 
     toggleUserStatus, 
     resetUserPin, 
+    resetUserPassword,
     updateRolePermissions,
     logAuditEvent,
     showNotification,
@@ -97,6 +98,20 @@ export const UserManagement: React.FC = () => {
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pinTargetUser, setPinTargetUser] = useState<LabStaffUser | null>(null);
   const [newPinValue, setNewPinValue] = useState('');
+
+  // Contraseñas temporales (alta de personal y restablecimiento). La contraseña
+  // vive SOLO en este estado, se muestra una vez y se borra al cerrar la ventana.
+  const [passwordResetTarget, setPasswordResetTarget] = useState<LabStaffUser | null>(null);
+  const [passwordResetTotp, setPasswordResetTotp] = useState(false);
+  const [isIssuingPassword, setIsIssuingPassword] = useState(false);
+  const [issuedCredentials, setIssuedCredentials] = useState<{
+    fullName: string;
+    email: string;
+    password: string;
+    reason: 'nuevo' | 'restablecido';
+    totpReset: boolean;
+  } | null>(null);
+  const [credentialsCopied, setCredentialsCopied] = useState(false);
 
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [selectedAuditLog, setSelectedAuditLog] = useState<LabAuditLog | null>(null);
@@ -401,7 +416,7 @@ export const UserManagement: React.FC = () => {
   };
 
   // Submit User Form
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.fullName.trim()) {
       showNotification('El nombre completo del personal es obligatorio', 'warning');
@@ -424,13 +439,63 @@ export const UserManagement: React.FC = () => {
         roleName: selectedRole ? selectedRole.name : formData.roleId
       });
     } else {
-      addStaffUser({
+      const creado = await addStaffUser({
         ...formData,
         roleName: selectedRole ? selectedRole.name : formData.roleId,
         avatarColor: getRoleAvatarBg(formData.roleId)
       });
+      // Si el servidor creó la cuenta, entrega la contraseña temporal (una sola vez).
+      if (creado.temporaryPassword) {
+        setCredentialsCopied(false);
+        setIssuedCredentials({
+          fullName: creado.fullName,
+          email: creado.email,
+          password: creado.temporaryPassword,
+          reason: 'nuevo',
+          totpReset: false
+        });
+      }
     }
     setIsUserModalOpen(false);
+  };
+
+  // Restablecer contraseña de otra persona (emite una temporal nueva)
+  const handleConfirmPasswordReset = async () => {
+    if (!passwordResetTarget) return;
+    setIsIssuingPassword(true);
+    try {
+      const r = await resetUserPassword(passwordResetTarget.id, { resetTotp: passwordResetTotp });
+      if (r) {
+        setCredentialsCopied(false);
+        setIssuedCredentials({
+          fullName: passwordResetTarget.fullName,
+          email: passwordResetTarget.email,
+          password: r.temporaryPassword,
+          reason: 'restablecido',
+          totpReset: r.totpReset
+        });
+        setPasswordResetTarget(null);
+        setPasswordResetTotp(false);
+      }
+    } finally {
+      setIsIssuingPassword(false);
+    }
+  };
+
+  const openPasswordReset = (user: LabStaffUser) => {
+    setPasswordResetTotp(false);
+    setPasswordResetTarget(user);
+  };
+
+  const copyIssuedCredentials = async () => {
+    if (!issuedCredentials) return;
+    const texto = `VACLINIC — acceso al sistema\nUsuario (correo): ${issuedCredentials.email}\nContraseña temporal: ${issuedCredentials.password}\nAl ingresar, el sistema te pedirá crear tu propia contraseña.`;
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCredentialsCopied(true);
+    } catch {
+      showNotification('No se pudo copiar automáticamente. Selecciona el texto y cópialo manualmente.', 'warning');
+    }
   };
 
   // Reset PIN submit
@@ -900,6 +965,14 @@ export const UserManagement: React.FC = () => {
 
                       <div className="flex items-center gap-1">
                         <button
+                          onClick={() => openPasswordReset(user)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                          title="Emitir una contraseña temporal nueva para esta persona"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Contraseña</span>
+                        </button>
+                        <button
                           onClick={() => handleOpenUserModal(user)}
                           className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                           title="Editar información de usuario"
@@ -983,6 +1056,13 @@ export const UserManagement: React.FC = () => {
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => openPasswordReset(user)}
+                                className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                                title="Restablecer contraseña"
+                              >
+                                <Lock className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => handleOpenUserModal(user)}
                                 className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer"
@@ -1653,6 +1733,16 @@ export const UserManagement: React.FC = () => {
                 />
               </div>
 
+              {!editingUser && (
+                <div className="flex items-start gap-2 text-[11px] text-teal-900 bg-teal-50 border border-teal-200 rounded-xl p-3 leading-relaxed">
+                  <Key className="w-4 h-4 shrink-0 mt-0.5 text-teal-700" />
+                  <span>
+                    Al registrar, el sistema genera una <strong>contraseña temporal</strong> y te la muestra una sola vez.
+                    El usuario entra con su <strong>correo</strong> y esa contraseña, y deberá crear la suya en el primer ingreso.
+                  </span>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -1722,6 +1812,120 @@ export const UserManagement: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CONFIRMAR RESTABLECIMIENTO DE CONTRASEÑA */}
+      {/* ========================================================================= */}
+      {passwordResetTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Restablecer contraseña</h3>
+                <p className="text-xs text-slate-500">{passwordResetTarget.fullName} · {passwordResetTarget.email}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Se generará una <strong>contraseña temporal nueva</strong>. La clave anterior deja de servir, se cierran
+              las sesiones abiertas de esta persona y, en su próximo ingreso, el sistema le exigirá crear su propia contraseña.
+            </p>
+
+            <label className="flex items-start gap-2 text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={passwordResetTotp}
+                onChange={(e) => setPasswordResetTotp(e.target.checked)}
+                className="mt-0.5 cursor-pointer"
+              />
+              <span>
+                <strong>También reiniciar su autenticador (código de 6 dígitos).</strong>{' '}
+                Márcalo solo si esa persona perdió su teléfono o la aplicación; deberá configurarlo de nuevo.
+              </span>
+            </label>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => { setPasswordResetTarget(null); setPasswordResetTotp(false); }}
+                disabled={isIssuingPassword}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPasswordReset}
+                disabled={isIssuingPassword}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-sm disabled:opacity-60"
+              >
+                {isIssuingPassword ? 'Generando…' : 'Generar contraseña temporal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CREDENCIALES TEMPORALES (se muestran UNA sola vez) */}
+      {/* ========================================================================= */}
+      {issuedCredentials && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4" role="dialog" aria-modal="true" aria-label="Credenciales temporales">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center">
+                <Key className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  {issuedCredentials.reason === 'nuevo' ? 'Usuario creado' : 'Contraseña restablecida'}
+                </h3>
+                <p className="text-xs text-slate-500">{issuedCredentials.fullName}</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+              <div>
+                <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Usuario (correo)</span>
+                <span className="font-mono text-sm font-bold text-slate-800 break-all">{issuedCredentials.email}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Contraseña temporal</span>
+                <span className="font-mono text-lg font-black text-slate-900 tracking-wide break-all select-all">{issuedCredentials.password}</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Esta contraseña se muestra <strong>solo ahora</strong>: el sistema no la guarda y no se podrá volver a ver.
+                Entrégala a la persona por un medio privado. En su primer ingreso deberá crear su propia contraseña.
+                {issuedCredentials.totpReset && ' Su autenticador fue reiniciado: deberá configurarlo de nuevo.'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={copyIssuedCredentials}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold cursor-pointer"
+              >
+                {credentialsCopied ? 'Copiado ✓' : 'Copiar datos'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setIssuedCredentials(null); setCredentialsCopied(false); }}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-sm"
+              >
+                Ya la anoté, cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
