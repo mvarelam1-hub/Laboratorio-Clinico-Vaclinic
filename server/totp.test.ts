@@ -93,20 +93,21 @@ describe('verifyTotpToken', () => {
 });
 
 describe('isTotpMandatoryForRole / MANDATORY_TOTP_ROLES', () => {
-  it('exige TOTP para director_laboratorio y administrador_ti', () => {
-    expect(isTotpMandatoryForRole('director_laboratorio')).toBe(true);
-    expect(isTotpMandatoryForRole('administrador_ti')).toBe(true);
+  const TODOS = [
+    'director_laboratorio', 'administrador_ti', 'bioanalista_senior', 'bioanalista',
+    'tecnico_flebotomista', 'recepcionista', 'auditor_calidad'
+  ];
+
+  it('exige TOTP para TODOS los roles del personal (LabStaffRole)', () => {
+    for (const rol of TODOS) expect(isTotpMandatoryForRole(rol)).toBe(true);
   });
 
-  it('no exige TOTP para el resto de roles de LabStaffRole', () => {
-    expect(isTotpMandatoryForRole('bioanalista')).toBe(false);
-    expect(isTotpMandatoryForRole('bioanalista_senior')).toBe(false);
-    expect(isTotpMandatoryForRole('tecnico_flebotomista')).toBe(false);
-    expect(isTotpMandatoryForRole('recepcionista')).toBe(false);
-    expect(isTotpMandatoryForRole('auditor_calidad')).toBe(false);
+  it('no exige TOTP a roles que no son personal (p. ej. un rol desconocido)', () => {
+    expect(isTotpMandatoryForRole('paciente')).toBe(false);
+    expect(isTotpMandatoryForRole('')).toBe(false);
   });
 
-  it('MANDATORY_TOTP_ROLES contiene exactamente los dos roles documentados', () => {
-    expect([...MANDATORY_TOTP_ROLES].sort()).toEqual(['administrador_ti', 'director_laboratorio']);
+  it('MANDATORY_TOTP_ROLES contiene exactamente los siete roles del personal', () => {
+    expect([...MANDATORY_TOTP_ROLES].sort()).toEqual([...TODOS].sort());
   });
 });
