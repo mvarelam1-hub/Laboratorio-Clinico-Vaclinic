@@ -150,6 +150,7 @@ import {
   actualizarPersonalRemoto,
   cambiarEstadoPersonalRemoto,
   reiniciarPinPersonalRemoto,
+  restablecerContrasenaPersonalRemoto,
   eliminarPersonalRemoto,
   PersonalApiError
 } from '../services/personalApiService';
@@ -314,11 +315,14 @@ interface ClinicContextType {
   staffUsers: LabStaffUser[];
   staffRoles: LabRoleConfig[];
   auditLogs: LabAuditLog[];
-  addStaffUser: (userData: Omit<LabStaffUser, 'id' | 'createdAt'>) => Promise<LabStaffUser>;
+  /** `temporaryPassword` solo viene si el servidor creó el usuario: se muestra una vez y no se guarda en el estado. */
+  addStaffUser: (userData: Omit<LabStaffUser, 'id' | 'createdAt'>) => Promise<LabStaffUser & { temporaryPassword?: string }>;
   updateStaffUser: (id: string, updates: Partial<LabStaffUser>) => Promise<void>;
   deleteStaffUser: (id: string) => Promise<void>;
   toggleUserStatus: (id: string, newStatus: UserStatus) => Promise<void>;
   resetUserPin: (id: string, newPin: string) => Promise<void>;
+  /** Emite una contraseña temporal nueva (solo con el servidor). Devuelve null si no se pudo. */
+  resetUserPassword: (id: string, opciones?: { resetTotp?: boolean }) => Promise<{ temporaryPassword: string; totpReset: boolean } | null>;
   updateRolePermissions: (roleId: LabStaffRole, permissions: string[]) => Promise<void>;
   logAuditEvent: (log: Omit<LabAuditLog, 'id' | 'timestamp'>) => void;
   hasPermission: (user: LabStaffUser, permissionId: string) => boolean;
@@ -2895,7 +2899,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setAuditLogs(prev => [newLog, ...prev.slice(0, 199)]);
   };
 
-  const addStaffUser = async (userData: Omit<LabStaffUser, 'id' | 'createdAt'>): Promise<LabStaffUser> => {
+  const addStaffUser = async (userData: Omit<LabStaffUser, 'id' | 'createdAt'>): Promise<LabStaffUser & { temporaryPassword?: string }> => {
     const roleObj = staffRoles.find(r => r.id === userData.roleId);
     const draftUser: LabStaffUser = {
       ...userData,
@@ -2906,6 +2910,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     let newUser = draftUser;
+    let temporaryPassword: string | undefined;
     if (isEffectiveOnline) {
       try {
         const creado = await crearPersonalRemoto({
@@ -2916,6 +2921,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           avatarColor: draftUser.avatarColor, notes: draftUser.notes
         });
         newUser = { ...draftUser, id: `usr-remote-${creado.id_usuario}`, remoteId: creado.id_usuario };
+        // Se guarda solo en una variable local: NO entra al estado ni a localStorage.
+        temporaryPassword = creado.contrasenaTemporal;
       } catch (err) {
         const mensaje = err instanceof PersonalApiError ? err.message : 'Error de red desconocido.';
         console.error('[ClinicContext] No se pudo crear el usuario en el servidor:', err);
@@ -2934,7 +2941,36 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       severity: 'info'
     });
     showNotification(`Usuario ${newUser.fullName} registrado con éxito`, 'success');
-    return newUser;
+    return temporaryPassword ? { ...newUser, temporaryPassword } : newUser;
+  };
+
+  const resetUserPassword = async (id: string, opciones: { resetTotp?: boolean } = {}): Promise<{ temporaryPassword: string; totpReset: boolean } | null> => {
+    const user = staffUsers.find(u => u.id === id);
+    if (!user) return null;
+    if (!isEffectiveOnline || !user.remoteId) {
+      showNotification('Para restablecer una contraseña se necesita conexión con el servidor y un usuario registrado en él.', 'warning');
+      return null;
+    }
+    try {
+      const r = await restablecerContrasenaPersonalRemoto(user.remoteId, { reiniciarTotp: opciones.resetTotp === true });
+      logAuditEvent({
+        userId: 'usr-admin',
+        userName: 'Administrador del Sistema',
+        userRole: 'Administrador de Sistemas & TI',
+        action: 'Restablecimiento de contraseña',
+        module: 'seguridad',
+        // Nunca se escribe la contraseña en la bitácora.
+        details: `Se emitió una contraseña temporal para ${user.fullName}; deberá cambiarla en su próximo ingreso.`,
+        severity: 'warning'
+      });
+      showNotification(`Contraseña temporal emitida para ${user.fullName}`, 'success');
+      return { temporaryPassword: r.contrasenaTemporal, totpReset: r.totpReiniciado };
+    } catch (err) {
+      const mensaje = err instanceof PersonalApiError ? err.message : 'Error de red desconocido.';
+      console.error('[ClinicContext] No se pudo restablecer la contraseña:', err);
+      showNotification(`No se pudo restablecer la contraseña (${mensaje}).`, 'warning');
+      return null;
+    }
   };
 
   const updateStaffUser = async (id: string, updates: Partial<LabStaffUser>): Promise<void> => {
@@ -4662,6 +4698,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteStaffUser,
         toggleUserStatus,
         resetUserPin,
+        resetUserPassword,
         updateRolePermissions,
         logAuditEvent,
         hasPermission,
