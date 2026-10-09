@@ -40,6 +40,7 @@ import { AuditLogsView } from './components/staff/AuditLogsView';
 import { StaffLoginView } from './components/staff/StaffLoginView';
 import { ForcedPasswordChangeView } from './components/staff/ForcedPasswordChangeView';
 import { ForcedTotpEnrollmentView } from './components/staff/ForcedTotpEnrollmentView';
+import { InactivityGuard } from './components/staff/InactivityGuard';
 import { BiometricSecuritySection } from './components/staff/BiometricSecuritySection';
 import { GlobalShortcutsManager } from './components/staff/GlobalShortcutsManager';
 import { MicroscopicAtlasView } from './components/staff/MicroscopicAtlasView';
@@ -223,6 +224,7 @@ export default function App() {
   return (
     <ClinicProvider>
       <MainContent />
+      <InactivityGuard />
     </ClinicProvider>
   );
 }
