@@ -196,6 +196,104 @@ describe('POST /api/auth/verify-totp', () => {
   });
 });
 
+describe('Bloqueo por intentos fallidos', () => {
+  const filaUsuario = () => ({
+    rows: [{
+      id_usuario: 7, nombre_completo: 'Demo', correo: 'demo@vaclinic.test',
+      contrasena_hash: hashPassword('Demo12345!'), rol: 'bioanalista', estado: true,
+      totp_secret: null, totp_enabled: false, must_change_password: false
+    }]
+  });
+
+  it('login: al 5.º fallo seguido responde 429 con Retry-After y lo registra en bitácora', async () => {
+    const app = await buildApp();
+    for (let i = 0; i < 4; i++) {
+      queryMock.mockResolvedValueOnce(filaUsuario());
+      const r = await request(app).post('/api/auth/login').send({ correo: 'demo@vaclinic.test', contrasena: 'mala' });
+      expect(r.status).toBe(401);
+    }
+    queryMock.mockResolvedValueOnce(filaUsuario());
+    queryMock.mockResolvedValueOnce({ rows: [] }); // bitácora del bloqueo
+    const quinto = await request(app).post('/api/auth/login').send({ correo: 'demo@vaclinic.test', contrasena: 'mala' });
+    expect(quinto.status).toBe(429);
+    expect(Number(quinto.headers['retry-after'])).toBeGreaterThan(0);
+    expect(quinto.body.error).toMatch(/Demasiados intentos/);
+    const llamadaBitacora = queryMock.mock.calls.find(([sql]) => /INSERT INTO historial_auditoria/.test(sql));
+    expect(llamadaBitacora).toBeTruthy();
+    expect(llamadaBitacora![1][0]).toBe(7);
+  });
+
+  it('login: estando bloqueado ni siquiera consulta la base y rechaza aunque la contraseña sea correcta', async () => {
+    const app = await buildApp();
+    for (let i = 0; i < 4; i++) {
+      queryMock.mockResolvedValueOnce(filaUsuario());
+      await request(app).post('/api/auth/login').send({ correo: 'demo@vaclinic.test', contrasena: 'mala' });
+    }
+    queryMock.mockResolvedValueOnce(filaUsuario());
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    await request(app).post('/api/auth/login').send({ correo: 'demo@vaclinic.test', contrasena: 'mala' });
+
+    queryMock.mockClear();
+    const res = await request(app).post('/api/auth/login').send({ correo: 'demo@vaclinic.test', contrasena: 'Demo12345!' });
+    expect(res.status).toBe(429);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('login: el mismo mensaje de bloqueo aplica a un correo que no existe (no revela cuentas)', async () => {
+    const app = await buildApp();
+    for (let i = 0; i < 5; i++) {
+      queryMock.mockResolvedValueOnce({ rows: [] });
+      await request(app).post('/api/auth/login').send({ correo: 'nadie@vaclinic.test', contrasena: 'x' });
+    }
+    const res = await request(app).post('/api/auth/login').send({ correo: 'nadie@vaclinic.test', contrasena: 'x' });
+    expect(res.status).toBe(429);
+  });
+
+  it('login: un inicio de sesión correcto borra los fallos previos', async () => {
+    const app = await buildApp();
+    for (let i = 0; i < 4; i++) {
+      queryMock.mockResolvedValueOnce(filaUsuario());
+      await request(app).post('/api/auth/login').send({ correo: 'demo@vaclinic.test', contrasena: 'mala' });
+    }
+    queryMock.mockResolvedValueOnce(filaUsuario());
+    queryMock.mockResolvedValueOnce({ rows: [] }); // sesión
+    queryMock.mockResolvedValueOnce({ rows: [] }); // bitácora
+    const ok = await request(app).post('/api/auth/login').send({ correo: 'demo@vaclinic.test', contrasena: 'Demo12345!' });
+    expect(ok.status).toBe(200);
+    // después del éxito, un nuevo fallo vuelve a ser 401 (contador en cero)
+    queryMock.mockResolvedValueOnce(filaUsuario());
+    const fallo = await request(app).post('/api/auth/login').send({ correo: 'demo@vaclinic.test', contrasena: 'mala' });
+    expect(fallo.status).toBe(401);
+  });
+
+  it('verify-totp: tras 5 códigos incorrectos bloquea, aunque se vuelva a pedir un ticket nuevo', async () => {
+    const secret = generateTotpSecret();
+    const { createLoginTicket } = await import('../session');
+    const fila = () => ({
+      rows: [{
+        id_usuario: 7, nombre_completo: 'Demo', correo: 'demo@vaclinic.test',
+        contrasena_hash: hashPassword('Demo12345!'), rol: 'director_laboratorio', estado: true,
+        totp_secret: encryptSecret(secret), totp_enabled: true, must_change_password: false
+      }]
+    });
+    const app = await buildApp();
+    for (let i = 0; i < 4; i++) {
+      queryMock.mockResolvedValueOnce(fila());
+      const r = await request(app).post('/api/auth/verify-totp').send({ loginTicket: createLoginTicket(7), code: '000000' });
+      expect(r.status).toBe(401);
+    }
+    queryMock.mockResolvedValueOnce(fila());
+    queryMock.mockResolvedValueOnce({ rows: [] }); // bitácora
+    const quinto = await request(app).post('/api/auth/verify-totp').send({ loginTicket: createLoginTicket(7), code: '000000' });
+    expect(quinto.status).toBe(429);
+
+    queryMock.mockClear();
+    const conCodigoBueno = await request(app).post('/api/auth/verify-totp').send({ loginTicket: createLoginTicket(7), code: generateTotpToken(secret) });
+    expect(conCodigoBueno.status).toBe(429);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/auth/change-password', () => {
   it('con la contraseña actual correcta, actualiza el hash y limpia must_change_password', async () => {
     queryMock.mockResolvedValueOnce({ rows: [{ contrasena_hash: hashPassword('Actual123!') }] });
