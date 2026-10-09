@@ -32,6 +32,7 @@ import { createSession, revokeSession, createLoginTicket, verifyLoginTicket, ver
 import { generateTotpSecret, totpAuthUri, verifyTotpToken, isTotpMandatoryForRole } from '../totp';
 import { encryptSecret, decryptSecret } from '../crypto-aes';
 import { registrarBitacora } from '../bitacora';
+import { segundosDeBloqueo, registrarFallo, limpiarFallos, mensajeBloqueo } from '../loginLimiter';
 
 /**
  * Registra el inicio de sesión exitoso en la bitácora REAL
@@ -55,6 +56,31 @@ async function registrarLoginExitoso(idUsuario: number, rol: string, detalleExtr
   }
 }
 
+/**
+ * Deja constancia en la bitácora de que una cuenta quedó bloqueada
+ * temporalmente por demasiados intentos fallidos (ver server/loginLimiter.ts).
+ * "Best effort": un fallo al escribir la bitácora nunca cambia la respuesta.
+ */
+async function registrarBloqueo(idUsuario: number | null, paso: 'contraseña' | 'código de verificación'): Promise<void> {
+  if (idUsuario === null) return;
+  try {
+    await registrarBitacora({
+      idUsuario,
+      accion: 'Cuenta bloqueada temporalmente por intentos fallidos',
+      modulo: 'autenticacion',
+      severidad: 'warning',
+      detalles: `Demasiados intentos fallidos de ${paso}; bloqueo temporal de 15 minutos.`
+    });
+  } catch (err) {
+    console.error('No se pudo registrar el bloqueo en la bitácora de auditoría:', err);
+  }
+}
+
+function responderBloqueado(res: import('express').Response, segundos: number) {
+  res.setHeader('Retry-After', String(segundos));
+  return res.status(429).json({ error: mensajeBloqueo(segundos) });
+}
+
 export const authRouter = Router();
 
 const SELECT_LOGIN = `id_usuario, nombre_completo, correo, contrasena_hash, rol, estado,
@@ -73,15 +99,26 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'correo y contrasena son obligatorios.' });
   }
 
-  const { rows } = await pool.query(`SELECT ${SELECT_LOGIN} FROM usuario WHERE correo = $1`, [String(correo).trim()]);
+  const claveLogin = String(correo).trim();
+  const segundosBloqueado = segundosDeBloqueo(claveLogin);
+  if (segundosBloqueado > 0) return responderBloqueado(res, segundosBloqueado);
+
+  const { rows } = await pool.query(`SELECT ${SELECT_LOGIN} FROM usuario WHERE correo = $1`, [claveLogin]);
   const usuario = rows[0];
 
   if (!usuario || !verifyPassword(contrasena, usuario.contrasena_hash)) {
+    const fallo = registrarFallo(claveLogin);
+    if (fallo.bloqueadoAhora) {
+      await registrarBloqueo(usuario ? usuario.id_usuario : null, 'contraseña');
+      return responderBloqueado(res, segundosDeBloqueo(claveLogin));
+    }
     return res.status(401).json({ error: 'Correo o contraseña incorrectos.' });
   }
   if (!usuario.estado) {
     return res.status(403).json({ error: 'Usuario inactivo o suspendido.' });
   }
+  // Contraseña correcta: se borran los fallos de contraseña de este correo.
+  limpiarFallos(claveLogin);
 
   if (usuario.totp_enabled) {
     // Segundo factor activo: NO se emite sesión todavía, solo un ticket de
@@ -122,6 +159,12 @@ authRouter.post('/verify-totp', asyncHandler(async (req, res) => {
     return res.status(401).json({ error: 'El ticket de inicio de sesión es inválido o expiró. Inicia sesión de nuevo.' });
   }
 
+  // El código de 6 dígitos tiene su propio contador por usuario (no se borra
+  // al volver a escribir la contraseña), para que no se pueda adivinar.
+  const claveTotp = `totp:${ticket.idUsuario}`;
+  const segundosBloqueado = segundosDeBloqueo(claveTotp);
+  if (segundosBloqueado > 0) return responderBloqueado(res, segundosBloqueado);
+
   const { rows } = await pool.query(`SELECT ${SELECT_LOGIN} FROM usuario WHERE id_usuario = $1`, [ticket.idUsuario]);
   const usuario = rows[0];
   if (!usuario || !usuario.estado) {
@@ -133,8 +176,14 @@ authRouter.post('/verify-totp', asyncHandler(async (req, res) => {
 
   const secreto = decryptSecret(usuario.totp_secret);
   if (!verifyTotpToken(secreto, String(code))) {
+    const fallo = registrarFallo(claveTotp);
+    if (fallo.bloqueadoAhora) {
+      await registrarBloqueo(usuario.id_usuario, 'código de verificación');
+      return responderBloqueado(res, segundosDeBloqueo(claveTotp));
+    }
     return res.status(401).json({ error: 'Código de verificación incorrecto o expirado.' });
   }
+  limpiarFallos(claveTotp);
 
   const { token } = await createSession(pool, usuario.id_usuario, {
     mustChangePassword: usuario.must_change_password,
