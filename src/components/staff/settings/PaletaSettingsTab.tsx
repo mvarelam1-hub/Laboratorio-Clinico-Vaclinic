@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, CheckCircle2, AlertCircle, Info, RotateCcw, Save, Undo2 } from 'lucide-react';
 import {
-  PALETAS,
+  PALETAS_ESTILO,
   PALETA_ORIGINAL,
   CLAVES_COLOR,
   ESTILOS,
   aplicarDiseno,
-  avisosDeContraste,
+  avisosDeContrasteEstilo,
+  coloresOriginalesDeEstilo,
+  textoSobre,
   esHexValido,
   guardarEstiloEnCache,
   guardarTemaEnCache,
@@ -23,7 +25,7 @@ import { guardarTemaRemoto, obtenerTemaRemoto, restablecerTemaRemoto } from '../
 
 /**
  * Ajustes → "9. Paleta del sistema": el laboratorio elige el estilo (Bosque, Monad o Apple) y,
- * con Bosque, entre paletas listas o cambia 4 colores clave. Mientras se edita, la aplicación completa se ve con
+ * con cualquiera de ellos, entre paletas listas o cambia 4 colores clave. Mientras se edita, la aplicación completa se ve con
  * esos colores (vista previa en vivo); solo al guardar se aplican a todos los
  * usuarios y al portal del paciente. Solo administrador_ti y director pueden
  * guardar (lo valida el servidor) y cada cambio queda en la bitácora.
@@ -47,6 +49,7 @@ export const PaletaSettingsTab: React.FC = () => {
   // Lo que hoy tiene el laboratorio guardado: a esto se vuelve al salir sin guardar.
   const guardado = useRef<ColoresTema>(PALETA_ORIGINAL.colores);
   const guardadoEstilo = useRef<EstiloTema>('bosque');
+  const guardadoPaleta = useRef<string>('bosque');
 
   useEffect(() => {
     let vivo = true;
@@ -59,6 +62,7 @@ export const PaletaSettingsTab: React.FC = () => {
       const estiloBase: EstiloTema = r ? r.estilo : r === null ? 'bosque' : leerEstiloEnCache();
       guardado.current = base;
       guardadoEstilo.current = estiloBase;
+      guardadoPaleta.current = r?.paleta ?? (r ? 'personalizada' : 'bosque');
       aplicarDiseno(base, estiloBase);
       setEstilo(estiloBase);
       setColores(base);
@@ -83,7 +87,7 @@ export const PaletaSettingsTab: React.FC = () => {
   };
 
   const elegirPaleta = (id: string) => {
-    const p = PALETAS.find((x) => x.id === id);
+    const p = PALETAS_ESTILO[estilo].find((x) => x.id === id);
     if (p) cambiar(p.colores, p.id);
   };
 
@@ -98,14 +102,19 @@ export const PaletaSettingsTab: React.FC = () => {
   };
 
   const elegirEstilo = (id: EstiloTema) => {
+    // Cada estilo trae sus colores: al volver al que está guardado se recuperan los guardados.
+    const nuevos = id === guardadoEstilo.current ? guardado.current : coloresOriginalesDeEstilo(id);
     setEstilo(id);
+    setColores(nuevos);
+    setTextos(nuevos);
+    setPaleta(id === guardadoEstilo.current ? guardadoPaleta.current : id);
     setMensaje(null);
-    aplicarDiseno(colores, id); // vista previa en vivo de todo el sistema
+    aplicarDiseno(nuevos, id); // vista previa en vivo de todo el sistema
   };
 
   const hayCambios = !sonIguales(colores, guardado.current) || estilo !== guardadoEstilo.current;
-  const vista = estilo === 'bosque' ? colores : (ESTILOS.find((e) => e.id === estilo) ?? ESTILOS[0]).muestra;
-  const avisos = estilo === 'bosque' ? avisosDeContraste(colores) : [];
+  const vista = colores;
+  const avisos = avisosDeContrasteEstilo(estilo, colores);
 
   const guardar = async () => {
     setMensaje(null);
@@ -115,6 +124,7 @@ export const PaletaSettingsTab: React.FC = () => {
     if (r.ok === true) {
       guardado.current = colores;
       guardadoEstilo.current = estilo;
+      guardadoPaleta.current = paleta;
       guardarTemaEnCache(colores);
       guardarEstiloEnCache(estilo);
       setMensaje({ tipo: 'ok', texto: 'Paleta guardada. Todos los usuarios y el portal del paciente la verán al recargar la página.' });
@@ -127,6 +137,7 @@ export const PaletaSettingsTab: React.FC = () => {
     setEstilo(guardadoEstilo.current);
     setColores(guardado.current);
     setTextos(guardado.current);
+    setPaleta(guardadoPaleta.current);
     aplicarDiseno(guardado.current, guardadoEstilo.current);
     setMensaje(null);
   };
@@ -139,6 +150,7 @@ export const PaletaSettingsTab: React.FC = () => {
     if (r.ok === true) {
       guardado.current = PALETA_ORIGINAL.colores;
       guardadoEstilo.current = 'bosque';
+      guardadoPaleta.current = 'bosque';
       guardarTemaEnCache(null);
       guardarEstiloEnCache('bosque');
       setEstilo('bosque');
@@ -166,7 +178,7 @@ export const PaletaSettingsTab: React.FC = () => {
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <h3 className="text-sm font-black text-slate-900">Estilo y colores del sistema</h3>
           <p className="mt-1 text-xs text-slate-600">
-            Elige el estilo y, con Bosque, una paleta lista o los cuatro colores clave. Mientras eliges, toda la aplicación se ve con
+            Elige el estilo y, con él, una paleta lista o los cuatro colores clave. Mientras eliges, toda la aplicación se ve con
             esa elección como vista previa; solo al guardar se aplica para todo el laboratorio y para el portal del paciente.
           </p>
           <p className="mt-3 flex items-start gap-2 rounded-xl bg-sky-wash p-3 text-[11px] font-medium text-slate-800">
@@ -204,12 +216,10 @@ export const PaletaSettingsTab: React.FC = () => {
           </ul>
         </div>
 
-        {estilo === 'bosque' ? (
-          <>
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-black text-slate-900">Paletas listas</p>
           <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {PALETAS.map((p) => {
+            {PALETAS_ESTILO[estilo].map((p) => {
               const activa = paleta === p.id;
               return (
                 <li key={p.id}>
@@ -274,16 +284,6 @@ export const PaletaSettingsTab: React.FC = () => {
             </ul>
           )}
         </div>
-          </>
-        ) : (
-          <p className="flex items-start gap-2 rounded-xl bg-sky-wash p-3 text-[11px] font-medium text-slate-800">
-            <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-            {estilo === 'apple'
-              ? 'Apple usa su propia paleta fija (negro, carbón y un azul para la acción principal). '
-              : 'Monad usa su propia paleta fija (pergamino, gris casi negro y un azul para la acción principal). '}
-            Para cambiar los colores elige el estilo Bosque.
-          </p>
-        )}
 
         {mensaje && (
           <div
@@ -344,7 +344,7 @@ export const PaletaSettingsTab: React.FC = () => {
                 <p className="mt-1 text-[11px] text-slate-500">Así se verán las tarjetas y los botones.</p>
                 <span
                   className="mt-3 inline-block rounded-full px-4 py-1.5 text-xs font-semibold"
-                  style={{ backgroundColor: vista.boton, color: estilo === 'bosque' ? '#1a1a1a' : '#ffffff' }}
+                  style={{ backgroundColor: vista.boton, color: estilo === 'bosque' ? '#1a1a1a' : textoSobre(vista.boton) }}
                 >
                   Revisar y liquidar
                 </span>
