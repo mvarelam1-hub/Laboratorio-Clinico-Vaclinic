@@ -22,7 +22,7 @@ import {
 import { guardarTemaRemoto, obtenerTemaRemoto, restablecerTemaRemoto } from '../../../services/temaApiService';
 
 /**
- * Ajustes → "9. Paleta del sistema": el laboratorio elige el estilo (Bosque o Monad) y,
+ * Ajustes → "9. Paleta del sistema": el laboratorio elige el estilo (Bosque, Monad o Apple) y,
  * con Bosque, entre paletas listas o cambia 4 colores clave. Mientras se edita, la aplicación completa se ve con
  * esos colores (vista previa en vivo); solo al guardar se aplican a todos los
  * usuarios y al portal del paciente. Solo administrador_ti y director pueden
@@ -104,7 +104,7 @@ export const PaletaSettingsTab: React.FC = () => {
   };
 
   const hayCambios = !sonIguales(colores, guardado.current) || estilo !== guardadoEstilo.current;
-  const vista = estilo === 'monad' ? ESTILOS[1].muestra : colores;
+  const vista = estilo === 'bosque' ? colores : (ESTILOS.find((e) => e.id === estilo) ?? ESTILOS[0]).muestra;
   const avisos = estilo === 'bosque' ? avisosDeContraste(colores) : [];
 
   const guardar = async () => {
@@ -278,8 +278,10 @@ export const PaletaSettingsTab: React.FC = () => {
         ) : (
           <p className="flex items-start gap-2 rounded-xl bg-sky-wash p-3 text-[11px] font-medium text-slate-800">
             <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-            Monad usa su propia paleta fija (pergamino, gris casi negro y un azul para la acción principal). Para cambiar los colores
-            elige el estilo Bosque.
+            {estilo === 'apple'
+              ? 'Apple usa su propia paleta fija (negro, carbón y un azul para la acción principal). '
+              : 'Monad usa su propia paleta fija (pergamino, gris casi negro y un azul para la acción principal). '}
+            Para cambiar los colores elige el estilo Bosque.
           </p>
         )}
 
@@ -338,18 +340,18 @@ export const PaletaSettingsTab: React.FC = () => {
             </div>
             <div className="flex-1 space-y-3 p-4">
               <div className="rounded-2xl bg-white p-4">
-                <p className="text-sm font-bold text-slate-900" style={estilo === 'monad' ? { fontFamily: "'Newsreader', Georgia, serif", fontWeight: 400, fontSize: 18 } : undefined}>Nueva orden</p>
+                <p className="text-sm font-bold text-slate-900" style={estilo === 'monad' ? { fontFamily: "'Newsreader', Georgia, serif", fontWeight: 400, fontSize: 18 } : estilo === 'apple' ? { fontWeight: 600, letterSpacing: '-0.01em' } : undefined}>Nueva orden</p>
                 <p className="mt-1 text-[11px] text-slate-500">Así se verán las tarjetas y los botones.</p>
                 <span
                   className="mt-3 inline-block rounded-full px-4 py-1.5 text-xs font-semibold"
-                  style={{ backgroundColor: vista.boton, color: estilo === 'monad' ? '#ffffff' : '#1a1a1a' }}
+                  style={{ backgroundColor: vista.boton, color: estilo === 'bosque' ? '#1a1a1a' : '#ffffff' }}
                 >
                   Revisar y liquidar
                 </span>
               </div>
-              <div className="rounded-2xl p-4" style={{ backgroundColor: mezclar(vista.acento, '#ffffff', 0.8) }}>
-                <p className="text-sm font-bold" style={{ color: vista.menu }}>Tarjeta con acento</p>
-                <p className="mt-1 text-[11px] text-slate-700">Detalles y fondos suaves salen del acento.</p>
+              <div className="rounded-2xl p-4" style={{ backgroundColor: estilo === 'apple' ? '#1d1d1f' : mezclar(vista.acento, '#ffffff', 0.8) }}>
+                <p className="text-sm font-bold" style={{ color: estilo === 'apple' ? '#f5f5f7' : vista.menu }}>Tarjeta con acento</p>
+                <p className="mt-1 text-[11px]" style={{ color: estilo === 'apple' ? '#aeaeb2' : '#334155' }}>Detalles y fondos suaves salen del acento.</p>
               </div>
             </div>
           </div>
