@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useClinic, STAFF_SESSION_TOKEN_STORAGE_KEY } from '../../context/ClinicContext';
-import { VaclinicPosterGraphic } from '../common/VaclinicPosterGraphic';
+import { PortadaLogin, ImagenPortada, usePortadaImagenes } from './PortadaLogin';
 import { loginStaff, verifyTotp, verifyStaffSession } from '../../services/staffAuthService';
 import { PasswordRecovery } from './PasswordRecovery';
 import {
@@ -67,6 +67,8 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
     showNotification
   } = useClinic();
 
+  // Imágenes de la portada elegidas por el laboratorio (Ajustes → Portada del acceso).
+  const imagenesPortada = usePortadaImagenes();
   const [email, setEmail] = useState('');
   // Recuperación de contraseña: se abre sola si llegó por el enlace del correo (?reset=...).
   const [modoRecuperacion, setModoRecuperacion] = useState<boolean>(() => new URLSearchParams(window.location.search).has('reset'));
@@ -347,6 +349,16 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
       {/* 3. MAIN LOGIN VIEWPORT AREA */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-8 lg:p-12 relative overflow-hidden bg-radial from-slate-100 via-slate-200/80 to-slate-300/60">
         
+        {/* Fondo de pantalla elegido por el laboratorio (Ajustes → Portada del acceso) */}
+        <ImagenPortada
+          clave="fondo_pagina"
+          imagenes={imagenesPortada}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          alternativa={null}
+        />
+        {imagenesPortada.fondo_pagina && <div className="absolute inset-0 bg-slate-100/70 pointer-events-none" />}
+
         {/* Soft Background High-Tech Lab Texture */}
         <div 
           className="absolute inset-0 opacity-[0.04] pointer-events-none"
@@ -365,7 +377,7 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
           
           {/* LEFT SIDE: VACLINIC Official Clinical Graphic Poster */}
           <div className="w-full md:w-1/2 flex justify-center order-2 md:order-1">
-            <VaclinicPosterGraphic size="md" className="shadow-2xl hover:shadow-cyan-900/20 transition-all duration-300" />
+            <PortadaLogin imagenes={imagenesPortada} />
           </div>
 
           {/* RIGHT SIDE: Acceso a Personal VACLINIC Card */}
@@ -377,9 +389,17 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
 
               {/* Padlock Icon in Dark Rounded Square */}
               <div className="flex justify-center mt-1">
-                <div className="w-14 h-14 rounded-2xl bg-[#0a1924] flex items-center justify-center text-teal-400 shadow-lg border border-teal-500/30">
-                  <Lock className="w-7 h-7 stroke-[2.2] text-teal-400" />
-                </div>
+                <ImagenPortada
+                  clave="escudo"
+                  imagenes={imagenesPortada}
+                  alt="Escudo de acceso de VACLINIC"
+                  className="h-16 w-16 object-contain"
+                  alternativa={
+                    <div className="w-14 h-14 rounded-2xl bg-[#0a1924] flex items-center justify-center text-teal-400 shadow-lg border border-teal-500/30">
+                      <Lock className="w-7 h-7 stroke-[2.2] text-teal-400" />
+                    </div>
+                  }
+                />
               </div>
 
               {/* Header Titles */}
