@@ -360,7 +360,7 @@ export const OzelleCbcReportView: React.FC<OzelleCbcReportViewProps> = ({
 
         {/* PÁGINA 1: SERIE LEUCOCITARIA & PARCIAL ERITROCITARIA */}
         {(activePage === 1 || activePage === 'all') && (
-          <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
+          <div className="papel-informe bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
             {renderHeader(1)}
 
             {/* Section 1: Serie Leucocitaria */}
@@ -439,7 +439,7 @@ export const OzelleCbcReportView: React.FC<OzelleCbcReportViewProps> = ({
 
         {/* PÁGINA 2: SERIE ERITROCITARIA (PARTE 2), SERIE PLAQUETARIA & HISTOGRAMAS */}
         {(activePage === 2 || activePage === 'all') && (
-          <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
+          <div className="papel-informe bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
             {renderHeader(2)}
 
             {/* Continuation of Serie Eritrocitaria */}
@@ -521,7 +521,7 @@ export const OzelleCbcReportView: React.FC<OzelleCbcReportViewProps> = ({
 
         {/* PÁGINA 3: GRÁFICO DE DISTRIBUCIÓN CELULAR & FOTOS CELULARES (PARTE 1) */}
         {(activePage === 3 || activePage === 'all') && (
-          <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
+          <div className="papel-informe bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
             {renderHeader(3)}
 
             {/* Cell Distribution Smears */}
@@ -604,7 +604,7 @@ export const OzelleCbcReportView: React.FC<OzelleCbcReportViewProps> = ({
 
         {/* PÁGINA 4: FOTOS CELULARES (PARTE 2) & INTERPRETACIÓN CLÍNICA */}
         {(activePage === 4 || activePage === 'all') && (
-          <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
+          <div className="papel-informe bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
             {renderHeader(4)}
 
             {/* Remaining Cell Gallery Types (BAS# and RET#) */}
@@ -719,7 +719,7 @@ export const OzelleCbcReportView: React.FC<OzelleCbcReportViewProps> = ({
 
         {/* PÁGINA 5: PARÁMETROS ANÓMALOS RESTANTES, POSIBLES AFECCIONES & REFERENCIAS */}
         {(activePage === 5 || activePage === 'all') && (
-          <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
+          <div className="papel-informe bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-lg font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:m-0 print:p-0">
             {renderHeader(5)}
 
             {/* Remaining abnormal findings */}
