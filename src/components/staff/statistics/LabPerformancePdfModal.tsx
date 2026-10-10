@@ -271,6 +271,8 @@ export const LabPerformancePdfModal: React.FC<LabPerformancePdfModalProps> = ({
         logging: false,
         windowWidth: 1024,
         onclone: (clonedDoc) => {
+          // El PDF no usa los estilos de pantalla (Monad, Apple): sale como siempre.
+          clonedDoc.documentElement.classList.remove('estilo-monad', 'estilo-apple');
           // Reemplazo de colores no soportados por canvas si los hubiere
           const allEls = clonedDoc.querySelectorAll('*');
           allEls.forEach((el) => {
