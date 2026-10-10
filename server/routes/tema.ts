@@ -34,7 +34,7 @@ export function validarColores(valor: unknown): ColoresTema | null {
   return salida;
 }
 
-export const ESTILOS = ['bosque', 'monad'] as const;
+export const ESTILOS = ['bosque', 'monad', 'apple'] as const;
 export type EstiloTema = (typeof ESTILOS)[number];
 
 /** Estilo válido; si no se manda, 'bosque'. `undefined` si es un valor desconocido. */
