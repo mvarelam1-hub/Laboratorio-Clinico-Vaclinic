@@ -66,19 +66,19 @@ export const PortalPublico: React.FC = () => {
   const nombreLab = contacto.nombre || 'Laboratorio Clínico';
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="tema-vaclinic max-w-6xl mx-auto">
       <header className="pt-2 pb-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Portal del Paciente</p>
-        <p className="text-lg font-extrabold text-slate-900">{nombreLab}</p>
+        <p className="text-xs font-semibold text-graphite">Portal del Paciente</p>
+        <p className="text-xl font-semibold text-canopy tracking-tight">{nombreLab}</p>
       </header>
-      <nav aria-label="Secciones del portal" className="sticky top-0 z-20 -mx-3 sm:mx-0 px-3 sm:px-0 bg-slate-100/95 backdrop-blur border-b border-slate-300 mb-6">
+      <nav aria-label="Secciones del portal" className="sticky top-0 z-20 -mx-3 sm:mx-0 px-3 sm:px-0 bg-lavender-mist/95 backdrop-blur border-b border-frost mb-6">
         <ul className="flex gap-1 overflow-x-auto py-2">
           {MENU.map((m) => (
             <li key={m.id} className="shrink-0">
               <a
                 href={`#/${m.id}`}
                 aria-current={vista === m.id ? 'page' : undefined}
-                className={`block px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${vista === m.id ? 'bg-teal-700 text-white' : 'text-slate-700 hover:bg-white'}`}
+                className={`block px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${vista === m.id ? 'bg-canopy text-white' : 'text-graphite hover:bg-white'}`}
               >
                 {m.etiqueta}
               </a>
@@ -118,7 +118,7 @@ export const PortalPublico: React.FC = () => {
         {vista === 'contacto' && (
           <section aria-labelledby="titulo-contacto">
             <div id="titulo-contacto"><TituloSeccion titulo="Contacto" subtitulo={`Escríbenos o visítanos en ${nombreLab}.`} /></div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-5">
+            <div className="bg-cream rounded-3xl p-6">
                 <TarjetaContacto lab={contacto} />
               </div>
           </section>
@@ -137,9 +137,9 @@ interface InicioProps {
 }
 
 const PASOS = [
-  { n: '1', t: 'Visita el laboratorio', d: 'Te atendemos, registramos tu orden y tomamos tu muestra.' },
-  { n: '2', t: 'Recibe tu código', d: 'Al registrar tu orden te entregamos tu código de consulta (PIN).' },
-  { n: '3', t: 'Consulta tus resultados', d: 'Cuando el laboratorio publique tu informe, escribe tu código aquí para verlo, descargarlo o imprimirlo.' },
+  { n: '1', t: 'Visita el laboratorio', d: 'Te atendemos, registramos tu orden y tomamos tu muestra.', fondo: 'bg-mint-wash' },
+  { n: '2', t: 'Recibe tu código', d: 'Al registrar tu orden te entregamos tu código de consulta (PIN).', fondo: 'bg-sky-wash' },
+  { n: '3', t: 'Consulta tus resultados', d: 'Cuando el laboratorio publique tu informe, escribe tu código aquí para verlo, descargarlo o imprimirlo.', fondo: 'bg-peach-wash' },
 ];
 
 const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCategoria }) => {
@@ -154,19 +154,19 @@ const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCatego
 
   return (
     <div className="space-y-10">
-      <section className="relative overflow-hidden bg-white border border-slate-200 rounded-3xl px-6 py-10 sm:px-10 sm:py-14 grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,400px)] items-center">
-        <ImagenPortada clave="fondo_pagina" imagenes={imagenesPortada} alt="" className="absolute inset-0 h-full w-full object-cover" alternativa={null} />
-        {imagenesPortada.fondo_pagina && <div className="absolute inset-0 bg-white/85 pointer-events-none" />}
+      <section className="relative isolate overflow-hidden bg-canopy rounded-3xl px-6 py-10 sm:px-12 sm:py-16 grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,400px)] items-center">
+        <ImagenPortada clave="fondo_pagina" imagenes={imagenesPortada} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover" alternativa={null} />
+        {imagenesPortada.fondo_pagina && <div className="absolute inset-0 -z-10 bg-canopy/85 pointer-events-none" />}
         <div className="relative">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 max-w-3xl">
+        <h1 className="titulo-display text-4xl sm:text-6xl text-white max-w-3xl">
           {lab?.eslogan || 'Consulta tus resultados y conoce nuestros servicios'}
         </h1>
-        <p className="text-slate-600 mt-3 max-w-2xl">
+        <p className="text-lg text-mint-wash mt-4 max-w-2xl">
           Aquí puedes ver tus resultados cuando estén listos, conocer las pruebas que ofrece {lab?.nombre || 'el laboratorio'}, sus precios y cómo prepararte para tu examen.
         </p>
         <div className="flex flex-wrap gap-3 mt-6">
-          <button onClick={() => ir('resultados')} className="bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-full px-6 py-3 cursor-pointer">Consultar mis Resultados</button>
-          <button onClick={() => ir('catalogo')} className="bg-white border-2 border-slate-300 hover:border-slate-500 text-slate-900 font-bold rounded-full px-6 py-3 cursor-pointer">Ver Catálogo de Pruebas</button>
+          <button onClick={() => ir('resultados')} className="bg-coral-pulse hover:bg-coral-hover text-[#1a1a1a] font-semibold rounded-full px-6 py-3 cursor-pointer transition-colors">Consultar mis Resultados</button>
+          <button onClick={() => ir('catalogo')} className="bg-transparent border border-white hover:bg-white/10 text-white font-medium rounded-full px-6 py-3 cursor-pointer transition-colors">Ver Catálogo de Pruebas</button>
         </div>
         </div>
         <div className="relative hidden md:flex justify-center">
@@ -175,13 +175,13 @@ const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCatego
       </section>
 
       <section aria-labelledby="como-funciona">
-        <h2 id="como-funciona" className="text-xl font-extrabold text-slate-900 mb-3">¿Cómo funciona?</h2>
-        <ol className="grid gap-3 sm:grid-cols-3">
+        <h2 id="como-funciona" className="titulo-display text-3xl sm:text-5xl text-canopy mb-5">¿Cómo funciona?</h2>
+        <ol className="grid gap-6 sm:grid-cols-3">
           {PASOS.map((p) => (
-            <li key={p.n} className="bg-white border border-slate-200 rounded-2xl p-5">
-              <span aria-hidden="true" className="w-8 h-8 rounded-full bg-teal-700 text-white font-bold flex items-center justify-center">{p.n}</span>
-              <p className="font-extrabold text-slate-900 mt-3">{p.t}</p>
-              <p className="text-sm text-slate-600 mt-1">{p.d}</p>
+            <li key={p.n} className={`${p.fondo} rounded-3xl p-6 sm:p-8`}>
+              <span aria-hidden="true" className="w-10 h-10 rounded-full bg-white text-canopy font-bold flex items-center justify-center">{p.n}</span>
+              <p className="text-2xl font-bold text-canopy tracking-tight mt-4">{p.t}</p>
+              <p className="text-base text-graphite mt-2">{p.d}</p>
             </li>
           ))}
         </ol>
@@ -190,8 +190,8 @@ const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCatego
       {promos.length > 0 && (
         <section aria-labelledby="promos-inicio">
           <div className="flex items-baseline justify-between mb-3">
-            <h2 id="promos-inicio" className="text-xl font-extrabold text-slate-900">Promociones vigentes</h2>
-            <a href="#/noticias" className="text-sm font-bold text-teal-800 underline">Ver todas</a>
+            <h2 id="promos-inicio" className="titulo-display text-3xl sm:text-4xl text-canopy">Promociones vigentes</h2>
+            <a href="#/noticias" className="text-sm font-semibold text-canopy underline">Ver todas</a>
           </div>
           <ListaContenido items={promos} promo vacio="" />
         </section>
@@ -199,13 +199,13 @@ const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCatego
 
       {categorias.length > 0 && (
         <section aria-labelledby="servicios-inicio">
-          <h2 id="servicios-inicio" className="text-xl font-extrabold text-slate-900 mb-3">Nuestros servicios y análisis</h2>
+          <h2 id="servicios-inicio" className="titulo-display text-3xl sm:text-4xl text-canopy mb-4">Nuestros servicios y análisis</h2>
           <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {categorias.map((c) => (
               <li key={c.codigo}>
-                <button onClick={() => verCategoria(c.codigo)} className="w-full text-left bg-white border border-slate-200 hover:border-teal-600 rounded-xl px-4 py-3 flex items-center justify-between gap-2 cursor-pointer">
-                  <span className="font-bold text-slate-900">{c.nombre}</span>
-                  <span className="text-xs font-bold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">{c.total}</span>
+                <button onClick={() => verCategoria(c.codigo)} className="w-full text-left bg-white hover:bg-sage-wash rounded-2xl px-5 py-4 flex items-center justify-between gap-2 cursor-pointer transition-colors">
+                  <span className="font-semibold text-slate-900">{c.nombre}</span>
+                  <span className="text-xs font-semibold text-canopy bg-mint-wash rounded-full px-3 py-1">{c.total}</span>
                 </button>
               </li>
             ))}
@@ -216,15 +216,15 @@ const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCatego
       {noticias.length > 0 && (
         <section aria-labelledby="noticias-inicio">
           <div className="flex items-baseline justify-between mb-3">
-            <h2 id="noticias-inicio" className="text-xl font-extrabold text-slate-900">Noticias y Salud</h2>
-            <a href="#/noticias" className="text-sm font-bold text-teal-800 underline">Ver todas</a>
+            <h2 id="noticias-inicio" className="titulo-display text-3xl sm:text-4xl text-canopy">Noticias y Salud</h2>
+            <a href="#/noticias" className="text-sm font-semibold text-canopy underline">Ver todas</a>
           </div>
           <ListaContenido items={noticias} vacio="" />
         </section>
       )}
 
-      <section aria-labelledby="contacto-inicio" className="bg-white border border-slate-200 rounded-2xl p-5">
-        <h2 id="contacto-inicio" className="text-xl font-extrabold text-slate-900 mb-3">Contacto</h2>
+      <section aria-labelledby="contacto-inicio" className="bg-cream rounded-3xl p-6 sm:p-8">
+        <h2 id="contacto-inicio" className="titulo-display text-3xl sm:text-4xl text-canopy mb-4">Contacto</h2>
         <TarjetaContacto lab={lab} />
       </section>
     </div>
