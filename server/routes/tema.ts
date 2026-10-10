@@ -1,5 +1,5 @@
 /**
- * Paleta de colores del laboratorio (migración 0026).
+ * Paleta de colores y estilo visual del laboratorio (migraciones 0026 y 0027).
  *
  *  - Router PÚBLICO (`temaPublicoRouter`, montado ANTES de requireStaffAuth): el
  *    login y el portal del paciente aún no tienen sesión y deben verse con los
@@ -34,6 +34,15 @@ export function validarColores(valor: unknown): ColoresTema | null {
   return salida;
 }
 
+export const ESTILOS = ['bosque', 'monad'] as const;
+export type EstiloTema = (typeof ESTILOS)[number];
+
+/** Estilo válido; si no se manda, 'bosque'. `undefined` si es un valor desconocido. */
+export function validarEstilo(valor: unknown): EstiloTema | undefined {
+  if (valor === null || valor === undefined) return 'bosque';
+  return typeof valor === 'string' && (ESTILOS as readonly string[]).includes(valor) ? (valor as EstiloTema) : undefined;
+}
+
 /** Identificador corto de la paleta elegida ("oceano", "personalizada"…) o null. */
 export function validarNombrePaleta(valor: unknown): string | null | undefined {
   if (valor === null || valor === undefined) return null;
@@ -45,13 +54,13 @@ export function validarNombrePaleta(valor: unknown): string | null | undefined {
 export const temaPublicoRouter = Router();
 
 temaPublicoRouter.get('/', asyncHandler(async (_req, res) => {
-  const { rows } = await pool.query('SELECT paleta, colores, actualizado_en FROM tema_laboratorio WHERE id = 1');
+  const { rows } = await pool.query('SELECT paleta, colores, estilo, actualizado_en FROM tema_laboratorio WHERE id = 1');
   res.setHeader('Cache-Control', 'no-cache');
   if (rows.length === 0) return res.json({ tema: null });
   const colores = validarColores(rows[0].colores);
   if (!colores) return res.json({ tema: null });
   return res.json({
-    tema: { paleta: rows[0].paleta ?? null, colores, version: new Date(rows[0].actualizado_en).getTime() }
+    tema: { paleta: rows[0].paleta ?? null, colores, estilo: validarEstilo(rows[0].estilo) ?? 'bosque', version: new Date(rows[0].actualizado_en).getTime() }
   });
 }));
 
@@ -65,21 +74,24 @@ temaAdminRouter.put('/', asyncHandler(async (req, res) => {
   if (!colores) return res.status(400).json({ error: 'Los cuatro colores deben ser códigos como #0a3922.' });
   const paleta = validarNombrePaleta(req.body?.paleta);
   if (paleta === undefined) return res.status(400).json({ error: 'El nombre de la paleta no es válido.' });
+  const estilo = validarEstilo(req.body?.estilo);
+  if (estilo === undefined) return res.status(400).json({ error: 'El estilo no es válido.' });
 
   await pool.query(
-    `INSERT INTO tema_laboratorio (id, paleta, colores, actualizado_en, id_usuario)
-     VALUES (1, $1, $2::jsonb, NOW(), $3)
+    `INSERT INTO tema_laboratorio (id, paleta, colores, actualizado_en, id_usuario, estilo)
+     VALUES (1, $1, $2::jsonb, NOW(), $3, $4)
      ON CONFLICT (id) DO UPDATE
-       SET paleta = EXCLUDED.paleta, colores = EXCLUDED.colores, actualizado_en = NOW(), id_usuario = EXCLUDED.id_usuario`,
-    [paleta, JSON.stringify(colores), req.staffUser!.idUsuario]
+       SET paleta = EXCLUDED.paleta, colores = EXCLUDED.colores, actualizado_en = NOW(),
+           id_usuario = EXCLUDED.id_usuario, estilo = EXCLUDED.estilo`,
+    [paleta, JSON.stringify(colores), req.staffUser!.idUsuario, estilo]
   );
   try {
     await registrarBitacora({
       idUsuario: req.staffUser!.idUsuario,
-      accion: `Paleta de colores del sistema: se aplicó "${paleta ?? 'personalizada'}"`,
+      accion: `Paleta de colores del sistema: se aplicó "${paleta ?? 'personalizada'}" (estilo ${estilo})`,
       modulo: 'catalogo',
       severidad: 'info',
-      detalles: `Menú ${colores.menu}, acento ${colores.acento}, botón ${colores.boton}, fondo ${colores.fondo}.`
+      detalles: `Estilo ${estilo}. Menú ${colores.menu}, acento ${colores.acento}, botón ${colores.boton}, fondo ${colores.fondo}.`
     });
   } catch (err) {
     console.error('No se pudo registrar el cambio de paleta en la bitácora:', err);
@@ -96,7 +108,7 @@ temaAdminRouter.delete('/', asyncHandler(async (req, res) => {
         accion: 'Paleta de colores del sistema: se restableció el diseño original',
         modulo: 'catalogo',
         severidad: 'info',
-        detalles: 'Vuelve la paleta Bosque.'
+        detalles: 'Vuelve el estilo y la paleta Bosque.'
       });
     } catch (err) {
       console.error('No se pudo registrar el restablecimiento de la paleta en la bitácora:', err);
