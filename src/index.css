@@ -140,7 +140,7 @@
   }
 
   html.estilo-monad body {
-    background-color: #f6f3f1;
+    background-color: var(--color-lavender-mist);
     letter-spacing: -0.02em;
   }
 
@@ -159,7 +159,7 @@
 
   /* El botón principal es azul con texto blanco (el texto oscuro de la paleta Bosque no se lee sobre azul). */
   html.estilo-monad .bg-coral-pulse {
-    color: #ffffff;
+    color: var(--on-boton, #ffffff);
     white-space: nowrap;
   }
 }
@@ -239,7 +239,7 @@
   }
 
   html.estilo-apple body {
-    background-color: #111111;
+    background-color: var(--color-lavender-mist);
     color: #f5f5f7;
     letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
@@ -264,19 +264,19 @@
 
   /* Botón principal: azul de compra con texto blanco y forma de píldora. */
   html.estilo-apple .bg-coral-pulse {
-    color: #ffffff;
+    color: var(--on-boton, #ffffff);
     white-space: nowrap;
   }
   html.estilo-apple .text-canopy,
   html.estilo-apple .hover\:text-canopy:hover { color: #f5f5f7; }
   html.estilo-apple .border-canopy { border-color: #6e6e73; }
-  /* Botón/ítem activo "verde": píldora Polar White con texto grafito (el punto de estado "en línea" sigue verde). */
-  html.estilo-apple .bg-leaf.text-canopy { background-color: #f5f5f7; color: #1d1d1f; }
-  html.estilo-apple .bg-leaf.text-canopy:hover { background-color: #ffffff; }
+  /* Botón/ítem activo del acento: píldora del color de acento con texto que se lee sobre él. */
+  html.estilo-apple .bg-leaf.text-canopy { background-color: var(--color-leaf); color: var(--on-acento, #062b14); }
+  html.estilo-apple .bg-leaf.text-canopy:hover { background-color: color-mix(in srgb, var(--color-leaf) 82%, #ffffff); }
   html.estilo-apple .text-mint-wash { color: #d1d1d6; }
   html.estilo-apple .text-mint-wash\/80 { color: color-mix(in srgb, #d1d1d6 80%, transparent); }
   html.estilo-apple .text-mint-wash\/50 { color: color-mix(in srgb, #d1d1d6 50%, transparent); }
-  html.estilo-apple .text-teal-500 { color: #2997ff; }
+  html.estilo-apple .text-teal-500 { color: var(--ap-t400,#2997ff); }
 
   /* Campos de texto: relleno translúcido, borde fino gris y píldora (980px). */
   html.estilo-apple input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
@@ -375,19 +375,19 @@
   html.estilo-apple .bg-slate-50\/80{background-color:color-mix(in srgb,#1d1d1f 80%,transparent)}
   html.estilo-apple .bg-slate-50\/90{background-color:color-mix(in srgb,#1d1d1f 90%,transparent)}
   html.estilo-apple .bg-slate-50{background-color:#1d1d1f}
-  html.estilo-apple .bg-teal-100\/60{background-color:color-mix(in srgb,#001b36 60%,transparent)}
-  html.estilo-apple .bg-teal-100\/80{background-color:color-mix(in srgb,#001b36 80%,transparent)}
-  html.estilo-apple .bg-teal-100\/90{background-color:color-mix(in srgb,#001b36 90%,transparent)}
-  html.estilo-apple .bg-teal-100{background-color:#001b36}
-  html.estilo-apple .bg-teal-50\/20{background-color:color-mix(in srgb,#001224 20%,transparent)}
-  html.estilo-apple .bg-teal-50\/30{background-color:color-mix(in srgb,#001224 30%,transparent)}
-  html.estilo-apple .bg-teal-50\/40{background-color:color-mix(in srgb,#001224 40%,transparent)}
-  html.estilo-apple .bg-teal-50\/50{background-color:color-mix(in srgb,#001224 50%,transparent)}
-  html.estilo-apple .bg-teal-50\/60{background-color:color-mix(in srgb,#001224 60%,transparent)}
-  html.estilo-apple .bg-teal-50\/70{background-color:color-mix(in srgb,#001224 70%,transparent)}
-  html.estilo-apple .bg-teal-50\/80{background-color:color-mix(in srgb,#001224 80%,transparent)}
-  html.estilo-apple .bg-teal-50\/90{background-color:color-mix(in srgb,#001224 90%,transparent)}
-  html.estilo-apple .bg-teal-50{background-color:#001224}
+  html.estilo-apple .bg-teal-100\/60{background-color:color-mix(in srgb,var(--ap-bg100,#001b36) 60%,transparent)}
+  html.estilo-apple .bg-teal-100\/80{background-color:color-mix(in srgb,var(--ap-bg100,#001b36) 80%,transparent)}
+  html.estilo-apple .bg-teal-100\/90{background-color:color-mix(in srgb,var(--ap-bg100,#001b36) 90%,transparent)}
+  html.estilo-apple .bg-teal-100{background-color:var(--ap-bg100,#001b36)}
+  html.estilo-apple .bg-teal-50\/20{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 20%,transparent)}
+  html.estilo-apple .bg-teal-50\/30{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 30%,transparent)}
+  html.estilo-apple .bg-teal-50\/40{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 40%,transparent)}
+  html.estilo-apple .bg-teal-50\/50{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 50%,transparent)}
+  html.estilo-apple .bg-teal-50\/60{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 60%,transparent)}
+  html.estilo-apple .bg-teal-50\/70{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 70%,transparent)}
+  html.estilo-apple .bg-teal-50\/80{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 80%,transparent)}
+  html.estilo-apple .bg-teal-50\/90{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 90%,transparent)}
+  html.estilo-apple .bg-teal-50{background-color:var(--ap-bg50,#001224)}
   html.estilo-apple .bg-violet-200\/70{background-color:color-mix(in srgb,#2c1d4f 70%,transparent)}
   html.estilo-apple .bg-white\/50{background-color:color-mix(in srgb,#000000 50%,transparent)}
   html.estilo-apple .bg-white\/60{background-color:color-mix(in srgb,#000000 60%,transparent)}
@@ -453,14 +453,14 @@
   html.estilo-apple .border-slate-300\/80{border-color:color-mix(in srgb,#48484a 80%,transparent)}
   html.estilo-apple .border-slate-300{border-color:#48484a}
   html.estilo-apple .border-slate-400{border-color:#636366}
-  html.estilo-apple .border-teal-100{border-color:#001932}
-  html.estilo-apple .border-teal-200\/50{border-color:color-mix(in srgb,#002449 50%,transparent)}
-  html.estilo-apple .border-teal-200\/60{border-color:color-mix(in srgb,#002449 60%,transparent)}
-  html.estilo-apple .border-teal-200\/70{border-color:color-mix(in srgb,#002449 70%,transparent)}
-  html.estilo-apple .border-teal-200\/80{border-color:color-mix(in srgb,#002449 80%,transparent)}
-  html.estilo-apple .border-teal-200{border-color:#002449}
-  html.estilo-apple .border-teal-300\/30{border-color:color-mix(in srgb,#003366 30%,transparent)}
-  html.estilo-apple .border-teal-300{border-color:#003366}
+  html.estilo-apple .border-teal-100{border-color:var(--ap-bd100,#001932)}
+  html.estilo-apple .border-teal-200\/50{border-color:color-mix(in srgb,var(--ap-bg200,#002449) 50%,transparent)}
+  html.estilo-apple .border-teal-200\/60{border-color:color-mix(in srgb,var(--ap-bg200,#002449) 60%,transparent)}
+  html.estilo-apple .border-teal-200\/70{border-color:color-mix(in srgb,var(--ap-bg200,#002449) 70%,transparent)}
+  html.estilo-apple .border-teal-200\/80{border-color:color-mix(in srgb,var(--ap-bg200,#002449) 80%,transparent)}
+  html.estilo-apple .border-teal-200{border-color:var(--ap-bg200,#002449)}
+  html.estilo-apple .border-teal-300\/30{border-color:color-mix(in srgb,var(--ap-bd300,#003366) 30%,transparent)}
+  html.estilo-apple .border-teal-300{border-color:var(--ap-bd300,#003366)}
   html.estilo-apple .border-violet-300{border-color:#3f296f}
   html.estilo-apple .divide-slate-100>:not(:last-child){border-color:#2a2a2d}
   html.estilo-apple .divide-slate-200>:not(:last-child){border-color:#38383a}
@@ -475,12 +475,12 @@
   html.estilo-apple .from-rose-50{--tw-gradient-from:#270a0f}
   html.estilo-apple .from-slate-50\/40{--tw-gradient-from:color-mix(in srgb,#1d1d1f 40%,transparent)}
   html.estilo-apple .from-slate-50{--tw-gradient-from:#1d1d1f}
-  html.estilo-apple .from-teal-100{--tw-gradient-from:#001b36}
-  html.estilo-apple .from-teal-300{--tw-gradient-from:#002f5f}
-  html.estilo-apple .from-teal-50\/50{--tw-gradient-from:color-mix(in srgb,#001224 50%,transparent)}
-  html.estilo-apple .from-teal-50\/80{--tw-gradient-from:color-mix(in srgb,#001224 80%,transparent)}
-  html.estilo-apple .from-teal-50\/90{--tw-gradient-from:color-mix(in srgb,#001224 90%,transparent)}
-  html.estilo-apple .from-teal-50{--tw-gradient-from:#001224}
+  html.estilo-apple .from-teal-100{--tw-gradient-from:var(--ap-bg100,#001b36)}
+  html.estilo-apple .from-teal-300{--tw-gradient-from:var(--ap-bg300,#002f5f)}
+  html.estilo-apple .from-teal-50\/50{--tw-gradient-from:color-mix(in srgb,var(--ap-bg50,#001224) 50%,transparent)}
+  html.estilo-apple .from-teal-50\/80{--tw-gradient-from:color-mix(in srgb,var(--ap-bg50,#001224) 80%,transparent)}
+  html.estilo-apple .from-teal-50\/90{--tw-gradient-from:color-mix(in srgb,var(--ap-bg50,#001224) 90%,transparent)}
+  html.estilo-apple .from-teal-50{--tw-gradient-from:var(--ap-bg50,#001224)}
   html.estilo-apple .from-violet-50{--tw-gradient-from:#160f27}
   html.estilo-apple .text-amber-600{color:#fbbf24}
   html.estilo-apple .text-amber-700{color:#fcd34d}
@@ -537,14 +537,14 @@
   html.estilo-apple .text-slate-800{color:#e5e5ea}
   html.estilo-apple .text-slate-900{color:#f5f5f7}
   html.estilo-apple .text-slate-950{color:#f5f5f7}
-  html.estilo-apple .text-teal-500{color:#2997ff}
-  html.estilo-apple .text-teal-600{color:#2997ff}
-  html.estilo-apple .text-teal-700{color:#6cb8ff}
-  html.estilo-apple .text-teal-800\/80{color:color-mix(in srgb,#6cb8ff 80%,transparent)}
-  html.estilo-apple .text-teal-800\/90{color:color-mix(in srgb,#6cb8ff 90%,transparent)}
-  html.estilo-apple .text-teal-800{color:#6cb8ff}
-  html.estilo-apple .text-teal-900{color:#b3d9ff}
-  html.estilo-apple .text-teal-950{color:#b3d9ff}
+  html.estilo-apple .text-teal-500{color:var(--ap-t400,#2997ff)}
+  html.estilo-apple .text-teal-600{color:var(--ap-t400,#2997ff)}
+  html.estilo-apple .text-teal-700{color:var(--ap-t300,#6cb8ff)}
+  html.estilo-apple .text-teal-800\/80{color:color-mix(in srgb,var(--ap-t300,#6cb8ff) 80%,transparent)}
+  html.estilo-apple .text-teal-800\/90{color:color-mix(in srgb,var(--ap-t300,#6cb8ff) 90%,transparent)}
+  html.estilo-apple .text-teal-800{color:var(--ap-t300,#6cb8ff)}
+  html.estilo-apple .text-teal-900{color:var(--ap-t200,#b3d9ff)}
+  html.estilo-apple .text-teal-950{color:var(--ap-t200,#b3d9ff)}
   html.estilo-apple .text-violet-600{color:#a78bfa}
   html.estilo-apple .text-violet-900{color:#ddd6fe}
   html.estilo-apple .text-violet-950{color:#ddd6fe}
@@ -563,9 +563,9 @@
   html.estilo-apple .to-rose-50\/50{--tw-gradient-to:color-mix(in srgb,#270a0f 50%,transparent)}
   html.estilo-apple .to-sky-50\/40{--tw-gradient-to:color-mix(in srgb,#021a25 40%,transparent)}
   html.estilo-apple .to-slate-50{--tw-gradient-to:#1d1d1f}
-  html.estilo-apple .to-teal-100{--tw-gradient-to:#001b36}
-  html.estilo-apple .to-teal-50\/50{--tw-gradient-to:color-mix(in srgb,#001224 50%,transparent)}
-  html.estilo-apple .to-teal-50{--tw-gradient-to:#001224}
+  html.estilo-apple .to-teal-100{--tw-gradient-to:var(--ap-bg100,#001b36)}
+  html.estilo-apple .to-teal-50\/50{--tw-gradient-to:color-mix(in srgb,var(--ap-bg50,#001224) 50%,transparent)}
+  html.estilo-apple .to-teal-50{--tw-gradient-to:var(--ap-bg50,#001224)}
   html.estilo-apple .to-white{--tw-gradient-to:#000000}
   html.estilo-apple .via-amber-50\/70{--tw-gradient-via:color-mix(in srgb,#271902 70%,transparent)}
   html.estilo-apple .via-cyan-200{--tw-gradient-via:#023a44}
@@ -581,14 +581,14 @@
   html.estilo-apple .placeholder\:text-slate-400::placeholder{color:#86868b}
   html.estilo-apple .active\:bg-slate-300:active{background-color:#424245}
   html.estilo-apple .focus\:bg-white:focus{background-color:#000000}
-  html.estilo-apple .group-hover\:bg-teal-50:is(:where(.group):hover *){background-color:#001224}
-  html.estilo-apple .group-hover\:border-teal-200:is(:where(.group):hover *){border-color:#002449}
+  html.estilo-apple .group-hover\:bg-teal-50:is(:where(.group):hover *){background-color:var(--ap-bg50,#001224)}
+  html.estilo-apple .group-hover\:border-teal-200:is(:where(.group):hover *){border-color:var(--ap-bg200,#002449)}
   html.estilo-apple .group-hover\:text-cyan-600:is(:where(.group):hover *){color:#22d3ee}
   html.estilo-apple .group-hover\:text-cyan-700:is(:where(.group):hover *){color:#67e8f9}
   html.estilo-apple .group-hover\:text-slate-400:is(:where(.group):hover *){color:#86868b}
-  html.estilo-apple .group-hover\:text-teal-600:is(:where(.group):hover *){color:#2997ff}
-  html.estilo-apple .group-hover\:text-teal-700:is(:where(.group):hover *){color:#6cb8ff}
-  html.estilo-apple .group-hover\:text-teal-800:is(:where(.group):hover *){color:#6cb8ff}
+  html.estilo-apple .group-hover\:text-teal-600:is(:where(.group):hover *){color:var(--ap-t400,#2997ff)}
+  html.estilo-apple .group-hover\:text-teal-700:is(:where(.group):hover *){color:var(--ap-t300,#6cb8ff)}
+  html.estilo-apple .group-hover\:text-teal-800:is(:where(.group):hover *){color:var(--ap-t300,#6cb8ff)}
   html.estilo-apple .hover\:bg-amber-100\/50:hover{background-color:color-mix(in srgb,#3b2603 50%,transparent)}
   html.estilo-apple .hover\:bg-amber-100\/70:hover{background-color:color-mix(in srgb,#3b2603 70%,transparent)}
   html.estilo-apple .hover\:bg-amber-100\/80:hover{background-color:color-mix(in srgb,#3b2603 80%,transparent)}
@@ -634,15 +634,15 @@
   html.estilo-apple .hover\:bg-slate-50\/70:hover{background-color:color-mix(in srgb,#1d1d1f 70%,transparent)}
   html.estilo-apple .hover\:bg-slate-50\/80:hover{background-color:color-mix(in srgb,#1d1d1f 80%,transparent)}
   html.estilo-apple .hover\:bg-slate-50:hover{background-color:#1d1d1f}
-  html.estilo-apple .hover\:bg-teal-100\/70:hover{background-color:color-mix(in srgb,#001b36 70%,transparent)}
-  html.estilo-apple .hover\:bg-teal-100\/80:hover{background-color:color-mix(in srgb,#001b36 80%,transparent)}
-  html.estilo-apple .hover\:bg-teal-100:hover{background-color:#001b36}
-  html.estilo-apple .hover\:bg-teal-200:hover{background-color:#002449}
-  html.estilo-apple .hover\:bg-teal-300:hover{background-color:#002f5f}
-  html.estilo-apple .hover\:bg-teal-50\/30:hover{background-color:color-mix(in srgb,#001224 30%,transparent)}
-  html.estilo-apple .hover\:bg-teal-50\/40:hover{background-color:color-mix(in srgb,#001224 40%,transparent)}
-  html.estilo-apple .hover\:bg-teal-50\/50:hover{background-color:color-mix(in srgb,#001224 50%,transparent)}
-  html.estilo-apple .hover\:bg-teal-50:hover{background-color:#001224}
+  html.estilo-apple .hover\:bg-teal-100\/70:hover{background-color:color-mix(in srgb,var(--ap-bg100,#001b36) 70%,transparent)}
+  html.estilo-apple .hover\:bg-teal-100\/80:hover{background-color:color-mix(in srgb,var(--ap-bg100,#001b36) 80%,transparent)}
+  html.estilo-apple .hover\:bg-teal-100:hover{background-color:var(--ap-bg100,#001b36)}
+  html.estilo-apple .hover\:bg-teal-200:hover{background-color:var(--ap-bg200,#002449)}
+  html.estilo-apple .hover\:bg-teal-300:hover{background-color:var(--ap-bg300,#002f5f)}
+  html.estilo-apple .hover\:bg-teal-50\/30:hover{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 30%,transparent)}
+  html.estilo-apple .hover\:bg-teal-50\/40:hover{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 40%,transparent)}
+  html.estilo-apple .hover\:bg-teal-50\/50:hover{background-color:color-mix(in srgb,var(--ap-bg50,#001224) 50%,transparent)}
+  html.estilo-apple .hover\:bg-teal-50:hover{background-color:var(--ap-bg50,#001224)}
   html.estilo-apple .hover\:bg-violet-50:hover{background-color:#160f27}
   html.estilo-apple .hover\:bg-white:hover{background-color:#000000}
   html.estilo-apple .hover\:border-cyan-300:hover{border-color:#03525f}
@@ -651,10 +651,10 @@
   html.estilo-apple .hover\:border-purple-300:hover{border-color:#4c266f}
   html.estilo-apple .hover\:border-slate-300:hover{border-color:#48484a}
   html.estilo-apple .hover\:border-slate-400:hover{border-color:#636366}
-  html.estilo-apple .hover\:border-teal-200:hover{border-color:#002449}
-  html.estilo-apple .hover\:border-teal-300:hover{border-color:#003366}
+  html.estilo-apple .hover\:border-teal-200:hover{border-color:var(--ap-bg200,#002449)}
+  html.estilo-apple .hover\:border-teal-300:hover{border-color:var(--ap-bd300,#003366)}
   html.estilo-apple .hover\:from-cyan-300:hover{--tw-gradient-from:#034c59}
-  html.estilo-apple .hover\:from-teal-300:hover{--tw-gradient-from:#002f5f}
+  html.estilo-apple .hover\:from-teal-300:hover{--tw-gradient-from:var(--ap-bg300,#002f5f)}
   html.estilo-apple .hover\:text-amber-600:hover{color:#fbbf24}
   html.estilo-apple .hover\:text-amber-700:hover{color:#fcd34d}
   html.estilo-apple .hover\:text-amber-800:hover{color:#fcd34d}
@@ -678,14 +678,14 @@
   html.estilo-apple .hover\:text-slate-700:hover{color:#c7c7cc}
   html.estilo-apple .hover\:text-slate-800:hover{color:#e5e5ea}
   html.estilo-apple .hover\:text-slate-900:hover{color:#f5f5f7}
-  html.estilo-apple .hover\:text-teal-500:hover{color:#2997ff}
-  html.estilo-apple .hover\:text-teal-600:hover{color:#2997ff}
-  html.estilo-apple .hover\:text-teal-700:hover{color:#6cb8ff}
-  html.estilo-apple .hover\:text-teal-800:hover{color:#6cb8ff}
-  html.estilo-apple .hover\:text-teal-900:hover{color:#b3d9ff}
+  html.estilo-apple .hover\:text-teal-500:hover{color:var(--ap-t400,#2997ff)}
+  html.estilo-apple .hover\:text-teal-600:hover{color:var(--ap-t400,#2997ff)}
+  html.estilo-apple .hover\:text-teal-700:hover{color:var(--ap-t300,#6cb8ff)}
+  html.estilo-apple .hover\:text-teal-800:hover{color:var(--ap-t300,#6cb8ff)}
+  html.estilo-apple .hover\:text-teal-900:hover{color:var(--ap-t200,#b3d9ff)}
   html.estilo-apple .hover\:to-cyan-200:hover{--tw-gradient-to:#023a44}
   html.estilo-apple .hover\:to-cyan-300:hover{--tw-gradient-to:#034c59}
-  html.estilo-apple .hover\:to-teal-300:hover{--tw-gradient-to:#002f5f}
+  html.estilo-apple .hover\:to-teal-300:hover{--tw-gradient-to:var(--ap-bg300,#002f5f)}
 
   /*
    * Papel: informes, vistas previas de impresión y hojas que se exportan a PDF. Se les devuelve
