@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { correoConfigurado, urlBase, enviarCorreo, plantillaRecuperacion } from './mailer';
+import { correoConfigurado, urlBase, enviarCorreo, plantillaRecuperacion, plantillaUsuario } from './mailer';
 
 const ENTORNO = { ...process.env };
 
@@ -57,5 +57,13 @@ describe('mailer', () => {
     expect(p.texto).toContain('5 minutos');
     expect(p.html).toContain('&lt;b&gt;Ana&lt;/b&gt;');
     expect(p.html).not.toContain('<b>Ana</b>');
+  });
+
+  it('la plantilla de usuario muestra el usuario, el enlace y escapa el nombre', () => {
+    const p = plantillaUsuario({ nombre: '<i>Ana</i>', usuario: 'ana@ejemplo.com', enlace: 'https://x.test' });
+    expect(p.texto).toContain('ana@ejemplo.com');
+    expect(p.texto).toContain('https://x.test');
+    expect(p.html).toContain('&lt;i&gt;Ana&lt;/i&gt;');
+    expect(p.html).not.toContain('<i>Ana</i>');
   });
 });
