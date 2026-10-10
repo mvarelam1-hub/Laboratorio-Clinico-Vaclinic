@@ -43,7 +43,7 @@ export const ESTILOS: { id: EstiloTema; nombre: string; descripcion: string; mue
   {
     id: 'bosque',
     nombre: 'Bosque',
-    descripcion: 'El diseño actual: menú verde, tarjetas pastel y letra redondeada. Admite las paletas y los colores propios.',
+    descripcion: 'El diseño actual: menú verde, tarjetas pastel y letra redondeada.',
     muestra: PALETAS[0].colores
   },
   {
@@ -56,12 +56,44 @@ export const ESTILOS: { id: EstiloTema; nombre: string; descripcion: string; mue
     id: 'apple',
     nombre: 'Apple',
     descripcion: 'Oscuro: fondo negro y carbón, letra Inter, botones en píldora y un solo azul para la acción principal. Los informes impresos siguen en blanco.',
-    muestra: { menu: '#000000', acento: '#333336', boton: '#0071e3', fondo: '#111111' }
+    muestra: { menu: '#000000', acento: '#00d959', boton: '#0071e3', fondo: '#111111' }
   }
 ];
 
 export function esEstiloValido(valor: unknown): valor is EstiloTema {
   return valor === 'bosque' || valor === 'monad' || valor === 'apple';
+}
+
+const MONAD_ORIGINAL: ColoresTema = { menu: '#242424', acento: '#cfdaf5', boton: '#2b59d1', fondo: '#f6f3f1' };
+const APPLE_ORIGINAL: ColoresTema = { menu: '#000000', acento: '#00d959', boton: '#0071e3', fondo: '#111111' };
+
+/**
+ * Paletas listas de cada estilo. La primera de cada lista es la original del estilo (la que trae su CSS,
+ * así que no se pinta nada). Monad usa fondos claros; Apple, fondos oscuros.
+ */
+export const PALETAS_ESTILO: Record<EstiloTema, PaletaListas[]> = {
+  bosque: PALETAS,
+  monad: [
+    { id: 'monad', nombre: 'Pergamino (original)', colores: MONAD_ORIGINAL },
+    { id: 'monad-salvia', nombre: 'Salvia', colores: { menu: '#1f2a24', acento: '#cfe3d4', boton: '#2f7d4f', fondo: '#f1f4ef' } },
+    { id: 'monad-rosa', nombre: 'Rosa', colores: { menu: '#2a1f24', acento: '#f3d3dc', boton: '#c2335f', fondo: '#f8f1f2' } },
+    { id: 'monad-cielo', nombre: 'Cielo', colores: { menu: '#1d2530', acento: '#cde5f5', boton: '#1d6fb8', fondo: '#eff4f8' } },
+    { id: 'monad-ambar', nombre: 'Ámbar', colores: { menu: '#2b2418', acento: '#f5e2b8', boton: '#b8590b', fondo: '#f8f3ea' } },
+    { id: 'monad-violeta', nombre: 'Violeta', colores: { menu: '#241f33', acento: '#ddd3f5', boton: '#6a3fd1', fondo: '#f3f1f8' } }
+  ],
+  apple: [
+    { id: 'apple', nombre: 'Medianoche (original)', colores: APPLE_ORIGINAL },
+    { id: 'apple-esmeralda', nombre: 'Esmeralda', colores: { menu: '#02140d', acento: '#34d399', boton: '#059669', fondo: '#0b1511' } },
+    { id: 'apple-violeta', nombre: 'Violeta', colores: { menu: '#0d0818', acento: '#a78bfa', boton: '#7c3aed', fondo: '#14101f' } },
+    { id: 'apple-ambar', nombre: 'Ámbar', colores: { menu: '#120b02', acento: '#fbbf24', boton: '#d97706', fondo: '#1a130b' } },
+    { id: 'apple-rosa', nombre: 'Rosa', colores: { menu: '#14060c', acento: '#fb7185', boton: '#e11d48', fondo: '#1c0f14' } },
+    { id: 'apple-grafito', nombre: 'Grafito', colores: { menu: '#0b0b0c', acento: '#a1a1aa', boton: '#52525b', fondo: '#18181b' } }
+  ]
+};
+
+/** Los 4 colores con los que viene cada estilo (los de su CSS). */
+export function coloresOriginalesDeEstilo(estilo: EstiloTema): ColoresTema {
+  return PALETAS_ESTILO[estilo][0].colores;
 }
 
 /** Activa el estilo sobre <html> (clase `estilo-monad` / `estilo-apple` que usa index.css) y quita los demás. */
@@ -73,10 +105,17 @@ export function aplicarEstilo(estilo: EstiloTema, destino: { classList: { add(c:
   }
 }
 
-/** Pinta estilo y colores juntos: con Monad o Apple no se tocan las variables de la paleta (cada uno tiene la suya). */
+/** Pinta estilo y colores juntos. Bosque deriva su paleta con `aplicarTema`; Monad y Apple, con `aplicarVariablesEstilo`. */
 export function aplicarDiseno(colores: ColoresTema | null, estilo: EstiloTema): void {
   aplicarEstilo(estilo);
-  aplicarTema(estilo === 'bosque' ? colores : null);
+  // Las dos derivaciones comparten algunas variables: primero se limpia la que no toca y luego se pinta la otra.
+  if (estilo === 'bosque') {
+    aplicarVariablesEstilo(estilo, null);
+    aplicarTema(colores);
+  } else {
+    aplicarTema(null);
+    aplicarVariablesEstilo(estilo, colores ?? coloresOriginalesDeEstilo(estilo));
+  }
 }
 
 const TEXTO_BOTON = '#1a1a1a';
@@ -207,6 +246,105 @@ export function aplicarTema(colores: ColoresTema | null, destino: HTMLElement = 
   for (const v of TODAS_LAS_VARIABLES) destino.style.removeProperty(v);
   if (!colores) return;
   for (const [nombre, valor] of Object.entries(variablesDeTema(colores))) destino.style.setProperty(nombre, valor);
+}
+
+/** Color de texto (blanco o casi negro) que mejor se lee sobre `fondo`. */
+export function textoSobre(fondo: string): string {
+  return contraste(fondo, BLANCO) >= contraste(fondo, '#111111') ? BLANCO : '#111111';
+}
+
+/**
+ * Variables CSS con las que los colores elegidos se montan sobre Monad o Apple. Con los colores originales
+ * del estilo (o con Bosque) no se pinta nada: manda el CSS del estilo.
+ */
+export function variablesDeEstilo(estilo: EstiloTema, colores: ColoresTema): Record<string, string> {
+  if (estilo === 'bosque' || sonIguales(colores, coloresOriginalesDeEstilo(estilo))) return {};
+  const menu = normalizarHex(colores.menu);
+  const acento = normalizarHex(colores.acento);
+  const boton = normalizarHex(colores.boton);
+  const fondo = normalizarHex(colores.fondo);
+  const vars: Record<string, string> = {
+    '--color-canopy': menu,
+    '--color-canopy-claro': mezclar(menu, BLANCO, estilo === 'apple' ? 0.12 : 0.1),
+    '--color-leaf': acento,
+    '--color-coral-pulse': boton,
+    '--color-coral-hover': estilo === 'apple' ? mezclar(boton, BLANCO, 0.1) : mezclar(boton, NEGRO, 0.12),
+    '--color-lavender-mist': fondo,
+    '--color-cream': fondo,
+    '--on-boton': textoSobre(boton),
+    '--on-acento': textoSobre(acento)
+  };
+  if (estilo === 'monad') {
+    vars['--color-mint-wash'] = mezclar(acento, BLANCO, 0.5);
+    vars['--color-sky-wash'] = mezclar(acento, BLANCO, 0.5);
+    vars['--color-teal-600'] = menu;
+    vars['--color-teal-700'] = mezclar(menu, NEGRO, 0.37);
+    vars['--color-teal-800'] = mezclar(menu, NEGRO, 0.67);
+    vars['--color-teal-900'] = NEGRO;
+    vars['--color-teal-950'] = NEGRO;
+  } else {
+    vars['--color-mint-wash'] = mezclar(acento, NEGRO, 0.85);
+    vars['--color-sage-wash'] = mezclar(acento, NEGRO, 0.88);
+    const escala: Record<string, string> = {
+      '50': mezclar(boton, BLANCO, 0.92),
+      '100': mezclar(boton, BLANCO, 0.85),
+      '200': mezclar(boton, BLANCO, 0.7),
+      '300': mezclar(boton, BLANCO, 0.45),
+      '400': mezclar(boton, BLANCO, 0.2),
+      '500': boton,
+      '600': boton,
+      '700': mezclar(boton, NEGRO, 0.14),
+      '800': mezclar(boton, NEGRO, 0.3),
+      '900': mezclar(boton, NEGRO, 0.5),
+      '950': mezclar(boton, NEGRO, 0.72)
+    };
+    for (const [paso, valor] of Object.entries(escala)) vars[`--color-teal-${paso}`] = valor;
+    // Tintes oscuros y textos claros de la familia del botón (los usa el CSS de Apple).
+    vars['--ap-t200'] = escala['200'];
+    vars['--ap-t300'] = escala['300'];
+    vars['--ap-t400'] = escala['400'];
+    vars['--ap-bg50'] = mezclar(boton, NEGRO, 0.84);
+    vars['--ap-bg100'] = mezclar(boton, NEGRO, 0.76);
+    vars['--ap-bg200'] = mezclar(boton, NEGRO, 0.68);
+    vars['--ap-bg300'] = mezclar(boton, NEGRO, 0.58);
+    vars['--ap-bd100'] = mezclar(boton, NEGRO, 0.78);
+    vars['--ap-bd300'] = mezclar(boton, NEGRO, 0.55);
+  }
+  return vars;
+}
+
+const TODAS_LAS_VARIABLES_DE_ESTILO = Array.from(
+  new Set(
+    (['monad', 'apple'] as const).flatMap((e) =>
+      Object.keys(variablesDeEstilo(e, { menu: '#000001', acento: '#000002', boton: '#000003', fondo: '#000004' }))
+    )
+  )
+);
+
+/** Pinta (o quita, con `null`) las variables de los colores elegidos sobre Monad o Apple. */
+export function aplicarVariablesEstilo(
+  estilo: EstiloTema,
+  colores: ColoresTema | null,
+  destino: { style: { setProperty(n: string, v: string): unknown; removeProperty(n: string): unknown } } = document.documentElement
+): void {
+  for (const v of TODAS_LAS_VARIABLES_DE_ESTILO) destino.style.removeProperty(v);
+  if (!colores) return;
+  for (const [nombre, valor] of Object.entries(variablesDeEstilo(estilo, colores))) destino.style.setProperty(nombre, valor);
+}
+
+/** Avisos de legibilidad según el estilo (Apple es oscuro; Monad y Bosque, claros). */
+export function avisosDeContrasteEstilo(estilo: EstiloTema, colores: ColoresTema): AvisoColor[] {
+  if (estilo === 'bosque') return avisosDeContraste(colores);
+  const avisos: AvisoColor[] = [];
+  if (estilo === 'apple') {
+    if (luminancia(colores.fondo) > 0.2) avisos.push({ clave: 'fondo', texto: 'Apple es un estilo oscuro: con un fondo claro el texto casi no se verá. Elige un tono oscuro.' });
+    if (luminancia(colores.menu) > 0.2) avisos.push({ clave: 'menu', texto: 'El menú de Apple lleva texto claro: elige un tono oscuro.' });
+    if (contraste(colores.acento, colores.fondo) < 3) avisos.push({ clave: 'acento', texto: 'El acento casi no se distingue del fondo. Elige uno más claro.' });
+  } else {
+    if (contraste(colores.fondo, '#111111') < 7) avisos.push({ clave: 'fondo', texto: 'El fondo es muy oscuro para el texto. Elige un tono claro.' });
+    if (contraste(colores.acento, colores.menu) < 3) avisos.push({ clave: 'acento', texto: 'El acento casi no se distingue del color del menú. Elige uno más claro u oscuro.' });
+  }
+  return avisos;
 }
 
 const CLAVE_CACHE = 'vaclinic_tema';
