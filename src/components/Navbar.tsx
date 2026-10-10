@@ -61,28 +61,28 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
       <OfflineWarningBanner />
 
       {/* Top VACLINIC Institutional Bar */}
-      <div className="bg-slate-950 text-slate-300 text-xs px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
+      <div className="bg-canopy text-mint-wash text-xs px-4 py-1.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-cyan-400 font-black tracking-wide">
+          <span className="flex items-center gap-1.5 text-leaf font-black tracking-wide">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-leaf opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-leaf"></span>
             </span>
             VACLINIC • LABORATORIO CLÍNICO
           </span>
-          <span className="hidden md:inline text-slate-600">•</span>
-          <span className="hidden md:inline text-cyan-200/90 text-[11px] italic font-medium">
+          <span className="hidden md:inline text-mint-wash/50">•</span>
+          <span className="hidden md:inline text-mint-wash text-[11px] italic font-medium">
             "Precisión que diagnostica, confianza que cuida"
           </span>
         </div>
 
         <div className="flex items-center gap-3 text-xs">
-          <div className="flex items-center gap-1.5 bg-cyan-950/80 text-cyan-300 px-2.5 py-0.5 rounded-full border border-cyan-500/40 text-[11px] font-bold">
+          <div className="flex items-center gap-1.5 bg-canopy-claro text-mint-wash px-2.5 py-0.5 rounded-full border border-leaf/40 text-[11px] font-bold">
             <span>📞 Tel / WhatsApp: 56125563</span>
           </div>
 
-          <span className="text-slate-600 hidden sm:inline">|</span>
-          <span className="text-slate-400 text-[11px] hidden lg:inline">
+          <span className="text-mint-wash/50 hidden sm:inline">|</span>
+          <span className="text-mint-wash/80 text-[11px] hidden lg:inline">
             📍 Entrada de Pineda Oratorio Santa Rosa km 79.5
           </span>
         </div>
@@ -107,16 +107,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             )}
 
             {/* Styled VACLINIC circular micro-emblem */}
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-600 via-teal-600 to-slate-900 flex items-center justify-center text-white shadow-md shadow-cyan-600/30 flex-shrink-0 font-black relative overflow-hidden border border-cyan-400/40">
-              <span className="text-sm font-black tracking-tighter text-cyan-100">VC</span>
-              <span className="absolute bottom-0.5 right-1 text-[7px] font-mono text-cyan-300">LAB</span>
+            <div className="h-10 w-10 rounded-xl bg-canopy flex items-center justify-center text-white flex-shrink-0 font-black relative overflow-hidden">
+              <span className="text-sm font-black tracking-tighter text-leaf">VC</span>
+              <span className="absolute bottom-0.5 right-1 text-[7px] font-mono text-mint-wash">LAB</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-none">
                   VACLINIC
                 </span>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider bg-cyan-50 text-cyan-800 px-2 py-0.5 rounded-full border border-cyan-300 hidden xs:inline-block">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider bg-mint-wash text-canopy px-2 py-0.5 rounded-full hidden xs:inline-block">
                   Laboratorio Clínico
                 </span>
               </div>
@@ -127,12 +127,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
           </div>
 
           {/* Center: Main Role Switcher (Personal de Laboratorio vs Vista Paciente) */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner">
+          <div className="flex items-center bg-cloud p-1 rounded-full border border-frost">
             <button
               id="btn-vista-personal"
               onClick={handleRequestStaffRole}
               title={role === 'paciente' ? 'Requiere PIN de personal de laboratorio' : 'Panel de laboratorio LABVACLINIC'}
-              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
                 role === 'personal'
                   ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80 text-teal-700 font-bold'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
@@ -156,7 +156,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             <button
               id="btn-vista-paciente"
               onClick={() => setRole('paciente')}
-              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
                 role === 'paciente'
                   ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80 text-cyan-700 font-bold'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
@@ -272,7 +272,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                     setActiveReportToEdit(null);
                     setStaffActiveTab('redactor');
                   }}
-                  className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 active:scale-98 text-white px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold shadow-sm shadow-teal-600/30 transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 bg-coral-pulse hover:bg-coral-hover active:scale-98 text-[#1a1a1a] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer"
                   title="Abrir Editor de Informes Clínicos y Analizador Ozelle"
                 >
                   <PlusCircle className="w-4 h-4" />
