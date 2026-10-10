@@ -351,7 +351,7 @@ export const AuditPdfExportModal: React.FC<AuditPdfExportModalProps> = ({
             {/* THE PRINTABLE DOM ELEMENT */}
             <div 
               ref={printAreaRef}
-              className="bg-white text-slate-900 w-full max-w-[780px] p-8 sm:p-10 rounded-sm shadow-xl border border-slate-300 relative text-xs leading-normal select-text"
+              className="papel-informe bg-white text-slate-900 w-full max-w-[780px] p-8 sm:p-10 rounded-sm shadow-xl border border-slate-300 relative text-xs leading-normal select-text"
               style={{
                 fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
               }}
