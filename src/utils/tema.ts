@@ -33,10 +33,11 @@ export const PALETA_ORIGINAL = PALETAS[0];
 
 /**
  * Estilos del sistema. 'bosque' es el diseño actual (admite las paletas de arriba);
- * 'monad' es pergamino + serif + monoespaciada con su propia paleta fija: todo su CSS
- * vive en index.css bajo la clase `estilo-monad` de <html>.
+ * 'monad' es pergamino + serif + monoespaciada y 'apple' es oscuro (negro/carbón, azul de compra),
+ * cada uno con su propia paleta fija: todo su CSS vive en index.css bajo la clase
+ * `estilo-monad` / `estilo-apple` de <html>.
  */
-export type EstiloTema = 'bosque' | 'monad';
+export type EstiloTema = 'bosque' | 'monad' | 'apple';
 export const ESTILO_ORIGINAL: EstiloTema = 'bosque';
 export const ESTILOS: { id: EstiloTema; nombre: string; descripcion: string; muestra: ColoresTema }[] = [
   {
@@ -50,23 +51,32 @@ export const ESTILOS: { id: EstiloTema; nombre: string; descripcion: string; mue
     nombre: 'Monad',
     descripcion: 'Fondo pergamino, títulos en serif, texto en monoespaciada, bordes finos y un solo azul para la acción principal.',
     muestra: { menu: '#242424', acento: '#cfdaf5', boton: '#2b59d1', fondo: '#f6f3f1' }
+  },
+  {
+    id: 'apple',
+    nombre: 'Apple',
+    descripcion: 'Oscuro: fondo negro y carbón, letra Inter, botones en píldora y un solo azul para la acción principal. Los informes impresos siguen en blanco.',
+    muestra: { menu: '#000000', acento: '#333336', boton: '#0071e3', fondo: '#111111' }
   }
 ];
 
 export function esEstiloValido(valor: unknown): valor is EstiloTema {
-  return valor === 'bosque' || valor === 'monad';
+  return valor === 'bosque' || valor === 'monad' || valor === 'apple';
 }
 
-/** Activa o quita el estilo sobre <html> (la clase `estilo-monad` que usa index.css). */
+/** Activa el estilo sobre <html> (clase `estilo-monad` / `estilo-apple` que usa index.css) y quita los demás. */
 export function aplicarEstilo(estilo: EstiloTema, destino: { classList: { add(c: string): unknown; remove(c: string): unknown } } = document.documentElement): void {
-  if (estilo === 'monad') destino.classList.add('estilo-monad');
-  else destino.classList.remove('estilo-monad');
+  for (const e of ESTILOS) {
+    if (e.id === 'bosque') continue;
+    if (e.id === estilo) destino.classList.add(`estilo-${e.id}`);
+    else destino.classList.remove(`estilo-${e.id}`);
+  }
 }
 
-/** Pinta estilo y colores juntos: con Monad no se tocan las variables de la paleta (Monad tiene la suya). */
+/** Pinta estilo y colores juntos: con Monad o Apple no se tocan las variables de la paleta (cada uno tiene la suya). */
 export function aplicarDiseno(colores: ColoresTema | null, estilo: EstiloTema): void {
   aplicarEstilo(estilo);
-  aplicarTema(estilo === 'monad' ? null : colores);
+  aplicarTema(estilo === 'bosque' ? colores : null);
 }
 
 const TEXTO_BOTON = '#1a1a1a';
