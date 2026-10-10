@@ -2,12 +2,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   PALETAS,
   PALETA_ORIGINAL,
+  ESTILOS,
+  aplicarDiseno,
+  aplicarEstilo,
   aplicarTema,
   avisosDeContraste,
   contraste,
   escalaDesdeAcento,
+  esEstiloValido,
   esHexValido,
+  guardarEstiloEnCache,
   guardarTemaEnCache,
+  leerEstiloEnCache,
   leerTemaEnCache,
   mezclar,
   validarColores,
@@ -124,5 +130,57 @@ describe('aplicar y recordar', () => {
     vi.stubGlobal('localStorage', { getItem: () => { throw new Error('bloqueado'); }, setItem: () => { throw new Error('bloqueado'); }, removeItem: () => { throw new Error('bloqueado'); } });
     expect(() => guardarTemaEnCache(PALETAS[1].colores)).not.toThrow();
     expect(leerTemaEnCache()).toBeNull();
+  });
+});
+
+describe('estilo del sistema (Bosque / Monad)', () => {
+  function crearClases() {
+    const clases = new Set<string>();
+    return { clases, destino: { classList: { add: (c: string) => void clases.add(c), remove: (c: string) => void clases.delete(c) } } };
+  }
+
+  it('solo acepta los estilos conocidos y ofrece Bosque y Monad', () => {
+    expect(esEstiloValido('bosque')).toBe(true);
+    expect(esEstiloValido('monad')).toBe(true);
+    expect(esEstiloValido('rojo')).toBe(false);
+    expect(esEstiloValido(null)).toBe(false);
+    expect(ESTILOS.map((e) => e.id)).toEqual(['bosque', 'monad']);
+  });
+
+  it('activa y quita la clase estilo-monad', () => {
+    const { clases, destino } = crearClases();
+    aplicarEstilo('monad', destino);
+    expect(clases.has('estilo-monad')).toBe(true);
+    aplicarEstilo('bosque', destino);
+    expect(clases.has('estilo-monad')).toBe(false);
+  });
+
+  it('con Monad no se pintan las variables de la paleta; con Bosque sí', () => {
+    const { clases, destino } = crearClases();
+    const valores = new Map<string, string>();
+    const raiz = { classList: destino.classList, style: { setProperty: (n: string, v: string) => void valores.set(n, v), removeProperty: (n: string) => void valores.delete(n) } };
+    vi.stubGlobal('document', { documentElement: raiz });
+    aplicarDiseno(PALETAS[1].colores, 'monad');
+    expect(clases.has('estilo-monad')).toBe(true);
+    expect(valores.size).toBe(0);
+    aplicarDiseno(PALETAS[1].colores, 'bosque');
+    expect(clases.has('estilo-monad')).toBe(false);
+    expect(valores.get('--color-canopy')).toBe(PALETAS[1].colores.menu);
+    vi.unstubAllGlobals();
+  });
+
+  it('recuerda el estilo en el navegador y vuelve a Bosque si hay datos raros o no hay almacenamiento', () => {
+    const datos = new Map<string, string>();
+    vi.stubGlobal('localStorage', { getItem: (k: string) => datos.get(k) ?? null, setItem: (k: string, v: string) => void datos.set(k, v), removeItem: (k: string) => void datos.delete(k) });
+    expect(leerEstiloEnCache()).toBe('bosque');
+    guardarEstiloEnCache('monad');
+    expect(leerEstiloEnCache()).toBe('monad');
+    datos.set('vaclinic_estilo', '<script>');
+    expect(leerEstiloEnCache()).toBe('bosque');
+    guardarEstiloEnCache('bosque');
+    expect(datos.has('vaclinic_estilo')).toBe(false);
+    vi.stubGlobal('localStorage', { getItem: () => { throw new Error('bloqueado'); }, setItem: () => { throw new Error('bloqueado'); }, removeItem: () => { throw new Error('bloqueado'); } });
+    expect(() => guardarEstiloEnCache('monad')).not.toThrow();
+    expect(leerEstiloEnCache()).toBe('bosque');
   });
 });
