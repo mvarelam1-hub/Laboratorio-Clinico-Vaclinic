@@ -176,7 +176,11 @@ export class AuditExportService {
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        windowWidth: 1080
+        windowWidth: 1080,
+        // El PDF no usa los estilos de pantalla (Monad, Apple): sale como siempre.
+        onclone: (clonedDoc) => {
+          clonedDoc.documentElement.classList.remove('estilo-monad', 'estilo-apple');
+        }
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
