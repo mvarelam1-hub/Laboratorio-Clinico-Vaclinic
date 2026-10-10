@@ -264,3 +264,22 @@ export async function restablecerConToken(token: string, nuevaContrasena: string
     return { ok: false, message: 'No se pudo contactar al servidor de VACLINIC. Intenta de nuevo en unos segundos.' };
   }
 }
+
+/** POST /api/auth/forgot-username — pide que se envíe el usuario al correo registrado de la cuenta. */
+export async function solicitarRecordatorioUsuario(nombre: string): Promise<{ ok: true; mensaje: string } | { ok: false; message: string }> {
+  try {
+    const res = await fetch('/api/auth/forgot-username', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre })
+    });
+    if (!res.ok) {
+      return { ok: false, message: await mensajeDeError(res, 'No se pudo solicitar el recordatorio de usuario.') };
+    }
+    const body = await res.json().catch(() => ({}));
+    return { ok: true, mensaje: body?.mensaje || 'Si el nombre corresponde a una cuenta activa, enviamos un recordatorio a su correo.' };
+  } catch (err) {
+    console.error('[StaffAuth] No se pudo contactar al servidor para recordar el usuario:', err);
+    return { ok: false, message: 'No se pudo contactar al servidor de VACLINIC. Intenta de nuevo en unos segundos.' };
+  }
+}
