@@ -11,6 +11,7 @@ import { NoticiasPublicas, ListaContenido } from './NoticiasPublicas';
 import { EstadoCarga, TarjetaContacto, TituloSeccion } from './comunes';
 import { categoriasConConteo, completarConFabrica } from '../../../utils/catalogoPublico';
 import { contactoFinal } from '../../../data/contactoLaboratorio';
+import { PortadaLogin, ImagenPortada, usePortadaImagenes } from '../../staff/PortadaLogin';
 
 const AtlasPublico = lazy(() => import('./AtlasPublico'));
 
@@ -146,12 +147,17 @@ const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCatego
     () => (catalogo ? categoriasConConteo(catalogo.examenes.map(completarConFabrica)) : []),
     [catalogo]
   );
+  // Mismas imágenes de portada que el acceso del personal (Ajustes → Portada del acceso).
+  const imagenesPortada = usePortadaImagenes();
   const promos = contenido?.promociones.slice(0, 2) ?? [];
   const noticias = contenido?.noticias.slice(0, 2) ?? [];
 
   return (
     <div className="space-y-10">
-      <section className="bg-white border border-slate-200 rounded-3xl px-6 py-10 sm:px-10 sm:py-14">
+      <section className="relative overflow-hidden bg-white border border-slate-200 rounded-3xl px-6 py-10 sm:px-10 sm:py-14 grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,400px)] items-center">
+        <ImagenPortada clave="fondo_pagina" imagenes={imagenesPortada} alt="" className="absolute inset-0 h-full w-full object-cover" alternativa={null} />
+        {imagenesPortada.fondo_pagina && <div className="absolute inset-0 bg-white/85 pointer-events-none" />}
+        <div className="relative">
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 max-w-3xl">
           {lab?.eslogan || 'Consulta tus resultados y conoce nuestros servicios'}
         </h1>
@@ -161,6 +167,10 @@ const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCatego
         <div className="flex flex-wrap gap-3 mt-6">
           <button onClick={() => ir('resultados')} className="bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-full px-6 py-3 cursor-pointer">Consultar mis Resultados</button>
           <button onClick={() => ir('catalogo')} className="bg-white border-2 border-slate-300 hover:border-slate-500 text-slate-900 font-bold rounded-full px-6 py-3 cursor-pointer">Ver Catálogo de Pruebas</button>
+        </div>
+        </div>
+        <div className="relative hidden md:flex justify-center">
+          <PortadaLogin imagenes={imagenesPortada} telefono={lab?.telefono} ubicacion={lab?.direccion} eslogan={lab?.eslogan} />
         </div>
       </section>
 
