@@ -90,10 +90,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
 
       {/* Main Header Container */}
       <div className="w-full px-4 sm:px-6">
-        <div className="flex items-center justify-between h-15 gap-4">
+        <div className="flex items-center justify-between min-h-15 py-1 gap-3 sm:gap-4">
           
           {/* Left: Mobile Menu Toggle & Logo */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
             {/* Hamburger button for mobile staff navigation */}
             {role === 'personal' && (
               <button
@@ -107,11 +107,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             )}
 
             {/* Styled VACLINIC circular micro-emblem */}
-            <div className="h-10 w-10 rounded-xl bg-canopy flex items-center justify-center text-white flex-shrink-0 font-black relative overflow-hidden">
+            <div className="h-10 w-10 rounded-xl bg-canopy hidden lg:flex items-center justify-center text-white flex-shrink-0 font-black relative overflow-hidden">
               <span className="text-sm font-black tracking-tighter text-leaf">VC</span>
               <span className="absolute bottom-0.5 right-1 text-[7px] font-mono text-mint-wash">LAB</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-none">
                   VACLINIC
@@ -127,7 +127,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
           </div>
 
           {/* Center: Main Role Switcher (Personal de Laboratorio vs Vista Paciente) */}
-          <div className="flex items-center bg-cloud p-1 rounded-full border border-frost">
+          <div className="flex items-center bg-cloud p-1 rounded-full border border-frost flex-shrink-0 whitespace-nowrap">
             <button
               id="btn-vista-personal"
               onClick={handleRequestStaffRole}
@@ -147,7 +147,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                   PIN
                 </span>
               ) : (
-                <span className="hidden sm:inline-block text-[10px] bg-teal-100 text-teal-800 font-bold px-1.5 py-0.2 rounded">
+                <span className="hidden xl:inline-block text-[10px] bg-teal-100 text-teal-800 font-bold px-1.5 py-0.2 rounded">
                   Staff
                 </span>
               )}
@@ -173,7 +173,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
           </div>
 
           {/* Right Action Area */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0 whitespace-nowrap">
             {/* Visual Connection Status Indicator & Offline Queue Trigger */}
             {(role === 'personal' || DEMO_MODE) && <ConnectionStatusIndicator />}
 
@@ -260,7 +260,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                 title="Copia de Seguridad y Respaldo de Datos (.json)"
               >
                 <Database className="w-4 h-4 text-teal-600" />
-                <span className="hidden lg:inline text-xs font-bold">Respaldo</span>
+                <span className="hidden xl:inline text-xs font-bold">Respaldo</span>
               </button>
             )}
 
@@ -276,7 +276,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                   title="Abrir Editor de Informes Clínicos y Analizador Ozelle"
                 >
                   <PlusCircle className="w-4 h-4" />
-                  <span className="hidden sm:inline">Editor de Informes</span>
+                  <span className="hidden lg:inline">Editor de Informes</span>
                 </button>
 
                 {/* Staff Lock / Logout Button */}
