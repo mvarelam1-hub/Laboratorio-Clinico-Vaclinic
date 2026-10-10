@@ -74,6 +74,29 @@ export function plantillaRecuperacion(params: { nombre: string; enlace: string; 
   return { asunto, texto, html };
 }
 
+export function plantillaUsuario(params: { nombre: string; usuario: string; enlace: string }): { asunto: string; texto: string; html: string } {
+  const { nombre, usuario, enlace } = params;
+  const asunto = 'Tu usuario de VACLINIC';
+  const texto = [
+    `Hola ${nombre},`,
+    '',
+    'Recibimos una solicitud para recordar tu usuario de VACLINIC. Tu usuario es el correo con el que se registró tu cuenta:',
+    usuario,
+    '',
+    `Puedes iniciar sesión aquí: ${enlace}`,
+    'Si no recuerdas la contraseña, usa "¿Olvidaste tu contraseña?" en esa pantalla.',
+    '',
+    'Si no fuiste tú, ignora este mensaje: no se cambió nada en tu cuenta.'
+  ].join('\n');
+  const html = `<p>Hola ${escaparHtml(nombre)},</p>
+<p>Recibimos una solicitud para recordar tu usuario de VACLINIC. Tu usuario es el correo con el que se registró tu cuenta:</p>
+<p><strong>${escaparHtml(usuario)}</strong></p>
+<p><a href="${escaparHtml(enlace)}">Ir al inicio de sesión</a></p>
+<p>Si no recuerdas la contraseña, usa "¿Olvidaste tu contraseña?" en esa pantalla.</p>
+<p>Si no fuiste tú, ignora este mensaje: no se cambió nada en tu cuenta.</p>`;
+  return { asunto, texto, html };
+}
+
 function escaparHtml(valor: string): string {
   return valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
