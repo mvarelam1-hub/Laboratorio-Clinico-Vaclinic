@@ -1,5 +1,43 @@
 @import "tailwindcss";
 
+/*
+ * Diseño "bosque con consultorios pastel" del acceso del personal y del portal
+ * del paciente. Solo se agregan colores y una fuente NUEVOS (no pisa ninguno de
+ * los de Tailwind), y la tipografía DM Sans solo se activa dentro de
+ * `.tema-vaclinic`, así que el resto de la aplicación se ve igual que antes.
+ */
+@theme {
+  --color-canopy: #0a3922;
+  --color-canopy-claro: #0f4a2d;
+  --color-coral-pulse: #ff643b;
+  --color-coral-hover: #ff7a56;
+  --color-indigo-bloom: #460095;
+  --color-leaf: #1dbf73;
+  --color-deep-teal: #003642;
+  --color-aubergine: #47264c;
+  --color-graphite: #3d3d3d;
+  --color-frost: #e0e0e0;
+  --color-cloud: #f2f2f2;
+  --color-lavender-mist: #eee2ff;
+  --color-mint-wash: #d2f2e3;
+  --color-sky-wash: #ccf0f8;
+  --color-sage-wash: #e4f7ee;
+  --color-lilac-wash: #fdf0ff;
+  --color-peach-wash: #ffede8;
+  --color-cream: #faf7e8;
+  --font-dm: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.tema-vaclinic {
+  font-family: var(--font-dm);
+  font-feature-settings: 'ss03';
+}
+.tema-vaclinic .titulo-display {
+  letter-spacing: -0.028em;
+  line-height: 1.05;
+  font-weight: 500;
+}
+
 @layer utilities {
   @media print {
     @page {
