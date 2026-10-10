@@ -229,24 +229,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <aside 
         className={`
           fixed top-0 lg:top-[var(--navbar-h,0px)] bottom-0 left-0 z-50 lg:z-30 print:hidden
-          flex flex-col bg-[#0b1329] text-slate-200 border-r border-slate-800/80
+          flex flex-col bg-canopy text-mint-wash border-r border-canopy-claro
           transition-all duration-300 ease-in-out shadow-2xl lg:shadow-none
           ${isMobileOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'}
           ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}
         `}
       >
         {/* Top Header: VACLINIC PANEL DE PERSONAL */}
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between flex-shrink-0">
+        <div className="p-4 border-b border-canopy-claro flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3 overflow-hidden">
             {/* Teal Flask Emblem */}
-            <div className="h-10 w-10 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-md shadow-teal-900/50 flex-shrink-0">
+            <div className="h-10 w-10 rounded-full bg-leaf flex items-center justify-center text-canopy flex-shrink-0">
               <FlaskConical className="w-5 h-5" />
             </div>
 
             {(!isCollapsed || isMobileOpen) && (
               <div className="flex flex-col min-w-0">
                 <span className="font-black text-sm text-white tracking-tight leading-none">VACLINIC</span>
-                <span className="text-[10px] font-black uppercase text-teal-400 mt-0.5 tracking-wider">
+                <span className="text-[10px] font-black uppercase text-leaf mt-0.5 tracking-wider">
                   PANEL DE PERSONAL
                 </span>
               </div>
@@ -265,9 +265,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* User Card: Administrador VACLINIC */}
         {(!isCollapsed || isMobileOpen) && (
-          <div className="px-4 py-3 border-b border-slate-800/60 bg-slate-900/40 flex-shrink-0">
+          <div className="px-4 py-3 border-b border-canopy-claro bg-canopy-claro/40 flex-shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-teal-950 text-teal-400 flex items-center justify-center border border-teal-800/50 flex-shrink-0">
+              <div className="w-8 h-8 rounded-full bg-canopy-claro text-leaf flex items-center justify-center flex-shrink-0">
                 <Shield className="w-4 h-4" />
               </div>
               <div className="min-w-0 flex-1">
@@ -293,9 +293,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
                   placeholder="Buscar todo..."
-                  className="w-full pl-8 pr-12 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-teal-500"
+                  className="w-full pl-8 pr-12 py-1.5 rounded-lg bg-canopy-claro border border-canopy-claro text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-teal-500"
                 />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-500 bg-canopy-claro px-1.5 py-0.5 rounded border border-leaf/30">
                   Ctrl K
                 </span>
               </div>
@@ -303,7 +303,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {/* Campana: abre las alertas reales (con contador solo si hay alertas) */}
               <button
                 onClick={() => handleSelectTab('alertas')}
-                className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
+                className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-canopy-claro transition-colors"
                 title={`Alertas (${totalAlertas})`}
               >
                 <Bell className="w-4 h-4" />
@@ -343,13 +343,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onClick={() => handleSelectTab(it.tab)}
                         title={it.titulo || it.etiqueta}
                         className={`
-                          w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
+                          w-full flex items-center gap-3 px-3 py-2 rounded-full text-xs font-semibold
                           transition-all duration-150 relative cursor-pointer text-left
                           ${activo
-                            ? 'bg-teal-600 text-white font-bold shadow-md'
+                            ? 'bg-leaf text-canopy font-bold'
                             : it.destacado
-                              ? 'text-teal-300 hover:bg-teal-950/40'
-                              : 'text-slate-300 hover:bg-slate-900/80 hover:text-white'
+                              ? 'text-leaf hover:bg-canopy-claro'
+                              : 'text-mint-wash hover:bg-canopy-claro hover:text-white'
                           }
                           ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : ''}
                         `}
@@ -359,7 +359,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                             <span className="truncate">{it.etiqueta}</span>
                             {it.contador != null && it.contador > 0 && (
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${it.alerta ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300'}`}>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${it.alerta ? 'bg-rose-600 text-white' : 'bg-canopy-claro text-mint-wash'}`}>
                                 {it.contador}
                               </span>
                             )}
@@ -378,12 +378,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Footer Area: User Status & Desktop Collapse Button */}
-        <div className="p-2 border-t border-slate-800/80 bg-slate-950/90 flex-shrink-0 flex items-center justify-between gap-1">
+        <div className="p-2 border-t border-canopy-claro bg-canopy flex-shrink-0 flex items-center justify-between gap-1">
           <button
             type="button"
             onClick={logoutStaff}
             className={`
-              flex items-center gap-2 p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 transition-colors text-xs font-semibold cursor-pointer
+              flex items-center gap-2 p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-canopy-claro transition-colors text-xs font-semibold cursor-pointer
               ${isCollapsed && !isMobileOpen ? 'w-full justify-center' : ''}
             `}
             title={`Bloquear terminal (${currentStaffUser?.fullName || 'Personal'})`}
@@ -394,7 +394,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer hidden lg:flex"
+            className="p-1.5 text-slate-400 hover:text-white hover:bg-canopy-claro rounded-lg transition-colors cursor-pointer hidden lg:flex"
             title={isCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'}
           >
             {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
