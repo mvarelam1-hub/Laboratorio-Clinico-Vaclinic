@@ -1490,7 +1490,7 @@ export const NewOrderRegistration: React.FC = () => {
                 id="btn-submit-order"
                 type="submit"
                 title="Revisar y liquidar (Ctrl+S)"
-                className="w-full sm:w-auto bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm px-5 py-2.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
+                className="w-full sm:w-auto bg-coral-pulse hover:bg-coral-hover text-[#1a1a1a] font-semibold text-sm px-6 py-2.5 rounded-full transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <Receipt className="w-4 h-4" />
                 <span>Revisar y liquidar</span>
