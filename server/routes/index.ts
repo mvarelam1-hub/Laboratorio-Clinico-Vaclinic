@@ -25,6 +25,7 @@ import { informesRouter } from './informes';
 import { configLabRouter } from './configLab';
 import { iaRouter } from './ia';
 import { portadaPublicaRouter, portadaAdminRouter } from './portada';
+import { temaPublicoRouter, temaAdminRouter } from './tema';
 
 export const apiRouter = Router();
 
@@ -49,6 +50,8 @@ apiRouter.use('/verificar', verificarApiRouter);
 // no tiene sesión, así que la LECTURA es pública y va ANTES del middleware de
 // sesión. Subir/quitar imágenes está en /portada-admin, más abajo, con permiso.
 apiRouter.use('/portada', portadaPublicaRouter);
+// Paleta de colores del laboratorio (migración 0026): también pública, por la misma razón.
+apiRouter.use('/tema', temaPublicoRouter);
 
 // Login, cambio de contraseña, TOTP y whoami de personal (ver
 // server/routes/auth.ts). Cada endpoint de este router decide por sí mismo
@@ -108,3 +111,4 @@ apiRouter.use('/config-lab', configLabRouter);
 apiRouter.use('/contenido-publico', contenidoPublicoRouter);
 apiRouter.use('/ia', iaRouter);
 apiRouter.use('/portada-admin', portadaAdminRouter);
+apiRouter.use('/tema-admin', temaAdminRouter);
