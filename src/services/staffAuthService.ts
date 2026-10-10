@@ -224,3 +224,43 @@ export async function logoutStaff(sessionToken: string): Promise<void> {
     console.warn('[StaffAuth] No se pudo revocar la sesión en el servidor (se cierra localmente de todas formas):', err);
   }
 }
+
+/**
+ * POST /api/auth/forgot-password — pide el enlace de recuperación por correo.
+ * El servidor responde lo mismo exista o no la cuenta (no revela correos).
+ */
+export async function solicitarRecuperacion(correo: string): Promise<{ ok: true; mensaje: string } | { ok: false; message: string }> {
+  try {
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ correo })
+    });
+    if (!res.ok) {
+      return { ok: false, message: await mensajeDeError(res, 'No se pudo solicitar la recuperación.') };
+    }
+    const body = await res.json().catch(() => ({}));
+    return { ok: true, mensaje: body?.mensaje || 'Si el correo pertenece a una cuenta activa, te enviamos un enlace.' };
+  } catch (err) {
+    console.error('[StaffAuth] No se pudo contactar al servidor para recuperar la contraseña:', err);
+    return { ok: false, message: 'No se pudo contactar al servidor de VACLINIC. Intenta de nuevo en unos segundos.' };
+  }
+}
+
+/** POST /api/auth/reset-password — canjea el token del correo por una contraseña nueva. */
+export async function restablecerConToken(token: string, nuevaContrasena: string): Promise<StaffActionResult> {
+  try {
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, nuevaContrasena })
+    });
+    if (!res.ok) {
+      return { ok: false, message: await mensajeDeError(res, 'No se pudo restablecer la contraseña.') };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error('[StaffAuth] No se pudo contactar al servidor para restablecer la contraseña:', err);
+    return { ok: false, message: 'No se pudo contactar al servidor de VACLINIC. Intenta de nuevo en unos segundos.' };
+  }
+}
