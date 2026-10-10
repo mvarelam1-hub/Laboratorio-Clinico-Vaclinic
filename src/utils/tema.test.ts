@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   PALETAS,
+  PALETAS_ESTILO,
   PALETA_ORIGINAL,
   ESTILOS,
   aplicarDiseno,
+  aplicarVariablesEstilo,
+  avisosDeContrasteEstilo,
+  coloresOriginalesDeEstilo,
+  textoSobre,
+  variablesDeEstilo,
   aplicarEstilo,
   aplicarTema,
   avisosDeContraste,
@@ -169,29 +175,84 @@ describe('estilo del sistema (Bosque / Monad)', () => {
     expect(clases.size).toBe(0);
   });
 
-  it('con Apple tampoco se pintan las variables de la paleta', () => {
+  it('con los colores originales de Monad o Apple no se pinta nada; con otros, sí', () => {
     const { clases, destino } = crearClases();
     const valores = new Map<string, string>();
     const raiz = { classList: destino.classList, style: { setProperty: (n: string, v: string) => void valores.set(n, v), removeProperty: (n: string) => void valores.delete(n) } };
     vi.stubGlobal('document', { documentElement: raiz });
-    aplicarDiseno(PALETAS[1].colores, 'apple');
+    aplicarDiseno(coloresOriginalesDeEstilo('apple'), 'apple');
     expect(clases.has('estilo-apple')).toBe(true);
+    expect(valores.size).toBe(0);
+    aplicarDiseno(PALETAS_ESTILO.apple[1].colores, 'apple');
+    expect(valores.get('--color-canopy')).toBe(PALETAS_ESTILO.apple[1].colores.menu);
+    expect(valores.get('--color-coral-pulse')).toBe(PALETAS_ESTILO.apple[1].colores.boton);
+    // Al pasar a Monad con sus colores originales se limpia lo de Apple.
+    aplicarDiseno(coloresOriginalesDeEstilo('monad'), 'monad');
+    expect(clases.has('estilo-monad')).toBe(true);
+    expect(valores.size).toBe(0);
+    aplicarDiseno(PALETAS_ESTILO.monad[2].colores, 'monad');
+    expect(valores.get('--color-lavender-mist')).toBe(PALETAS_ESTILO.monad[2].colores.fondo);
+    // Bosque usa su propia derivación y no deja variables de estilo.
+    aplicarDiseno(PALETAS[1].colores, 'bosque');
+    expect(clases.size).toBe(0);
+    expect(valores.get('--color-canopy')).toBe(PALETAS[1].colores.menu);
+    expect(valores.has('--on-boton')).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('sin colores guardados, Monad y Apple usan los suyos (no pintan nada)', () => {
+    const { destino } = crearClases();
+    const valores = new Map<string, string>();
+    const raiz = { classList: destino.classList, style: { setProperty: (n: string, v: string) => void valores.set(n, v), removeProperty: (n: string) => void valores.delete(n) } };
+    vi.stubGlobal('document', { documentElement: raiz });
+    aplicarDiseno(null, 'apple');
     expect(valores.size).toBe(0);
     vi.unstubAllGlobals();
   });
 
-  it('con Monad no se pintan las variables de la paleta; con Bosque sí', () => {
-    const { clases, destino } = crearClases();
+  it('cada estilo trae sus paletas listas, la primera es la original y todas son #rrggbb', () => {
+    for (const e of ESTILOS) {
+      const lista = PALETAS_ESTILO[e.id];
+      expect(lista[0].colores).toEqual(e.muestra);
+      expect(coloresOriginalesDeEstilo(e.id)).toEqual(e.muestra);
+      for (const p of lista) expect(validarColores(p.colores)).not.toBeNull();
+    }
+    const ids = Object.values(PALETAS_ESTILO).flatMap((l) => l.map((p) => p.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every((id) => /^[a-z0-9_-]{1,30}$/.test(id))).toBe(true);
+  });
+
+  it('variablesDeEstilo: nada con Bosque o con los originales; Apple deriva la escala del botón', () => {
+    expect(variablesDeEstilo('bosque', PALETAS[1].colores)).toEqual({});
+    expect(variablesDeEstilo('monad', coloresOriginalesDeEstilo('monad'))).toEqual({});
+    const v = variablesDeEstilo('apple', PALETAS_ESTILO.apple[2].colores);
+    expect(v['--color-teal-600']).toBe(PALETAS_ESTILO.apple[2].colores.boton);
+    expect(v['--ap-bg50']).toBeDefined();
+    expect(v['--on-boton']).toMatch(/^#/);
+    const m = variablesDeEstilo('monad', PALETAS_ESTILO.monad[1].colores);
+    expect(m['--color-teal-600']).toBe(PALETAS_ESTILO.monad[1].colores.menu);
+    expect(m['--ap-bg50']).toBeUndefined();
+  });
+
+  it('textoSobre elige blanco u oscuro según el fondo', () => {
+    expect(textoSobre('#000000')).toBe('#ffffff');
+    expect(textoSobre('#ffe066')).toBe('#111111');
+  });
+
+  it('aplicarVariablesEstilo(null) limpia todo', () => {
     const valores = new Map<string, string>();
-    const raiz = { classList: destino.classList, style: { setProperty: (n: string, v: string) => void valores.set(n, v), removeProperty: (n: string) => void valores.delete(n) } };
-    vi.stubGlobal('document', { documentElement: raiz });
-    aplicarDiseno(PALETAS[1].colores, 'monad');
-    expect(clases.has('estilo-monad')).toBe(true);
+    const destino = { style: { setProperty: (n: string, v: string) => void valores.set(n, v), removeProperty: (n: string) => void valores.delete(n) } };
+    aplicarVariablesEstilo('apple', PALETAS_ESTILO.apple[3].colores, destino);
+    expect(valores.size).toBeGreaterThan(5);
+    aplicarVariablesEstilo('apple', null, destino);
     expect(valores.size).toBe(0);
-    aplicarDiseno(PALETAS[1].colores, 'bosque');
-    expect(clases.has('estilo-monad')).toBe(false);
-    expect(valores.get('--color-canopy')).toBe(PALETAS[1].colores.menu);
-    vi.unstubAllGlobals();
+  });
+
+  it('avisos de legibilidad por estilo: Apple pide fondos oscuros, Monad claros', () => {
+    expect(avisosDeContrasteEstilo('apple', coloresOriginalesDeEstilo('apple'))).toEqual([]);
+    expect(avisosDeContrasteEstilo('monad', coloresOriginalesDeEstilo('monad'))).toEqual([]);
+    expect(avisosDeContrasteEstilo('apple', { ...coloresOriginalesDeEstilo('apple'), fondo: '#f0f0f0' }).map((a) => a.clave)).toContain('fondo');
+    expect(avisosDeContrasteEstilo('monad', { ...coloresOriginalesDeEstilo('monad'), fondo: '#101010' }).map((a) => a.clave)).toContain('fondo');
   });
 
   it('recuerda el estilo en el navegador y vuelve a Bosque si hay datos raros o no hay almacenamiento', () => {
