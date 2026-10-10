@@ -111,6 +111,8 @@ describe('administración', () => {
     expect(String(queryMock.mock.calls[0][0])).toContain('estilo');
     expect((await request(app).put('/api/tema-admin').send({ paleta: null, colores: COLORES })).status).toBe(200);
     expect(queryMock.mock.calls[1][1][3]).toBe('bosque');
+    expect((await request(app).put('/api/tema-admin').send({ paleta: null, colores: COLORES, estilo: 'apple' })).status).toBe(200);
+    expect(queryMock.mock.calls[2][1][3]).toBe('apple');
     queryMock.mockClear();
     expect((await request(app).put('/api/tema-admin').send({ paleta: null, colores: COLORES, estilo: 'rojo' })).status).toBe(400);
     expect((await request(app).put('/api/tema-admin').send({ paleta: null, colores: COLORES, estilo: { x: 1 } })).status).toBe(400);
