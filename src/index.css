@@ -164,6 +164,602 @@
   }
 }
 
+/*
+ * Estilo "Apple" (Ajustes → Paleta del sistema → Estilo del sistema): instrumento oscuro de
+ * medianoche. Lienzo carbón (#111), tarjetas negras de esquinas muy redondeadas sin sombra,
+ * letra Inter, botones y campos en píldora y un solo azul de compra (#0071e3). Se activa con la
+ * clase `estilo-apple` en <html>.
+ *
+ * Solo en pantalla: lo impreso no cambia. Los informes (hoja de papel) se quedan en blanco: la
+ * regla de "papel" de más abajo devuelve a esos elementos lo que dicen las clases de Tailwind
+ * (revert-layer), y los PDF que se arman desde la pantalla quitan esta clase del documento clonado.
+ *
+ * Las reglas `html.estilo-apple .bg-… / .text-… / .border-…` de la segunda parte se generan a
+ * partir de las clases claras (fondos 50-300, textos 600-950, bordes 100-300 de cada familia) que
+ * usa la aplicación; las claras que ya viven sobre fondo oscuro (800/900/950) se dejan como están.
+ */
+@media screen {
+  html.estilo-apple {
+    color-scheme: dark;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    --font-dm: var(--font-sans);
+
+    /* Superficies: lienzo carbón, menú negro, lavados pastel convertidos en tintes oscuros. */
+    --color-lavender-mist: #111111;
+    --color-cream: #111111;
+    --color-cloud: #1d1d1f;
+    --color-frost: #38383a;
+    --color-canopy: #000000;
+    --color-canopy-claro: #1d1d1f;
+    --color-leaf: #00d959;
+    --color-graphite: #aeaeb2;
+    --color-deep-teal: #d1d1d6;
+    --color-mint-wash: #0f2a1c;
+    --color-sky-wash: #0f2233;
+    --color-sage-wash: #14231b;
+    --color-lilac-wash: #1d1a2b;
+    --color-peach-wash: #2b1a12;
+
+    /* Acción principal: Purchase Blue. */
+    --color-coral-pulse: #0071e3;
+    --color-coral-hover: #0077ed;
+
+    /* La escala "teal" que usa toda la app pasa a azul. */
+    --color-teal-50: #eaf4ff;
+    --color-teal-100: #d6eaff;
+    --color-teal-200: #b3d9ff;
+    --color-teal-300: #6cb8ff;
+    --color-teal-400: #2997ff;
+    --color-teal-500: #0071e3;
+    --color-teal-600: #0071e3;
+    --color-teal-700: #0062c4;
+    --color-teal-800: #004f9e;
+    --color-teal-900: #00376e;
+    --color-teal-950: #001f40;
+
+    /* Grises neutros (sin tinte azul) para los paneles que ya eran oscuros. */
+    --color-slate-400: #86868b;
+    --color-slate-500: #98989d;
+    --color-slate-600: #48484a;
+    --color-slate-700: #3a3a3c;
+    --color-slate-800: #2c2c2e;
+    --color-slate-900: #1c1c1e;
+    --color-slate-950: #000000;
+
+    /* Formas: tarjetas de 28px, esquinas grandes; sin sombras (el relieve lo da el contraste). */
+    --radius-xl: 1rem;
+    --radius-2xl: 1.75rem;
+    --radius-3xl: 2rem;
+    --shadow-xs: 0 0 #0000;
+    --shadow-sm: 0 0 #0000;
+    --shadow-md: 0 0 #0000;
+    --shadow-lg: 0 0 #0000;
+    --shadow-xl: 0 0 #0000;
+    --shadow-2xl: 0 0 #0000;
+  }
+
+  html.estilo-apple body {
+    background-color: #111111;
+    color: #f5f5f7;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html.estilo-apple h1,
+  html.estilo-apple h2,
+  html.estilo-apple h3,
+  html.estilo-apple h4,
+  html.estilo-apple .titulo-display {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  html.estilo-apple h1,
+  html.estilo-apple .titulo-display {
+    letter-spacing: -0.03em;
+  }
+  /* Apple solo usa pesos 400 y 600. */
+  html.estilo-apple .font-bold,
+  html.estilo-apple .font-extrabold { font-weight: 600; }
+  html.estilo-apple .font-black { font-weight: 700; }
+
+  /* Botón principal: azul de compra con texto blanco y forma de píldora. */
+  html.estilo-apple .bg-coral-pulse {
+    color: #ffffff;
+    white-space: nowrap;
+  }
+  html.estilo-apple .text-canopy,
+  html.estilo-apple .hover\:text-canopy:hover { color: #f5f5f7; }
+  html.estilo-apple .border-canopy { border-color: #6e6e73; }
+  /* Botón/ítem activo "verde": píldora Polar White con texto grafito (el punto de estado "en línea" sigue verde). */
+  html.estilo-apple .bg-leaf.text-canopy { background-color: #f5f5f7; color: #1d1d1f; }
+  html.estilo-apple .bg-leaf.text-canopy:hover { background-color: #ffffff; }
+  html.estilo-apple .text-mint-wash { color: #d1d1d6; }
+  html.estilo-apple .text-mint-wash\/80 { color: color-mix(in srgb, #d1d1d6 80%, transparent); }
+  html.estilo-apple .text-mint-wash\/50 { color: color-mix(in srgb, #d1d1d6 50%, transparent); }
+  html.estilo-apple .text-teal-500 { color: #2997ff; }
+
+  /* Campos de texto: relleno translúcido, borde fino gris y píldora (980px). */
+  html.estilo-apple input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+  html.estilo-apple textarea,
+  html.estilo-apple select {
+    color: #f5f5f7;
+  }
+  html.estilo-apple input[class*="w-full"]:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+  html.estilo-apple select[class*="w-full"] {
+    border-radius: 9999px;
+  }
+  html.estilo-apple input[class*="border-slate-200"]:not(:focus),
+  html.estilo-apple input[class*="border-slate-300"]:not(:focus),
+  html.estilo-apple select[class*="border-slate-200"]:not(:focus),
+  html.estilo-apple select[class*="border-slate-300"]:not(:focus),
+  html.estilo-apple textarea[class*="border-slate-200"]:not(:focus),
+  html.estilo-apple textarea[class*="border-slate-300"]:not(:focus) {
+    border-color: #6e6e73;
+  }
+  html.estilo-apple option { background-color: #1c1c1e; color: #f5f5f7; }
+  html.estilo-apple ::placeholder { color: #86868b; }
+  html.estilo-apple ::selection { background-color: #0071e3; color: #ffffff; }
+
+  html.estilo-apple .bg-amber-100\/70{background-color:color-mix(in srgb,#3b2603 70%,transparent)}
+  html.estilo-apple .bg-amber-100\/90{background-color:color-mix(in srgb,#3b2603 90%,transparent)}
+  html.estilo-apple .bg-amber-100{background-color:#3b2603}
+  html.estilo-apple .bg-amber-200{background-color:#4e3304}
+  html.estilo-apple .bg-amber-300{background-color:#674205}
+  html.estilo-apple .bg-amber-50\/20{background-color:color-mix(in srgb,#271902 20%,transparent)}
+  html.estilo-apple .bg-amber-50\/40{background-color:color-mix(in srgb,#271902 40%,transparent)}
+  html.estilo-apple .bg-amber-50\/50{background-color:color-mix(in srgb,#271902 50%,transparent)}
+  html.estilo-apple .bg-amber-50\/60{background-color:color-mix(in srgb,#271902 60%,transparent)}
+  html.estilo-apple .bg-amber-50\/70{background-color:color-mix(in srgb,#271902 70%,transparent)}
+  html.estilo-apple .bg-amber-50\/80{background-color:color-mix(in srgb,#271902 80%,transparent)}
+  html.estilo-apple .bg-amber-50\/90{background-color:color-mix(in srgb,#271902 90%,transparent)}
+  html.estilo-apple .bg-amber-50{background-color:#271902}
+  html.estilo-apple .bg-blue-100{background-color:#0e1f3b}
+  html.estilo-apple .bg-blue-300{background-color:#193767}
+  html.estilo-apple .bg-blue-50{background-color:#091527}
+  html.estilo-apple .bg-cyan-100\/80{background-color:color-mix(in srgb,#012c33 80%,transparent)}
+  html.estilo-apple .bg-cyan-100{background-color:#012c33}
+  html.estilo-apple .bg-cyan-200{background-color:#023a44}
+  html.estilo-apple .bg-cyan-50\/40{background-color:color-mix(in srgb,#011d22 40%,transparent)}
+  html.estilo-apple .bg-cyan-50\/50{background-color:color-mix(in srgb,#011d22 50%,transparent)}
+  html.estilo-apple .bg-cyan-50\/60{background-color:color-mix(in srgb,#011d22 60%,transparent)}
+  html.estilo-apple .bg-cyan-50\/70{background-color:color-mix(in srgb,#011d22 70%,transparent)}
+  html.estilo-apple .bg-cyan-50{background-color:#011d22}
+  html.estilo-apple .bg-emerald-100\/80{background-color:color-mix(in srgb,#042c1f 80%,transparent)}
+  html.estilo-apple .bg-emerald-100\/90{background-color:color-mix(in srgb,#042c1f 90%,transparent)}
+  html.estilo-apple .bg-emerald-100{background-color:#042c1f}
+  html.estilo-apple .bg-emerald-200{background-color:#053b29}
+  html.estilo-apple .bg-emerald-50\/50{background-color:color-mix(in srgb,#031e15 50%,transparent)}
+  html.estilo-apple .bg-emerald-50\/60{background-color:color-mix(in srgb,#031e15 60%,transparent)}
+  html.estilo-apple .bg-emerald-50\/70{background-color:color-mix(in srgb,#031e15 70%,transparent)}
+  html.estilo-apple .bg-emerald-50\/80{background-color:color-mix(in srgb,#031e15 80%,transparent)}
+  html.estilo-apple .bg-emerald-50\/90{background-color:color-mix(in srgb,#031e15 90%,transparent)}
+  html.estilo-apple .bg-emerald-50{background-color:#031e15}
+  html.estilo-apple .bg-indigo-100{background-color:#18183a}
+  html.estilo-apple .bg-indigo-50\/60{background-color:color-mix(in srgb,#101027 60%,transparent)}
+  html.estilo-apple .bg-indigo-50\/70{background-color:color-mix(in srgb,#101027 70%,transparent)}
+  html.estilo-apple .bg-indigo-50\/80{background-color:color-mix(in srgb,#101027 80%,transparent)}
+  html.estilo-apple .bg-indigo-50{background-color:#101027}
+  html.estilo-apple .bg-orange-50{background-color:#281204}
+  html.estilo-apple .bg-purple-100{background-color:#28143b}
+  html.estilo-apple .bg-purple-50{background-color:#1b0e28}
+  html.estilo-apple .bg-red-50\/80{background-color:color-mix(in srgb,#260b0b 80%,transparent)}
+  html.estilo-apple .bg-rose-100\/80{background-color:color-mix(in srgb,#3b0f17 80%,transparent)}
+  html.estilo-apple .bg-rose-100{background-color:#3b0f17}
+  html.estilo-apple .bg-rose-200{background-color:#4e141e}
+  html.estilo-apple .bg-rose-50\/20{background-color:color-mix(in srgb,#270a0f 20%,transparent)}
+  html.estilo-apple .bg-rose-50\/30{background-color:color-mix(in srgb,#270a0f 30%,transparent)}
+  html.estilo-apple .bg-rose-50\/40{background-color:color-mix(in srgb,#270a0f 40%,transparent)}
+  html.estilo-apple .bg-rose-50\/50{background-color:color-mix(in srgb,#270a0f 50%,transparent)}
+  html.estilo-apple .bg-rose-50\/60{background-color:color-mix(in srgb,#270a0f 60%,transparent)}
+  html.estilo-apple .bg-rose-50\/70{background-color:color-mix(in srgb,#270a0f 70%,transparent)}
+  html.estilo-apple .bg-rose-50\/80{background-color:color-mix(in srgb,#270a0f 80%,transparent)}
+  html.estilo-apple .bg-rose-50{background-color:#270a0f}
+  html.estilo-apple .bg-sky-100{background-color:#032838}
+  html.estilo-apple .bg-sky-50\/40{background-color:color-mix(in srgb,#021a25 40%,transparent)}
+  html.estilo-apple .bg-sky-50\/70{background-color:color-mix(in srgb,#021a25 70%,transparent)}
+  html.estilo-apple .bg-sky-50{background-color:#021a25}
+  html.estilo-apple .bg-slate-100\/60{background-color:color-mix(in srgb,#262628 60%,transparent)}
+  html.estilo-apple .bg-slate-100\/70{background-color:color-mix(in srgb,#262628 70%,transparent)}
+  html.estilo-apple .bg-slate-100\/80{background-color:color-mix(in srgb,#262628 80%,transparent)}
+  html.estilo-apple .bg-slate-100\/90{background-color:color-mix(in srgb,#262628 90%,transparent)}
+  html.estilo-apple .bg-slate-100{background-color:#262628}
+  html.estilo-apple .bg-slate-200\/40{background-color:color-mix(in srgb,#333336 40%,transparent)}
+  html.estilo-apple .bg-slate-200\/50{background-color:color-mix(in srgb,#333336 50%,transparent)}
+  html.estilo-apple .bg-slate-200\/80{background-color:color-mix(in srgb,#333336 80%,transparent)}
+  html.estilo-apple .bg-slate-200{background-color:#333336}
+  html.estilo-apple .bg-slate-300{background-color:#424245}
+  html.estilo-apple .bg-slate-50\/40{background-color:color-mix(in srgb,#1d1d1f 40%,transparent)}
+  html.estilo-apple .bg-slate-50\/50{background-color:color-mix(in srgb,#1d1d1f 50%,transparent)}
+  html.estilo-apple .bg-slate-50\/60{background-color:color-mix(in srgb,#1d1d1f 60%,transparent)}
+  html.estilo-apple .bg-slate-50\/70{background-color:color-mix(in srgb,#1d1d1f 70%,transparent)}
+  html.estilo-apple .bg-slate-50\/80{background-color:color-mix(in srgb,#1d1d1f 80%,transparent)}
+  html.estilo-apple .bg-slate-50\/90{background-color:color-mix(in srgb,#1d1d1f 90%,transparent)}
+  html.estilo-apple .bg-slate-50{background-color:#1d1d1f}
+  html.estilo-apple .bg-teal-100\/60{background-color:color-mix(in srgb,#001b36 60%,transparent)}
+  html.estilo-apple .bg-teal-100\/80{background-color:color-mix(in srgb,#001b36 80%,transparent)}
+  html.estilo-apple .bg-teal-100\/90{background-color:color-mix(in srgb,#001b36 90%,transparent)}
+  html.estilo-apple .bg-teal-100{background-color:#001b36}
+  html.estilo-apple .bg-teal-50\/20{background-color:color-mix(in srgb,#001224 20%,transparent)}
+  html.estilo-apple .bg-teal-50\/30{background-color:color-mix(in srgb,#001224 30%,transparent)}
+  html.estilo-apple .bg-teal-50\/40{background-color:color-mix(in srgb,#001224 40%,transparent)}
+  html.estilo-apple .bg-teal-50\/50{background-color:color-mix(in srgb,#001224 50%,transparent)}
+  html.estilo-apple .bg-teal-50\/60{background-color:color-mix(in srgb,#001224 60%,transparent)}
+  html.estilo-apple .bg-teal-50\/70{background-color:color-mix(in srgb,#001224 70%,transparent)}
+  html.estilo-apple .bg-teal-50\/80{background-color:color-mix(in srgb,#001224 80%,transparent)}
+  html.estilo-apple .bg-teal-50\/90{background-color:color-mix(in srgb,#001224 90%,transparent)}
+  html.estilo-apple .bg-teal-50{background-color:#001224}
+  html.estilo-apple .bg-violet-200\/70{background-color:color-mix(in srgb,#2c1d4f 70%,transparent)}
+  html.estilo-apple .bg-white\/50{background-color:color-mix(in srgb,#000000 50%,transparent)}
+  html.estilo-apple .bg-white\/60{background-color:color-mix(in srgb,#000000 60%,transparent)}
+  html.estilo-apple .bg-white\/80{background-color:color-mix(in srgb,#000000 80%,transparent)}
+  html.estilo-apple .bg-white\/90{background-color:color-mix(in srgb,#000000 90%,transparent)}
+  html.estilo-apple .bg-white\/95{background-color:color-mix(in srgb,#000000 95%,transparent)}
+  html.estilo-apple .bg-white{background-color:#000000}
+  html.estilo-apple .border-amber-200\/60{border-color:color-mix(in srgb,#4e3304 60%,transparent)}
+  html.estilo-apple .border-amber-200\/70{border-color:color-mix(in srgb,#4e3304 70%,transparent)}
+  html.estilo-apple .border-amber-200\/80{border-color:color-mix(in srgb,#4e3304 80%,transparent)}
+  html.estilo-apple .border-amber-200\/90{border-color:color-mix(in srgb,#4e3304 90%,transparent)}
+  html.estilo-apple .border-amber-200{border-color:#4e3304}
+  html.estilo-apple .border-amber-300\/80{border-color:color-mix(in srgb,#6e4705 80%,transparent)}
+  html.estilo-apple .border-amber-300{border-color:#6e4705}
+  html.estilo-apple .border-blue-200{border-color:#132a4f}
+  html.estilo-apple .border-blue-300{border-color:#1b3a6f}
+  html.estilo-apple .border-cyan-100{border-color:#01282f}
+  html.estilo-apple .border-cyan-200\/30{border-color:color-mix(in srgb,#023a44 30%,transparent)}
+  html.estilo-apple .border-cyan-200\/50{border-color:color-mix(in srgb,#023a44 50%,transparent)}
+  html.estilo-apple .border-cyan-200\/60{border-color:color-mix(in srgb,#023a44 60%,transparent)}
+  html.estilo-apple .border-cyan-200\/70{border-color:color-mix(in srgb,#023a44 70%,transparent)}
+  html.estilo-apple .border-cyan-200\/80{border-color:color-mix(in srgb,#023a44 80%,transparent)}
+  html.estilo-apple .border-cyan-200{border-color:#023a44}
+  html.estilo-apple .border-cyan-300\/40{border-color:color-mix(in srgb,#03525f 40%,transparent)}
+  html.estilo-apple .border-cyan-300{border-color:#03525f}
+  html.estilo-apple .border-emerald-100{border-color:#04291c}
+  html.estilo-apple .border-emerald-200\/50{border-color:color-mix(in srgb,#053b29 50%,transparent)}
+  html.estilo-apple .border-emerald-200\/60{border-color:color-mix(in srgb,#053b29 60%,transparent)}
+  html.estilo-apple .border-emerald-200\/80{border-color:color-mix(in srgb,#053b29 80%,transparent)}
+  html.estilo-apple .border-emerald-200\/90{border-color:color-mix(in srgb,#053b29 90%,transparent)}
+  html.estilo-apple .border-emerald-200{border-color:#053b29}
+  html.estilo-apple .border-emerald-300\/50{border-color:color-mix(in srgb,#07533a 50%,transparent)}
+  html.estilo-apple .border-emerald-300\/60{border-color:color-mix(in srgb,#07533a 60%,transparent)}
+  html.estilo-apple .border-emerald-300{border-color:#07533a}
+  html.estilo-apple .border-indigo-100{border-color:#161635}
+  html.estilo-apple .border-indigo-200\/60{border-color:color-mix(in srgb,#20214d 60%,transparent)}
+  html.estilo-apple .border-indigo-200\/70{border-color:color-mix(in srgb,#20214d 70%,transparent)}
+  html.estilo-apple .border-indigo-200\/90{border-color:color-mix(in srgb,#20214d 90%,transparent)}
+  html.estilo-apple .border-indigo-200{border-color:#20214d}
+  html.estilo-apple .border-indigo-300{border-color:#2d2e6c}
+  html.estilo-apple .border-orange-200{border-color:#502507}
+  html.estilo-apple .border-purple-200{border-color:#361b4f}
+  html.estilo-apple .border-purple-300{border-color:#4c266f}
+  html.estilo-apple .border-red-200{border-color:#4c1616}
+  html.estilo-apple .border-rose-100{border-color:#360e15}
+  html.estilo-apple .border-rose-200\/80{border-color:color-mix(in srgb,#4e141e 80%,transparent)}
+  html.estilo-apple .border-rose-200{border-color:#4e141e}
+  html.estilo-apple .border-rose-300\/40{border-color:color-mix(in srgb,#6e1c2a 40%,transparent)}
+  html.estilo-apple .border-rose-300{border-color:#6e1c2a}
+  html.estilo-apple .border-sky-100{border-color:#032433}
+  html.estilo-apple .border-sky-200\/60{border-color:color-mix(in srgb,#04354b 60%,transparent)}
+  html.estilo-apple .border-sky-200\/90{border-color:color-mix(in srgb,#04354b 90%,transparent)}
+  html.estilo-apple .border-sky-200{border-color:#04354b}
+  html.estilo-apple .border-sky-300{border-color:#064a69}
+  html.estilo-apple .border-slate-100{border-color:#2a2a2d}
+  html.estilo-apple .border-slate-200\/60{border-color:color-mix(in srgb,#38383a 60%,transparent)}
+  html.estilo-apple .border-slate-200\/70{border-color:color-mix(in srgb,#38383a 70%,transparent)}
+  html.estilo-apple .border-slate-200\/80{border-color:color-mix(in srgb,#38383a 80%,transparent)}
+  html.estilo-apple .border-slate-200\/90{border-color:color-mix(in srgb,#38383a 90%,transparent)}
+  html.estilo-apple .border-slate-200{border-color:#38383a}
+  html.estilo-apple .border-slate-300\/60{border-color:color-mix(in srgb,#48484a 60%,transparent)}
+  html.estilo-apple .border-slate-300\/70{border-color:color-mix(in srgb,#48484a 70%,transparent)}
+  html.estilo-apple .border-slate-300\/80{border-color:color-mix(in srgb,#48484a 80%,transparent)}
+  html.estilo-apple .border-slate-300{border-color:#48484a}
+  html.estilo-apple .border-slate-400{border-color:#636366}
+  html.estilo-apple .border-teal-100{border-color:#001932}
+  html.estilo-apple .border-teal-200\/50{border-color:color-mix(in srgb,#002449 50%,transparent)}
+  html.estilo-apple .border-teal-200\/60{border-color:color-mix(in srgb,#002449 60%,transparent)}
+  html.estilo-apple .border-teal-200\/70{border-color:color-mix(in srgb,#002449 70%,transparent)}
+  html.estilo-apple .border-teal-200\/80{border-color:color-mix(in srgb,#002449 80%,transparent)}
+  html.estilo-apple .border-teal-200{border-color:#002449}
+  html.estilo-apple .border-teal-300\/30{border-color:color-mix(in srgb,#003366 30%,transparent)}
+  html.estilo-apple .border-teal-300{border-color:#003366}
+  html.estilo-apple .border-violet-300{border-color:#3f296f}
+  html.estilo-apple .divide-slate-100>:not(:last-child){border-color:#2a2a2d}
+  html.estilo-apple .divide-slate-200>:not(:last-child){border-color:#38383a}
+  html.estilo-apple .from-amber-300{--tw-gradient-from:#674205}
+  html.estilo-apple .from-amber-50\/70{--tw-gradient-from:color-mix(in srgb,#271902 70%,transparent)}
+  html.estilo-apple .from-cyan-100{--tw-gradient-from:#012c33}
+  html.estilo-apple .from-cyan-50{--tw-gradient-from:#011d22}
+  html.estilo-apple .from-emerald-50{--tw-gradient-from:#031e15}
+  html.estilo-apple .from-purple-100{--tw-gradient-from:#28143b}
+  html.estilo-apple .from-purple-50{--tw-gradient-from:#1b0e28}
+  html.estilo-apple .from-rose-100{--tw-gradient-from:#3b0f17}
+  html.estilo-apple .from-rose-50{--tw-gradient-from:#270a0f}
+  html.estilo-apple .from-slate-50\/40{--tw-gradient-from:color-mix(in srgb,#1d1d1f 40%,transparent)}
+  html.estilo-apple .from-slate-50{--tw-gradient-from:#1d1d1f}
+  html.estilo-apple .from-teal-100{--tw-gradient-from:#001b36}
+  html.estilo-apple .from-teal-300{--tw-gradient-from:#002f5f}
+  html.estilo-apple .from-teal-50\/50{--tw-gradient-from:color-mix(in srgb,#001224 50%,transparent)}
+  html.estilo-apple .from-teal-50\/80{--tw-gradient-from:color-mix(in srgb,#001224 80%,transparent)}
+  html.estilo-apple .from-teal-50\/90{--tw-gradient-from:color-mix(in srgb,#001224 90%,transparent)}
+  html.estilo-apple .from-teal-50{--tw-gradient-from:#001224}
+  html.estilo-apple .from-violet-50{--tw-gradient-from:#160f27}
+  html.estilo-apple .text-amber-600{color:#fbbf24}
+  html.estilo-apple .text-amber-700{color:#fcd34d}
+  html.estilo-apple .text-amber-800\/90{color:color-mix(in srgb,#fcd34d 90%,transparent)}
+  html.estilo-apple .text-amber-800{color:#fcd34d}
+  html.estilo-apple .text-amber-900\/90{color:color-mix(in srgb,#fde68a 90%,transparent)}
+  html.estilo-apple .text-amber-900{color:#fde68a}
+  html.estilo-apple .text-amber-950{color:#fde68a}
+  html.estilo-apple .text-blue-600{color:#60a5fa}
+  html.estilo-apple .text-blue-700{color:#93c5fd}
+  html.estilo-apple .text-blue-800{color:#93c5fd}
+  html.estilo-apple .text-cyan-600{color:#22d3ee}
+  html.estilo-apple .text-cyan-700{color:#67e8f9}
+  html.estilo-apple .text-cyan-800{color:#67e8f9}
+  html.estilo-apple .text-cyan-900{color:#a5f3fc}
+  html.estilo-apple .text-cyan-950{color:#a5f3fc}
+  html.estilo-apple .text-emerald-600{color:#34d399}
+  html.estilo-apple .text-emerald-700{color:#6ee7b7}
+  html.estilo-apple .text-emerald-800{color:#6ee7b7}
+  html.estilo-apple .text-emerald-900{color:#a7f3d0}
+  html.estilo-apple .text-emerald-950{color:#a7f3d0}
+  html.estilo-apple .text-indigo-600{color:#818cf8}
+  html.estilo-apple .text-indigo-700{color:#a5b4fc}
+  html.estilo-apple .text-indigo-800\/90{color:color-mix(in srgb,#a5b4fc 90%,transparent)}
+  html.estilo-apple .text-indigo-800{color:#a5b4fc}
+  html.estilo-apple .text-indigo-900{color:#c7d2fe}
+  html.estilo-apple .text-indigo-950{color:#c7d2fe}
+  html.estilo-apple .text-orange-700{color:#fdba74}
+  html.estilo-apple .text-purple-600{color:#c084fc}
+  html.estilo-apple .text-purple-700{color:#d8b4fe}
+  html.estilo-apple .text-purple-800{color:#d8b4fe}
+  html.estilo-apple .text-purple-900{color:#e9d5ff}
+  html.estilo-apple .text-purple-950{color:#e9d5ff}
+  html.estilo-apple .text-red-600{color:#f87171}
+  html.estilo-apple .text-red-700{color:#fca5a5}
+  html.estilo-apple .text-red-800{color:#fca5a5}
+  html.estilo-apple .text-red-900{color:#fecaca}
+  html.estilo-apple .text-red-950{color:#fecaca}
+  html.estilo-apple .text-rose-600{color:#fb7185}
+  html.estilo-apple .text-rose-700{color:#fda4af}
+  html.estilo-apple .text-rose-800{color:#fda4af}
+  html.estilo-apple .text-rose-900{color:#fecdd3}
+  html.estilo-apple .text-rose-950{color:#fecdd3}
+  html.estilo-apple .text-sky-600\/70{color:color-mix(in srgb,#38bdf8 70%,transparent)}
+  html.estilo-apple .text-sky-600{color:#38bdf8}
+  html.estilo-apple .text-sky-700{color:#7dd3fc}
+  html.estilo-apple .text-sky-800{color:#7dd3fc}
+  html.estilo-apple .text-sky-900{color:#bae6fd}
+  html.estilo-apple .text-sky-950{color:#bae6fd}
+  html.estilo-apple .text-slate-400{color:#86868b}
+  html.estilo-apple .text-slate-500{color:#98989d}
+  html.estilo-apple .text-slate-600{color:#aeaeb2}
+  html.estilo-apple .text-slate-700{color:#c7c7cc}
+  html.estilo-apple .text-slate-800{color:#e5e5ea}
+  html.estilo-apple .text-slate-900{color:#f5f5f7}
+  html.estilo-apple .text-slate-950{color:#f5f5f7}
+  html.estilo-apple .text-teal-500{color:#2997ff}
+  html.estilo-apple .text-teal-600{color:#2997ff}
+  html.estilo-apple .text-teal-700{color:#6cb8ff}
+  html.estilo-apple .text-teal-800\/80{color:color-mix(in srgb,#6cb8ff 80%,transparent)}
+  html.estilo-apple .text-teal-800\/90{color:color-mix(in srgb,#6cb8ff 90%,transparent)}
+  html.estilo-apple .text-teal-800{color:#6cb8ff}
+  html.estilo-apple .text-teal-900{color:#b3d9ff}
+  html.estilo-apple .text-teal-950{color:#b3d9ff}
+  html.estilo-apple .text-violet-600{color:#a78bfa}
+  html.estilo-apple .text-violet-900{color:#ddd6fe}
+  html.estilo-apple .text-violet-950{color:#ddd6fe}
+  html.estilo-apple .to-amber-50{--tw-gradient-to:#271902}
+  html.estilo-apple .to-blue-100{--tw-gradient-to:#0e1f3b}
+  html.estilo-apple .to-blue-200{--tw-gradient-to:#132a4f}
+  html.estilo-apple .to-cyan-50{--tw-gradient-to:#011d22}
+  html.estilo-apple .to-emerald-200{--tw-gradient-to:#053b29}
+  html.estilo-apple .to-emerald-300{--tw-gradient-to:#074e36}
+  html.estilo-apple .to-emerald-50{--tw-gradient-to:#031e15}
+  html.estilo-apple .to-indigo-100{--tw-gradient-to:#18183a}
+  html.estilo-apple .to-indigo-200{--tw-gradient-to:#20214d}
+  html.estilo-apple .to-indigo-50{--tw-gradient-to:#101027}
+  html.estilo-apple .to-red-100{--tw-gradient-to:#391010}
+  html.estilo-apple .to-red-200\/90{--tw-gradient-to:color-mix(in srgb,#4c1616 90%,transparent)}
+  html.estilo-apple .to-rose-50\/50{--tw-gradient-to:color-mix(in srgb,#270a0f 50%,transparent)}
+  html.estilo-apple .to-sky-50\/40{--tw-gradient-to:color-mix(in srgb,#021a25 40%,transparent)}
+  html.estilo-apple .to-slate-50{--tw-gradient-to:#1d1d1f}
+  html.estilo-apple .to-teal-100{--tw-gradient-to:#001b36}
+  html.estilo-apple .to-teal-50\/50{--tw-gradient-to:color-mix(in srgb,#001224 50%,transparent)}
+  html.estilo-apple .to-teal-50{--tw-gradient-to:#001224}
+  html.estilo-apple .to-white{--tw-gradient-to:#000000}
+  html.estilo-apple .via-amber-50\/70{--tw-gradient-via:color-mix(in srgb,#271902 70%,transparent)}
+  html.estilo-apple .via-cyan-200{--tw-gradient-via:#023a44}
+  html.estilo-apple .via-cyan-300{--tw-gradient-via:#034c59}
+  html.estilo-apple .via-cyan-50\/50{--tw-gradient-via:color-mix(in srgb,#011d22 50%,transparent)}
+  html.estilo-apple .via-cyan-50\/60{--tw-gradient-via:color-mix(in srgb,#011d22 60%,transparent)}
+  html.estilo-apple .via-cyan-50{--tw-gradient-via:#011d22}
+  html.estilo-apple .via-emerald-50\/50{--tw-gradient-via:color-mix(in srgb,#031e15 50%,transparent)}
+  html.estilo-apple .via-purple-50{--tw-gradient-via:#1b0e28}
+  html.estilo-apple .via-sky-50{--tw-gradient-via:#021a25}
+  html.estilo-apple .via-slate-200{--tw-gradient-via:#333336}
+  html.estilo-apple .via-white{--tw-gradient-via:#000000}
+  html.estilo-apple .placeholder\:text-slate-400::placeholder{color:#86868b}
+  html.estilo-apple .active\:bg-slate-300:active{background-color:#424245}
+  html.estilo-apple .focus\:bg-white:focus{background-color:#000000}
+  html.estilo-apple .group-hover\:bg-teal-50:is(:where(.group):hover *){background-color:#001224}
+  html.estilo-apple .group-hover\:border-teal-200:is(:where(.group):hover *){border-color:#002449}
+  html.estilo-apple .group-hover\:text-cyan-600:is(:where(.group):hover *){color:#22d3ee}
+  html.estilo-apple .group-hover\:text-cyan-700:is(:where(.group):hover *){color:#67e8f9}
+  html.estilo-apple .group-hover\:text-slate-400:is(:where(.group):hover *){color:#86868b}
+  html.estilo-apple .group-hover\:text-teal-600:is(:where(.group):hover *){color:#2997ff}
+  html.estilo-apple .group-hover\:text-teal-700:is(:where(.group):hover *){color:#6cb8ff}
+  html.estilo-apple .group-hover\:text-teal-800:is(:where(.group):hover *){color:#6cb8ff}
+  html.estilo-apple .hover\:bg-amber-100\/50:hover{background-color:color-mix(in srgb,#3b2603 50%,transparent)}
+  html.estilo-apple .hover\:bg-amber-100\/70:hover{background-color:color-mix(in srgb,#3b2603 70%,transparent)}
+  html.estilo-apple .hover\:bg-amber-100\/80:hover{background-color:color-mix(in srgb,#3b2603 80%,transparent)}
+  html.estilo-apple .hover\:bg-amber-100:hover{background-color:#3b2603}
+  html.estilo-apple .hover\:bg-amber-200\/80:hover{background-color:color-mix(in srgb,#4e3304 80%,transparent)}
+  html.estilo-apple .hover\:bg-amber-200:hover{background-color:#4e3304}
+  html.estilo-apple .hover\:bg-amber-50:hover{background-color:#271902}
+  html.estilo-apple .hover\:bg-blue-100\/70:hover{background-color:color-mix(in srgb,#0e1f3b 70%,transparent)}
+  html.estilo-apple .hover\:bg-blue-50:hover{background-color:#091527}
+  html.estilo-apple .hover\:bg-cyan-100\/80:hover{background-color:color-mix(in srgb,#012c33 80%,transparent)}
+  html.estilo-apple .hover\:bg-cyan-100:hover{background-color:#012c33}
+  html.estilo-apple .hover\:bg-cyan-200:hover{background-color:#023a44}
+  html.estilo-apple .hover\:bg-cyan-50\/40:hover{background-color:color-mix(in srgb,#011d22 40%,transparent)}
+  html.estilo-apple .hover\:bg-cyan-50:hover{background-color:#011d22}
+  html.estilo-apple .hover\:bg-emerald-100\/60:hover{background-color:color-mix(in srgb,#042c1f 60%,transparent)}
+  html.estilo-apple .hover\:bg-emerald-100\/70:hover{background-color:color-mix(in srgb,#042c1f 70%,transparent)}
+  html.estilo-apple .hover\:bg-emerald-100\/80:hover{background-color:color-mix(in srgb,#042c1f 80%,transparent)}
+  html.estilo-apple .hover\:bg-emerald-100:hover{background-color:#042c1f}
+  html.estilo-apple .hover\:bg-emerald-200:hover{background-color:#053b29}
+  html.estilo-apple .hover\:bg-emerald-50:hover{background-color:#031e15}
+  html.estilo-apple .hover\:bg-indigo-100\/70:hover{background-color:color-mix(in srgb,#18183a 70%,transparent)}
+  html.estilo-apple .hover\:bg-indigo-100:hover{background-color:#18183a}
+  html.estilo-apple .hover\:bg-indigo-50:hover{background-color:#101027}
+  html.estilo-apple .hover\:bg-purple-100\/70:hover{background-color:color-mix(in srgb,#28143b 70%,transparent)}
+  html.estilo-apple .hover\:bg-purple-100:hover{background-color:#28143b}
+  html.estilo-apple .hover\:bg-rose-100\/70:hover{background-color:color-mix(in srgb,#3b0f17 70%,transparent)}
+  html.estilo-apple .hover\:bg-rose-100\/80:hover{background-color:color-mix(in srgb,#3b0f17 80%,transparent)}
+  html.estilo-apple .hover\:bg-rose-100:hover{background-color:#3b0f17}
+  html.estilo-apple .hover\:bg-rose-200:hover{background-color:#4e141e}
+  html.estilo-apple .hover\:bg-rose-50:hover{background-color:#270a0f}
+  html.estilo-apple .hover\:bg-sky-100:hover{background-color:#032838}
+  html.estilo-apple .hover\:bg-slate-100\/60:hover{background-color:color-mix(in srgb,#262628 60%,transparent)}
+  html.estilo-apple .hover\:bg-slate-100\/70:hover{background-color:color-mix(in srgb,#262628 70%,transparent)}
+  html.estilo-apple .hover\:bg-slate-100\/80:hover{background-color:color-mix(in srgb,#262628 80%,transparent)}
+  html.estilo-apple .hover\:bg-slate-100:hover{background-color:#262628}
+  html.estilo-apple .hover\:bg-slate-200\/50:hover{background-color:color-mix(in srgb,#333336 50%,transparent)}
+  html.estilo-apple .hover\:bg-slate-200\/60:hover{background-color:color-mix(in srgb,#333336 60%,transparent)}
+  html.estilo-apple .hover\:bg-slate-200\/70:hover{background-color:color-mix(in srgb,#333336 70%,transparent)}
+  html.estilo-apple .hover\:bg-slate-200:hover{background-color:#333336}
+  html.estilo-apple .hover\:bg-slate-300:hover{background-color:#424245}
+  html.estilo-apple .hover\:bg-slate-50\/50:hover{background-color:color-mix(in srgb,#1d1d1f 50%,transparent)}
+  html.estilo-apple .hover\:bg-slate-50\/60:hover{background-color:color-mix(in srgb,#1d1d1f 60%,transparent)}
+  html.estilo-apple .hover\:bg-slate-50\/70:hover{background-color:color-mix(in srgb,#1d1d1f 70%,transparent)}
+  html.estilo-apple .hover\:bg-slate-50\/80:hover{background-color:color-mix(in srgb,#1d1d1f 80%,transparent)}
+  html.estilo-apple .hover\:bg-slate-50:hover{background-color:#1d1d1f}
+  html.estilo-apple .hover\:bg-teal-100\/70:hover{background-color:color-mix(in srgb,#001b36 70%,transparent)}
+  html.estilo-apple .hover\:bg-teal-100\/80:hover{background-color:color-mix(in srgb,#001b36 80%,transparent)}
+  html.estilo-apple .hover\:bg-teal-100:hover{background-color:#001b36}
+  html.estilo-apple .hover\:bg-teal-200:hover{background-color:#002449}
+  html.estilo-apple .hover\:bg-teal-300:hover{background-color:#002f5f}
+  html.estilo-apple .hover\:bg-teal-50\/30:hover{background-color:color-mix(in srgb,#001224 30%,transparent)}
+  html.estilo-apple .hover\:bg-teal-50\/40:hover{background-color:color-mix(in srgb,#001224 40%,transparent)}
+  html.estilo-apple .hover\:bg-teal-50\/50:hover{background-color:color-mix(in srgb,#001224 50%,transparent)}
+  html.estilo-apple .hover\:bg-teal-50:hover{background-color:#001224}
+  html.estilo-apple .hover\:bg-violet-50:hover{background-color:#160f27}
+  html.estilo-apple .hover\:bg-white:hover{background-color:#000000}
+  html.estilo-apple .hover\:border-cyan-300:hover{border-color:#03525f}
+  html.estilo-apple .hover\:border-emerald-300:hover{border-color:#07533a}
+  html.estilo-apple .hover\:border-indigo-300:hover{border-color:#2d2e6c}
+  html.estilo-apple .hover\:border-purple-300:hover{border-color:#4c266f}
+  html.estilo-apple .hover\:border-slate-300:hover{border-color:#48484a}
+  html.estilo-apple .hover\:border-slate-400:hover{border-color:#636366}
+  html.estilo-apple .hover\:border-teal-200:hover{border-color:#002449}
+  html.estilo-apple .hover\:border-teal-300:hover{border-color:#003366}
+  html.estilo-apple .hover\:from-cyan-300:hover{--tw-gradient-from:#034c59}
+  html.estilo-apple .hover\:from-teal-300:hover{--tw-gradient-from:#002f5f}
+  html.estilo-apple .hover\:text-amber-600:hover{color:#fbbf24}
+  html.estilo-apple .hover\:text-amber-700:hover{color:#fcd34d}
+  html.estilo-apple .hover\:text-amber-800:hover{color:#fcd34d}
+  html.estilo-apple .hover\:text-amber-950:hover{color:#fde68a}
+  html.estilo-apple .hover\:text-cyan-600:hover{color:#22d3ee}
+  html.estilo-apple .hover\:text-cyan-700:hover{color:#67e8f9}
+  html.estilo-apple .hover\:text-cyan-800:hover{color:#67e8f9}
+  html.estilo-apple .hover\:text-cyan-900:hover{color:#a5f3fc}
+  html.estilo-apple .hover\:text-emerald-600:hover{color:#34d399}
+  html.estilo-apple .hover\:text-emerald-700:hover{color:#6ee7b7}
+  html.estilo-apple .hover\:text-emerald-800:hover{color:#6ee7b7}
+  html.estilo-apple .hover\:text-emerald-900:hover{color:#a7f3d0}
+  html.estilo-apple .hover\:text-indigo-600:hover{color:#818cf8}
+  html.estilo-apple .hover\:text-indigo-800:hover{color:#a5b4fc}
+  html.estilo-apple .hover\:text-indigo-900:hover{color:#c7d2fe}
+  html.estilo-apple .hover\:text-rose-600:hover{color:#fb7185}
+  html.estilo-apple .hover\:text-rose-700:hover{color:#fda4af}
+  html.estilo-apple .hover\:text-rose-800:hover{color:#fda4af}
+  html.estilo-apple .hover\:text-slate-400:hover{color:#86868b}
+  html.estilo-apple .hover\:text-slate-600:hover{color:#aeaeb2}
+  html.estilo-apple .hover\:text-slate-700:hover{color:#c7c7cc}
+  html.estilo-apple .hover\:text-slate-800:hover{color:#e5e5ea}
+  html.estilo-apple .hover\:text-slate-900:hover{color:#f5f5f7}
+  html.estilo-apple .hover\:text-teal-500:hover{color:#2997ff}
+  html.estilo-apple .hover\:text-teal-600:hover{color:#2997ff}
+  html.estilo-apple .hover\:text-teal-700:hover{color:#6cb8ff}
+  html.estilo-apple .hover\:text-teal-800:hover{color:#6cb8ff}
+  html.estilo-apple .hover\:text-teal-900:hover{color:#b3d9ff}
+  html.estilo-apple .hover\:to-cyan-200:hover{--tw-gradient-to:#023a44}
+  html.estilo-apple .hover\:to-cyan-300:hover{--tw-gradient-to:#034c59}
+  html.estilo-apple .hover\:to-teal-300:hover{--tw-gradient-to:#002f5f}
+
+  /*
+   * Papel: informes, vistas previas de impresión y hojas que se exportan a PDF. Se les devuelve
+   * lo que dicen las clases de Tailwind (sin las reglas de arriba) y las variables originales.
+   * Va al final y con más peso para ganarle a todo lo anterior.
+   */
+  html.estilo-apple.estilo-apple :is(
+    .papel-informe, .report-sheet-container,
+    #vaclinic-official-pdf-sheet, #vaclinic-official-report-sheet,
+    #vaclinic-physical-print-stage, #thermal-receipt-printable, #vaclinic-patient-history-pdf
+  ) {
+    color-scheme: light;
+    --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-dm: var(--font-sans);
+    --color-lavender-mist: #eee2ff;
+    --color-cream: #faf7e8;
+    --color-cloud: #f2f2f2;
+    --color-frost: #e0e0e0;
+    --color-canopy: #0a3922;
+    --color-canopy-claro: #0f4a2d;
+    --color-leaf: #1dbf73;
+    --color-graphite: #3d3d3d;
+    --color-deep-teal: #003642;
+    --color-mint-wash: #d2f2e3;
+    --color-sky-wash: #ccf0f8;
+    --color-sage-wash: #e4f7ee;
+    --color-lilac-wash: #fdf0ff;
+    --color-peach-wash: #ffede8;
+    --color-coral-pulse: #ff643b;
+    --color-coral-hover: #ff7a56;
+    --color-teal-50: #e4f7ee;
+    --color-teal-100: #d2f2e3;
+    --color-teal-200: #a9e5c8;
+    --color-teal-300: #6fd3a3;
+    --color-teal-400: #35c07f;
+    --color-teal-500: #1dbf73;
+    --color-teal-600: #11814c;
+    --color-teal-700: #0d6a3d;
+    --color-teal-800: #0b5230;
+    --color-teal-900: #0a3922;
+    --color-teal-950: #062514;
+    --color-slate-400: #94a3b8;
+    --color-slate-500: #64748b;
+    --color-slate-600: #475569;
+    --color-slate-700: #334155;
+    --color-slate-800: #1e293b;
+    --color-slate-900: #0f172a;
+    --color-slate-950: #020617;
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
+    --radius-3xl: 1.5rem;
+    letter-spacing: normal;
+  }
+  html.estilo-apple.estilo-apple :is(
+    .papel-informe, .report-sheet-container,
+    #vaclinic-official-pdf-sheet, #vaclinic-official-report-sheet,
+    #vaclinic-physical-print-stage, #thermal-receipt-printable, #vaclinic-patient-history-pdf
+  ),
+  html.estilo-apple.estilo-apple :is(
+    .papel-informe, .report-sheet-container,
+    #vaclinic-official-pdf-sheet, #vaclinic-official-report-sheet,
+    #vaclinic-physical-print-stage, #thermal-receipt-printable, #vaclinic-patient-history-pdf
+  ) * {
+    background-color: revert-layer;
+    color: revert-layer;
+    border-color: revert-layer;
+    font-weight: revert-layer;
+    letter-spacing: revert-layer;
+    --tw-gradient-from: revert-layer;
+    --tw-gradient-via: revert-layer;
+    --tw-gradient-to: revert-layer;
+  }
+}
+
 @layer utilities {
   @media print {
     @page {
