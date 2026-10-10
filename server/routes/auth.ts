@@ -33,6 +33,8 @@ import { generateTotpSecret, totpAuthUri, verifyTotpToken, isTotpMandatoryForRol
 import { encryptSecret, decryptSecret } from '../crypto-aes';
 import { registrarBitacora } from '../bitacora';
 import { segundosDeBloqueo, registrarFallo, limpiarFallos, mensajeBloqueo } from '../loginLimiter';
+import { generarTokenRecuperacion, hashToken, esCorreoEntregable, validarNuevaContrasena, MINUTOS_RECUPERACION } from '../passwordReset';
+import { enviarCorreo, plantillaRecuperacion, urlBase } from '../mailer';
 
 /**
  * Registra el inicio de sesión exitoso en la bitácora REAL
@@ -223,6 +225,116 @@ authRouter.post('/change-password', requireStaffAuth, asyncHandler(async (req, r
     'UPDATE usuario SET contrasena_hash = $1, must_change_password = FALSE WHERE id_usuario = $2',
     [hashPassword(newPassword), req.staffUser!.idUsuario]
   );
+  return res.json({ ok: true });
+}));
+
+/**
+ * POST /api/auth/forgot-password
+ * Recuperación por correo: si el correo es de una cuenta ACTIVA con un
+ * correo real, se envía un enlace de un solo uso que vence en 5 minutos.
+ * La respuesta es SIEMPRE la misma (exista o no la cuenta) para no revelar
+ * qué correos están registrados. Máximo 5 solicitudes por correo cada 15
+ * minutos (mismo limitador que el login). Recuperar la contraseña NO
+ * salta el segundo factor: al entrar sigue pidiéndose el código TOTP.
+ */
+const MENSAJE_RECUPERACION =
+  `Si el correo pertenece a una cuenta activa, te enviamos un enlace para restablecer la contraseña. Vence en ${MINUTOS_RECUPERACION} minutos.`;
+
+authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
+  const correo = String(req.body?.correo || '').trim();
+  if (!correo) return res.status(400).json({ error: 'El correo es obligatorio.' });
+
+  const clave = `olvido:${correo.toLowerCase()}`;
+  if (segundosDeBloqueo(clave) > 0) return res.json({ ok: true, mensaje: MENSAJE_RECUPERACION });
+  registrarFallo(clave);
+
+  const { rows } = await pool.query(
+    'SELECT id_usuario, nombre_completo, correo, estado FROM usuario WHERE correo = $1',
+    [correo]
+  );
+  const usuario = rows[0];
+  if (usuario && usuario.estado && esCorreoEntregable(usuario.correo)) {
+    const { token, hash } = generarTokenRecuperacion();
+    // Una solicitud nueva invalida las anteriores que siguieran sin usar.
+    await pool.query(
+      'UPDATE recuperacion_contrasena SET usado_en = NOW() WHERE id_usuario = $1 AND usado_en IS NULL',
+      [usuario.id_usuario]
+    );
+    await pool.query(
+      `INSERT INTO recuperacion_contrasena (id_usuario, token_hash, expira)
+       VALUES ($1, $2, NOW() + make_interval(mins => $3))`,
+      [usuario.id_usuario, hash, MINUTOS_RECUPERACION]
+    );
+    const enlace = `${urlBase()}/?reset=${token}`;
+    const plantilla = plantillaRecuperacion({ nombre: usuario.nombre_completo, enlace, minutos: MINUTOS_RECUPERACION });
+    const envio = await enviarCorreo({ para: usuario.correo, ...plantilla });
+    if (!envio.enviado) console.error('[recuperación] No se pudo enviar el correo:', envio.motivo);
+    try {
+      await registrarBitacora({
+        idUsuario: usuario.id_usuario,
+        accion: 'Solicitud de recuperación de contraseña',
+        modulo: 'autenticacion',
+        severidad: 'info',
+        detalles: envio.enviado ? 'Enlace enviado por correo.' : 'No se pudo enviar el correo.'
+      });
+    } catch (err) {
+      console.error('No se pudo registrar la solicitud de recuperación en la bitácora:', err);
+    }
+  }
+  return res.json({ ok: true, mensaje: MENSAJE_RECUPERACION });
+}));
+
+/**
+ * POST /api/auth/reset-password
+ * Canjea el token del correo por una contraseña nueva. El token se marca
+ * como usado ANTES de cambiar la contraseña (un solo uso aun con dos
+ * peticiones simultáneas) y se revocan todas las sesiones abiertas de la cuenta.
+ */
+authRouter.post('/reset-password', asyncHandler(async (req, res) => {
+  const { token, nuevaContrasena } = req.body || {};
+  if (!token || !nuevaContrasena) {
+    return res.status(400).json({ error: 'token y nuevaContrasena son obligatorios.' });
+  }
+  const errorContrasena = validarNuevaContrasena(nuevaContrasena);
+  if (errorContrasena) return res.status(400).json({ error: errorContrasena });
+
+  const ENLACE_INVALIDO = 'El enlace es inválido o ya venció. Solicita uno nuevo.';
+  const { rows } = await pool.query(
+    `SELECT r.id, r.id_usuario, u.correo, u.estado
+       FROM recuperacion_contrasena r
+       JOIN usuario u ON u.id_usuario = r.id_usuario
+      WHERE r.token_hash = $1 AND r.usado_en IS NULL AND r.expira > NOW()`,
+    [hashToken(String(token))]
+  );
+  const fila = rows[0];
+  if (!fila || !fila.estado) return res.status(400).json({ error: ENLACE_INVALIDO });
+
+  const marcado = await pool.query(
+    'UPDATE recuperacion_contrasena SET usado_en = NOW() WHERE id = $1 AND usado_en IS NULL RETURNING id',
+    [fila.id]
+  );
+  if (marcado.rowCount === 0) return res.status(400).json({ error: ENLACE_INVALIDO });
+
+  await pool.query(
+    'UPDATE usuario SET contrasena_hash = $1, must_change_password = FALSE WHERE id_usuario = $2',
+    [hashPassword(String(nuevaContrasena)), fila.id_usuario]
+  );
+  await pool.query(
+    'UPDATE sesion_personal SET revocado_en = NOW() WHERE id_usuario = $1 AND revocado_en IS NULL',
+    [fila.id_usuario]
+  );
+  limpiarFallos(String(fila.correo).trim());
+  try {
+    await registrarBitacora({
+      idUsuario: fila.id_usuario,
+      accion: 'Contraseña restablecida con enlace de recuperación',
+      modulo: 'autenticacion',
+      severidad: 'warning',
+      detalles: 'Se revocaron las sesiones abiertas de la cuenta.'
+    });
+  } catch (err) {
+    console.error('No se pudo registrar el restablecimiento en la bitácora:', err);
+  }
   return res.json({ ok: true });
 }));
 
