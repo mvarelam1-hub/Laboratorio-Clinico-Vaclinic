@@ -4,22 +4,26 @@ import {
   PALETAS,
   PALETA_ORIGINAL,
   CLAVES_COLOR,
-  aplicarTema,
+  ESTILOS,
+  aplicarDiseno,
   avisosDeContraste,
   esHexValido,
+  guardarEstiloEnCache,
   guardarTemaEnCache,
+  leerEstiloEnCache,
   leerTemaEnCache,
   mezclar,
   normalizarHex,
   sonIguales,
   type ClaveColor,
-  type ColoresTema
+  type ColoresTema,
+  type EstiloTema
 } from '../../../utils/tema';
 import { guardarTemaRemoto, obtenerTemaRemoto, restablecerTemaRemoto } from '../../../services/temaApiService';
 
 /**
- * Ajustes → "9. Paleta del sistema": el laboratorio elige entre paletas listas
- * o cambia 4 colores clave. Mientras se edita, la aplicación completa se ve con
+ * Ajustes → "9. Paleta del sistema": el laboratorio elige el estilo (Bosque o Monad) y,
+ * con Bosque, entre paletas listas o cambia 4 colores clave. Mientras se edita, la aplicación completa se ve con
  * esos colores (vista previa en vivo); solo al guardar se aplican a todos los
  * usuarios y al portal del paciente. Solo administrador_ti y director pueden
  * guardar (lo valida el servidor) y cada cambio queda en la bitácora.
@@ -36,11 +40,13 @@ export const PaletaSettingsTab: React.FC = () => {
   const [colores, setColores] = useState<ColoresTema>(PALETA_ORIGINAL.colores);
   const [textos, setTextos] = useState<ColoresTema>(PALETA_ORIGINAL.colores);
   const [paleta, setPaleta] = useState<string>('bosque');
+  const [estilo, setEstilo] = useState<EstiloTema>('bosque');
   const [ocupado, setOcupado] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
   // Lo que hoy tiene el laboratorio guardado: a esto se vuelve al salir sin guardar.
   const guardado = useRef<ColoresTema>(PALETA_ORIGINAL.colores);
+  const guardadoEstilo = useRef<EstiloTema>('bosque');
 
   useEffect(() => {
     let vivo = true;
@@ -50,8 +56,11 @@ export const PaletaSettingsTab: React.FC = () => {
       cargado = true;
       // r === undefined: no se pudo consultar; se deja lo que ya se ve.
       const base = r ? r.colores : r === null ? PALETA_ORIGINAL.colores : (leerTemaEnCache() ?? PALETA_ORIGINAL.colores);
+      const estiloBase: EstiloTema = r ? r.estilo : r === null ? 'bosque' : leerEstiloEnCache();
       guardado.current = base;
-      aplicarTema(base);
+      guardadoEstilo.current = estiloBase;
+      aplicarDiseno(base, estiloBase);
+      setEstilo(estiloBase);
       setColores(base);
       setTextos(base);
       setPaleta(r?.paleta ?? (r ? 'personalizada' : 'bosque'));
@@ -61,7 +70,7 @@ export const PaletaSettingsTab: React.FC = () => {
       vivo = false;
       // Si se sale sin guardar, la aplicación vuelve a la paleta guardada
       // (solo si ya se supo cuál es; antes de cargar no se toca nada).
-      if (cargado) aplicarTema(guardado.current);
+      if (cargado) aplicarDiseno(guardado.current, guardadoEstilo.current);
     };
   }, []);
 
@@ -70,7 +79,7 @@ export const PaletaSettingsTab: React.FC = () => {
     setTextos(nuevos);
     setPaleta(idPaleta);
     setMensaje(null);
-    aplicarTema(nuevos); // vista previa en vivo
+    aplicarDiseno(nuevos, estilo); // vista previa en vivo
   };
 
   const elegirPaleta = (id: string) => {
@@ -85,20 +94,29 @@ export const PaletaSettingsTab: React.FC = () => {
     setColores(nuevos);
     setPaleta('personalizada');
     setMensaje(null);
-    aplicarTema(nuevos);
+    aplicarDiseno(nuevos, estilo);
   };
 
-  const hayCambios = !sonIguales(colores, guardado.current);
-  const avisos = avisosDeContraste(colores);
+  const elegirEstilo = (id: EstiloTema) => {
+    setEstilo(id);
+    setMensaje(null);
+    aplicarDiseno(colores, id); // vista previa en vivo de todo el sistema
+  };
+
+  const hayCambios = !sonIguales(colores, guardado.current) || estilo !== guardadoEstilo.current;
+  const vista = estilo === 'monad' ? ESTILOS[1].muestra : colores;
+  const avisos = estilo === 'bosque' ? avisosDeContraste(colores) : [];
 
   const guardar = async () => {
     setMensaje(null);
     setOcupado(true);
-    const r = await guardarTemaRemoto(paleta === 'personalizada' ? null : paleta, colores);
+    const r = await guardarTemaRemoto(paleta === 'personalizada' ? null : paleta, colores, estilo);
     setOcupado(false);
     if (r.ok === true) {
       guardado.current = colores;
+      guardadoEstilo.current = estilo;
       guardarTemaEnCache(colores);
+      guardarEstiloEnCache(estilo);
       setMensaje({ tipo: 'ok', texto: 'Paleta guardada. Todos los usuarios y el portal del paciente la verán al recargar la página.' });
     } else {
       setMensaje({ tipo: 'error', texto: r.message });
@@ -106,7 +124,10 @@ export const PaletaSettingsTab: React.FC = () => {
   };
 
   const descartar = () => {
-    cambiar(guardado.current, paleta === 'personalizada' ? 'personalizada' : paleta);
+    setEstilo(guardadoEstilo.current);
+    setColores(guardado.current);
+    setTextos(guardado.current);
+    aplicarDiseno(guardado.current, guardadoEstilo.current);
     setMensaje(null);
   };
 
@@ -117,11 +138,14 @@ export const PaletaSettingsTab: React.FC = () => {
     setOcupado(false);
     if (r.ok === true) {
       guardado.current = PALETA_ORIGINAL.colores;
+      guardadoEstilo.current = 'bosque';
       guardarTemaEnCache(null);
+      guardarEstiloEnCache('bosque');
+      setEstilo('bosque');
       setColores(PALETA_ORIGINAL.colores);
       setTextos(PALETA_ORIGINAL.colores);
       setPaleta('bosque');
-      aplicarTema(null);
+      aplicarDiseno(null, 'bosque');
       setMensaje({ tipo: 'ok', texto: 'Se restableció el diseño original (Bosque).' });
     } else {
       setMensaje({ tipo: 'error', texto: r.message });
@@ -140,17 +164,48 @@ export const PaletaSettingsTab: React.FC = () => {
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
       <div className="space-y-4 xl:col-span-7">
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h3 className="text-sm font-black text-slate-900">Paleta de colores del sistema</h3>
+          <h3 className="text-sm font-black text-slate-900">Estilo y colores del sistema</h3>
           <p className="mt-1 text-xs text-slate-600">
-            Elige una paleta lista o cambia los cuatro colores clave. Mientras eliges, toda la aplicación se ve con esos colores como
-            vista previa; solo al guardar se aplican para todo el laboratorio y para el portal del paciente.
+            Elige el estilo y, con Bosque, una paleta lista o los cuatro colores clave. Mientras eliges, toda la aplicación se ve con
+            esa elección como vista previa; solo al guardar se aplica para todo el laboratorio y para el portal del paciente.
           </p>
           <p className="mt-3 flex items-start gap-2 rounded-xl bg-sky-wash p-3 text-[11px] font-medium text-slate-800">
             <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-            Solo el administrador de sistemas y el director pueden guardar la paleta. Los demás usuarios verán el cambio al recargar la página.
+            Solo el administrador de sistemas y el director pueden guardar el estilo y la paleta. Los demás usuarios verán el cambio al recargar la página.
           </p>
         </div>
 
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <p className="text-xs font-black text-slate-900">Estilo del sistema</p>
+          <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {ESTILOS.map((e) => {
+              const activo = estilo === e.id;
+              return (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    onClick={() => elegirEstilo(e.id)}
+                    aria-pressed={activo}
+                    className={`h-full w-full cursor-pointer rounded-2xl border p-3 text-left transition-colors ${
+                      activo ? 'border-leaf bg-sage-wash' : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="flex overflow-hidden rounded-full">
+                      {CLAVES_COLOR.map((k) => (
+                        <span key={k} className="h-6 flex-1" style={{ backgroundColor: e.muestra[k] }} />
+                      ))}
+                    </span>
+                    <span className="mt-2 block text-xs font-bold text-slate-900">{e.nombre}</span>
+                    <span className="mt-1 block text-[11px] leading-snug text-slate-600">{e.descripcion}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        {estilo === 'bosque' ? (
+          <>
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-black text-slate-900">Paletas listas</p>
           <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -219,6 +274,14 @@ export const PaletaSettingsTab: React.FC = () => {
             </ul>
           )}
         </div>
+          </>
+        ) : (
+          <p className="flex items-start gap-2 rounded-xl bg-sky-wash p-3 text-[11px] font-medium text-slate-800">
+            <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            Monad usa su propia paleta fija (pergamino, gris casi negro y un azul para la acción principal). Para cambiar los colores
+            elige el estilo Bosque.
+          </p>
+        )}
 
         {mensaje && (
           <div
@@ -265,27 +328,27 @@ export const PaletaSettingsTab: React.FC = () => {
 
       <div className="xl:col-span-5">
         <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Vista previa</p>
-        <div className="overflow-hidden rounded-3xl border border-slate-200" style={{ backgroundColor: colores.fondo }} aria-hidden="true">
+        <div className="overflow-hidden rounded-3xl border border-slate-200" style={{ backgroundColor: vista.fondo }} aria-hidden="true">
           <div className="flex min-h-[260px]">
-            <div className="w-1/3 space-y-2 p-3" style={{ backgroundColor: colores.menu }}>
+            <div className="w-1/3 space-y-2 p-3" style={{ backgroundColor: vista.menu }}>
               <p className="text-xs font-bold text-white">VACLINIC</p>
-              <p className="rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ backgroundColor: colores.acento, color: colores.menu }}>Nueva orden</p>
-              <p className="px-3 py-1.5 text-[11px] font-medium" style={{ color: mezclar(colores.menu, '#ffffff', 0.85) }}>Pacientes</p>
-              <p className="px-3 py-1.5 text-[11px] font-medium" style={{ color: mezclar(colores.menu, '#ffffff', 0.85) }}>Órdenes</p>
+              <p className="rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ backgroundColor: vista.acento, color: vista.menu }}>Nueva orden</p>
+              <p className="px-3 py-1.5 text-[11px] font-medium" style={{ color: mezclar(vista.menu, '#ffffff', 0.85) }}>Pacientes</p>
+              <p className="px-3 py-1.5 text-[11px] font-medium" style={{ color: mezclar(vista.menu, '#ffffff', 0.85) }}>Órdenes</p>
             </div>
             <div className="flex-1 space-y-3 p-4">
               <div className="rounded-2xl bg-white p-4">
-                <p className="text-sm font-bold text-slate-900">Nueva orden</p>
+                <p className="text-sm font-bold text-slate-900" style={estilo === 'monad' ? { fontFamily: "'Newsreader', Georgia, serif", fontWeight: 400, fontSize: 18 } : undefined}>Nueva orden</p>
                 <p className="mt-1 text-[11px] text-slate-500">Así se verán las tarjetas y los botones.</p>
                 <span
                   className="mt-3 inline-block rounded-full px-4 py-1.5 text-xs font-semibold"
-                  style={{ backgroundColor: colores.boton, color: '#1a1a1a' }}
+                  style={{ backgroundColor: vista.boton, color: estilo === 'monad' ? '#ffffff' : '#1a1a1a' }}
                 >
                   Revisar y liquidar
                 </span>
               </div>
-              <div className="rounded-2xl p-4" style={{ backgroundColor: mezclar(colores.acento, '#ffffff', 0.8) }}>
-                <p className="text-sm font-bold" style={{ color: colores.menu }}>Tarjeta con acento</p>
+              <div className="rounded-2xl p-4" style={{ backgroundColor: mezclar(vista.acento, '#ffffff', 0.8) }}>
+                <p className="text-sm font-bold" style={{ color: vista.menu }}>Tarjeta con acento</p>
                 <p className="mt-1 text-[11px] text-slate-700">Detalles y fondos suaves salen del acento.</p>
               </div>
             </div>
