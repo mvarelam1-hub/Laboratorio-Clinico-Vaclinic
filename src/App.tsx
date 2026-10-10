@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -50,9 +50,14 @@ import { BackupRestoreModal } from './components/staff/BackupRestoreModal';
 import { CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { role, staffActiveTab, notification, isStaffAuthenticated, staffAuthMeta, isBackupModalOpen, setIsBackupModalOpen } = useClinic();
+  const { role, setRole, staffActiveTab, notification, isStaffAuthenticated, staffAuthMeta, isBackupModalOpen, setIsBackupModalOpen } = useClinic();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Enlace de recuperación de contraseña (?reset=...): abre directo la vista de personal.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('reset')) setRole('personal');
+  }, [setRole]);
 
   // If in staff mode and not authenticated, show the official Staff Login screen
   if (role === 'personal' && !isStaffAuthenticated) {
