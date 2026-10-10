@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { solicitarRecuperacion, restablecerConToken } from './staffAuthService';
+import { solicitarRecuperacion, restablecerConToken, solicitarRecordatorioUsuario } from './staffAuthService';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -39,5 +39,19 @@ describe('servicios de recuperación de contraseña', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const r = await solicitarRecuperacion('persona@ejemplo.com');
     expect(r.ok).toBe(false);
+  });
+
+  it('solicitarRecordatorioUsuario manda el nombre completo', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, mensaje: 'Revisa tu correo.' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await solicitarRecordatorioUsuario('Josué Navas');
+    expect(r).toEqual({ ok: true, mensaje: 'Revisa tu correo.' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/forgot-username');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ nombre: 'Josué Navas' });
+  });
+
+  it('solicitarRecordatorioUsuario informa el error del servidor', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'Escribe tu nombre completo.' }) }));
+    expect(await solicitarRecordatorioUsuario('')).toEqual({ ok: false, message: 'Escribe tu nombre completo.' });
   });
 });
