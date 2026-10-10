@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useClinic, STAFF_SESSION_TOKEN_STORAGE_KEY } from '../../context/ClinicContext';
 import { VaclinicPosterGraphic } from '../common/VaclinicPosterGraphic';
 import { loginStaff, verifyTotp, verifyStaffSession } from '../../services/staffAuthService';
+import { PasswordRecovery } from './PasswordRecovery';
 import {
   loadRecentAccounts,
   rememberAccount,
@@ -67,6 +68,8 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
   } = useClinic();
 
   const [email, setEmail] = useState('');
+  // Recuperación de contraseña: se abre sola si llegó por el enlace del correo (?reset=...).
+  const [modoRecuperacion, setModoRecuperacion] = useState<boolean>(() => new URLSearchParams(window.location.search).has('reset'));
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -389,7 +392,9 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
                 </p>
               </div>
 
-              {!loginTicket ? (
+              {modoRecuperacion ? (
+                <PasswordRecovery onVolver={() => setModoRecuperacion(false)} />
+              ) : !loginTicket ? (
               /* Login Form — paso 1: correo + contraseña (POST /api/auth/login) */
               <form onSubmit={handleLogin} className="mt-6 space-y-4">
 
@@ -531,6 +536,14 @@ export const StaffLoginView: React.FC<StaffLoginViewProps> = ({
                   ) : (
                     <span>Ingresar al Sistema</span>
                   )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setModoRecuperacion(true)}
+                  className="w-full text-center text-xs font-semibold text-teal-700 hover:text-teal-900 hover:underline cursor-pointer"
+                >
+                  ¿Olvidaste tu contraseña?
                 </button>
               </form>
               ) : (
