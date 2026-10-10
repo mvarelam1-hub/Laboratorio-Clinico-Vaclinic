@@ -187,3 +187,65 @@ describe('POST /api/auth/reset-password', () => {
     expect(queryMock.mock.calls.some((c) => String(c[0]).includes('UPDATE usuario SET contrasena_hash'))).toBe(false);
   });
 });
+
+describe('POST /api/auth/forgot-username', () => {
+  const CUENTA = { id_usuario: 7, nombre_completo: 'Josué Navas', correo: 'jnavasn@miumg.edu.gt' };
+
+  it('exige un nombre', async () => {
+    const app = await buildApp();
+    expect((await request(app).post('/api/auth/forgot-username').send({})).status).toBe(400);
+    expect((await request(app).post('/api/auth/forgot-username').send({ nombre: 'ab' })).status).toBe(400);
+  });
+
+  it('envía el usuario SOLO al correo registrado y no lo devuelve en pantalla', async () => {
+    queryMock.mockResolvedValue({ rows: [CUENTA] });
+    enviarMock.mockResolvedValue({ enviado: true });
+    const app = await buildApp();
+    const res = await request(app).post('/api/auth/forgot-username').send({ nombre: '  josué   navas ' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(JSON.stringify(res.body)).not.toContain('jnavasn@');
+    expect(queryMock.mock.calls[0][1][0]).toBe('josué navas');
+    const correo = enviarMock.mock.calls[0][0];
+    expect(correo.para).toBe('jnavasn@miumg.edu.gt');
+    expect(correo.texto).toContain('jnavasn@miumg.edu.gt');
+    expect(bitacoraMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('responde igual y no envía nada si no hay cuenta con ese nombre', async () => {
+    queryMock.mockResolvedValue({ rows: [] });
+    const app = await buildApp();
+    const res = await request(app).post('/api/auth/forgot-username').send({ nombre: 'Nadie Existe' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it('no envía a correos que no pueden recibir mensajes (.local)', async () => {
+    queryMock.mockResolvedValue({ rows: [{ ...CUENTA, correo: 'admin.sistemas@vaclinic.local' }] });
+    const app = await buildApp();
+    await request(app).post('/api/auth/forgot-username').send({ nombre: 'Administrador' });
+    expect(enviarMock).not.toHaveBeenCalled();
+  });
+
+  it('si dos cuentas comparten nombre, cada una recibe solo lo suyo', async () => {
+    queryMock.mockResolvedValue({ rows: [CUENTA, { id_usuario: 8, nombre_completo: 'Josué Navas', correo: 'otro@ejemplo.com' }] });
+    enviarMock.mockResolvedValue({ enviado: true });
+    const app = await buildApp();
+    await request(app).post('/api/auth/forgot-username').send({ nombre: 'Josué Navas' });
+    expect(enviarMock).toHaveBeenCalledTimes(2);
+    expect(enviarMock.mock.calls[0][0].texto).not.toContain('otro@ejemplo.com');
+    expect(enviarMock.mock.calls[1][0].texto).not.toContain('jnavasn@');
+  });
+
+  it('limita a 5 solicitudes por nombre: la sexta ya no envía', async () => {
+    queryMock.mockResolvedValue({ rows: [CUENTA] });
+    enviarMock.mockResolvedValue({ enviado: true });
+    const app = await buildApp();
+    for (let i = 0; i < 6; i++) {
+      const res = await request(app).post('/api/auth/forgot-username').send({ nombre: 'Josué Navas' });
+      expect(res.status).toBe(200);
+    }
+    expect(enviarMock).toHaveBeenCalledTimes(5);
+  });
+});
