@@ -48,6 +48,8 @@ export class PdfReportService {
         logging: false,
         windowWidth: 1024,
         onclone: (clonedDoc) => {
+          // El PDF no usa los estilos de pantalla (Monad, Apple): sale como siempre.
+          clonedDoc.documentElement.classList.remove('estilo-monad', 'estilo-apple');
           // El PDF debe ser el informe limpio: sin sombras, filtros, texturas ni
           // guías de la vista previa (html2canvas dibuja las sombras como manchas
           // grises/negras alrededor de los bloques).
