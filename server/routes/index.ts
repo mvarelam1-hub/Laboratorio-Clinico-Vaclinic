@@ -24,6 +24,7 @@ import { chatRouter } from './chat';
 import { informesRouter } from './informes';
 import { configLabRouter } from './configLab';
 import { iaRouter } from './ia';
+import { portadaPublicaRouter, portadaAdminRouter } from './portada';
 
 export const apiRouter = Router();
 
@@ -43,6 +44,11 @@ apiRouter.use('/preferencias', preferenciasRouter);
 // 0019): SIN sesión, por eso va ANTES del middleware requireStaffAuth de abajo.
 // Expone solo datos mínimos (ver verificar.ts).
 apiRouter.use('/verificar', verificarApiRouter);
+
+// Imágenes de la portada del login del personal (migración 0024): el login aún
+// no tiene sesión, así que la LECTURA es pública y va ANTES del middleware de
+// sesión. Subir/quitar imágenes está en /portada-admin, más abajo, con permiso.
+apiRouter.use('/portada', portadaPublicaRouter);
 
 // Login, cambio de contraseña, TOTP y whoami de personal (ver
 // server/routes/auth.ts). Cada endpoint de este router decide por sí mismo
@@ -101,3 +107,4 @@ apiRouter.use('/informes', informesRouter);
 apiRouter.use('/config-lab', configLabRouter);
 apiRouter.use('/contenido-publico', contenidoPublicoRouter);
 apiRouter.use('/ia', iaRouter);
+apiRouter.use('/portada-admin', portadaAdminRouter);
