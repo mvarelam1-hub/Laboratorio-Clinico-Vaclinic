@@ -31,6 +31,44 @@ export const PALETAS: PaletaListas[] = [
 
 export const PALETA_ORIGINAL = PALETAS[0];
 
+/**
+ * Estilos del sistema. 'bosque' es el diseño actual (admite las paletas de arriba);
+ * 'monad' es pergamino + serif + monoespaciada con su propia paleta fija: todo su CSS
+ * vive en index.css bajo la clase `estilo-monad` de <html>.
+ */
+export type EstiloTema = 'bosque' | 'monad';
+export const ESTILO_ORIGINAL: EstiloTema = 'bosque';
+export const ESTILOS: { id: EstiloTema; nombre: string; descripcion: string; muestra: ColoresTema }[] = [
+  {
+    id: 'bosque',
+    nombre: 'Bosque',
+    descripcion: 'El diseño actual: menú verde, tarjetas pastel y letra redondeada. Admite las paletas y los colores propios.',
+    muestra: PALETAS[0].colores
+  },
+  {
+    id: 'monad',
+    nombre: 'Monad',
+    descripcion: 'Fondo pergamino, títulos en serif, texto en monoespaciada, bordes finos y un solo azul para la acción principal.',
+    muestra: { menu: '#242424', acento: '#cfdaf5', boton: '#2b59d1', fondo: '#f6f3f1' }
+  }
+];
+
+export function esEstiloValido(valor: unknown): valor is EstiloTema {
+  return valor === 'bosque' || valor === 'monad';
+}
+
+/** Activa o quita el estilo sobre <html> (la clase `estilo-monad` que usa index.css). */
+export function aplicarEstilo(estilo: EstiloTema, destino: { classList: { add(c: string): unknown; remove(c: string): unknown } } = document.documentElement): void {
+  if (estilo === 'monad') destino.classList.add('estilo-monad');
+  else destino.classList.remove('estilo-monad');
+}
+
+/** Pinta estilo y colores juntos: con Monad no se tocan las variables de la paleta (Monad tiene la suya). */
+export function aplicarDiseno(colores: ColoresTema | null, estilo: EstiloTema): void {
+  aplicarEstilo(estilo);
+  aplicarTema(estilo === 'monad' ? null : colores);
+}
+
 const TEXTO_BOTON = '#1a1a1a';
 const BLANCO = '#ffffff';
 const NEGRO = '#000000';
@@ -178,6 +216,26 @@ export function guardarTemaEnCache(colores: ColoresTema | null): void {
   try {
     if (colores) localStorage.setItem(CLAVE_CACHE, JSON.stringify(colores));
     else localStorage.removeItem(CLAVE_CACHE);
+  } catch {
+    /* sin almacenamiento: no pasa nada */
+  }
+}
+
+const CLAVE_CACHE_ESTILO = 'vaclinic_estilo';
+
+export function leerEstiloEnCache(): EstiloTema {
+  try {
+    const v = localStorage.getItem(CLAVE_CACHE_ESTILO);
+    return esEstiloValido(v) ? v : ESTILO_ORIGINAL;
+  } catch {
+    return ESTILO_ORIGINAL;
+  }
+}
+
+export function guardarEstiloEnCache(estilo: EstiloTema): void {
+  try {
+    if (estilo === ESTILO_ORIGINAL) localStorage.removeItem(CLAVE_CACHE_ESTILO);
+    else localStorage.setItem(CLAVE_CACHE_ESTILO, estilo);
   } catch {
     /* sin almacenamiento: no pasa nada */
   }
