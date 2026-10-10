@@ -68,6 +68,102 @@
   font-weight: 500;
 }
 
+/*
+ * Estilo "Monad" (Ajustes → Paleta del sistema → Estilo del sistema): pergamino cálido,
+ * títulos en serif, texto en monoespaciada, un solo azul para la acción principal y
+ * bordes finos de 1px. Se activa con la clase `estilo-monad` en <html>. Solo en pantalla:
+ * lo impreso (informes) no cambia.
+ */
+@media screen {
+  html.estilo-monad {
+    --font-sans: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-dm: var(--font-sans);
+    --font-monad-serif: 'Newsreader', ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+
+    /* Superficies */
+    --color-lavender-mist: #f6f3f1;
+    --color-cream: #f6f3f1;
+    --color-canopy: #242424;
+    --color-canopy-claro: #3a3939;
+    --color-leaf: #cfdaf5;
+    --color-graphite: #4e4d4d;
+    --color-mint-wash: #e6ecfa;
+    --color-sky-wash: #e6ecfa;
+    --color-sage-wash: #eeebe8;
+    --color-lilac-wash: #ebe8f5;
+    --color-peach-wash: #fbe3da;
+
+    /* Acción principal: el único azul del sistema. */
+    --color-coral-pulse: #2b59d1;
+    --color-coral-hover: #1f49b8;
+
+    /* Botones y detalles internos: escala cálida de grises, sin color extra. */
+    --color-teal-50: #f5f2ef;
+    --color-teal-100: #ece9e6;
+    --color-teal-200: #d9d5d2;
+    --color-teal-300: #b9b5b2;
+    --color-teal-400: #8b8887;
+    --color-teal-500: #5f5d5c;
+    --color-teal-600: #242424;
+    --color-teal-700: #161616;
+    --color-teal-800: #0c0c0c;
+    --color-teal-900: #000000;
+    --color-teal-950: #000000;
+
+    /* Textos y bordes: gris cálido; los bordes de 1px son el "Ash" del diseño. */
+    --color-slate-50: #f5f2ef;
+    --color-slate-100: #ece9e6;
+    --color-slate-200: #cecac8;
+    --color-slate-300: #b9b5b2;
+    --color-slate-400: #7d7a79;
+    --color-slate-500: #6a6867;
+    --color-slate-600: #4e4d4d;
+    --color-slate-700: #3a3939;
+    --color-slate-800: #2c2b2b;
+    --color-slate-900: #242424;
+    --color-slate-950: #0c0c0c;
+
+    /* Formas: tarjetas muy redondeadas, botones en píldora. */
+    --radius-xl: 1rem;
+    --radius-2xl: 1.5rem;
+    --radius-3xl: 2.5rem;
+
+    /* Sin sombras: el relieve lo dan el color de la superficie y el borde. */
+    --shadow-lg: 0 0 10px 0 rgb(0 0 0 / 0.10);
+    --shadow-xl: 0 0 10px 0 rgb(0 0 0 / 0.10);
+    --shadow-2xl: 0 0 10px 0 rgb(0 0 0 / 0.10);
+  }
+
+  /* La monoespaciada es más ancha: un punto menos de base mantiene las pantallas con datos ordenadas. */
+  html.estilo-monad {
+    font-size: 15px;
+  }
+
+  html.estilo-monad body {
+    background-color: #f6f3f1;
+    letter-spacing: -0.02em;
+  }
+
+  /* Títulos en serif, siempre en peso 400. */
+  html.estilo-monad h1,
+  html.estilo-monad .titulo-display {
+    font-family: var(--font-monad-serif);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+  html.estilo-monad h2,
+  html.estilo-monad h3,
+  html.estilo-monad h4 {
+    font-weight: 500;
+  }
+
+  /* El botón principal es azul con texto blanco (el texto oscuro de la paleta Bosque no se lee sobre azul). */
+  html.estilo-monad .bg-coral-pulse {
+    color: #ffffff;
+    white-space: nowrap;
+  }
+}
+
 @layer utilities {
   @media print {
     @page {
