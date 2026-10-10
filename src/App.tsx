@@ -85,7 +85,7 @@ const MainContent: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans ${role === 'personal' ? 'bg-slate-100/70' : 'bg-lavender-mist'}`}>
+    <div className="min-h-screen bg-lavender-mist flex flex-col font-sans">
       {/* Top Navbar */}
       <Navbar onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)} />
 
