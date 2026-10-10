@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Mail, KeyRound, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react';
-import { solicitarRecuperacion, restablecerConToken } from '../../services/staffAuthService';
+import { Mail, KeyRound, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, User } from 'lucide-react';
+import { solicitarRecuperacion, restablecerConToken, solicitarRecordatorioUsuario } from '../../services/staffAuthService';
 
 /**
  * Recuperación de contraseña del personal (cuerpo de la tarjeta del login).
@@ -12,6 +12,10 @@ import { solicitarRecuperacion, restablecerConToken } from '../../services/staff
  *    contraseña (POST /api/auth/reset-password). El token se pasa a la
  *    memoria del componente y se quita de la barra de direcciones al
  *    instante, para que no quede en el historial ni se filtre por Referer.
+ *
+ *  - "¿No recuerdas tu usuario?": el usuario es el correo registrado. La
+ *    persona escribe su nombre completo y el sistema manda el recordatorio
+ *    SOLO al correo de esa cuenta (POST /api/auth/forgot-username).
  *
  * Recuperar la contraseña no salta el segundo factor: al volver a entrar se
  * sigue pidiendo el código de la app autenticadora.
@@ -49,6 +53,8 @@ export const PasswordRecovery: React.FC<PasswordRecoveryProps> = ({ onVolver }) 
   const [cargando, setCargando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [listo, setListo] = useState(false);
+  const [modoUsuario, setModoUsuario] = useState(false);
+  const [nombre, setNombre] = useState('');
 
   const pedirEnlace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +66,21 @@ export const PasswordRecovery: React.FC<PasswordRecoveryProps> = ({ onVolver }) 
     }
     setCargando(true);
     const r = await solicitarRecuperacion(limpio);
+    setCargando(false);
+    if (r.ok === true) setAviso(r.mensaje);
+    else setError(r.message);
+  };
+
+  const pedirUsuario = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const limpio = nombre.trim();
+    if (limpio.length < 3) {
+      setError('Escribe tu nombre completo.');
+      return;
+    }
+    setCargando(true);
+    const r = await solicitarRecordatorioUsuario(limpio);
     setCargando(false);
     if (r.ok === true) setAviso(r.mensaje);
     else setError(r.message);
@@ -186,10 +207,44 @@ export const PasswordRecovery: React.FC<PasswordRecoveryProps> = ({ onVolver }) 
           <span className="font-medium">{aviso}</span>
         </div>
         <p className="text-[11px] text-slate-500">
-          Si no te llega, revisa la carpeta de spam o pide a un administrador que restablezca tu contraseña desde Usuarios y roles.
+          {modoUsuario
+            ? 'Si no te llega, revisa la carpeta de spam o pide a un administrador que consulte tu usuario en Usuarios y roles.'
+            : 'Si no te llega, revisa la carpeta de spam o pide a un administrador que restablezca tu contraseña desde Usuarios y roles.'}
         </p>
         {botonVolver}
       </div>
+    );
+  }
+
+  if (modoUsuario) {
+    return (
+      <form onSubmit={pedirUsuario} className="mt-6 space-y-4">
+        <p className="text-xs text-slate-600 font-medium">
+          Tu usuario es el correo con el que se registró tu cuenta. Escribe tu nombre completo y te lo enviaremos a ese correo.
+        </p>
+        <div>
+          <label htmlFor="recuperar-nombre" className="block text-xs font-bold text-slate-700 mb-1.5">Nombre completo</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <User className="w-4 h-4" />
+            </div>
+            <input
+              id="recuperar-nombre"
+              type="text"
+              value={nombre}
+              onChange={(e) => { setNombre(e.target.value); setError(null); }}
+              autoComplete="name"
+              required
+              className={CLASE_INPUT}
+            />
+          </div>
+        </div>
+        {bloqueError}
+        <button type="submit" disabled={cargando} className={CLASE_BOTON}>
+          {cargando ? 'Enviando...' : 'Enviar recordatorio de usuario'}
+        </button>
+        {botonVolver}
+      </form>
     );
   }
 
@@ -218,6 +273,13 @@ export const PasswordRecovery: React.FC<PasswordRecoveryProps> = ({ onVolver }) 
       {bloqueError}
       <button type="submit" disabled={cargando} className={CLASE_BOTON}>
         {cargando ? 'Enviando...' : 'Enviar enlace de recuperación'}
+      </button>
+      <button
+        type="button"
+        onClick={() => { setModoUsuario(true); setError(null); }}
+        className="w-full text-xs font-semibold text-teal-700 hover:text-teal-900 cursor-pointer"
+      >
+        ¿No recuerdas tu usuario?
       </button>
       {botonVolver}
     </form>
