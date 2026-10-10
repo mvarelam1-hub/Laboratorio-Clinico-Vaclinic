@@ -9,6 +9,7 @@ import { SecurityLegalSettingsTab } from './settings/SecurityLegalSettingsTab';
 import { OperationsSettingsTab } from './settings/OperationsSettingsTab';
 import { ReagentsInventoryTab } from './settings/ReagentsInventoryTab';
 import { LiveReportPreviewSheet } from './settings/LiveReportPreviewSheet';
+import { PortadaSettingsTab } from './settings/PortadaSettingsTab';
 import { 
   SlidersHorizontal, 
   Building2, 
@@ -26,7 +27,8 @@ import {
   Sparkles,
   Download,
   FlaskConical,
-  Database
+  Database,
+  Image as ImageIcon
 } from 'lucide-react';
 
 type SettingsTab = 'membrete' | 'firmas' | 'margenes' | 'colores' | 'seguridad' | 'operaciones' | 'inventario';
@@ -46,9 +48,12 @@ export const LabSettingsView: React.FC = () => {
 
   const activeTab = activeSettingsSubTab;
   const setActiveTab = (tab: SettingsTab) => {
+    setVerPortada(false);
     setActiveSettingsSubTab(tab);
   };
   const [showLivePreview, setShowLivePreview] = useState(true);
+  // Pestaña 8 (portada del acceso): vive aquí porque no forma parte de los ajustes del informe.
+  const [verPortada, setVerPortada] = useState(false);
   const [localSettings, setLocalSettings] = useState<LabSettings>(labSettings);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -190,7 +195,7 @@ export const LabSettingsView: React.FC = () => {
           { id: 'inventario', label: '7. Inventario & Reactivos', icon: FlaskConical },
         ].map((tab) => {
           const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
+          const isActive = !verPortada && activeTab === tab.id;
           return (
             <button
               key={tab.id}
@@ -206,10 +211,23 @@ export const LabSettingsView: React.FC = () => {
             </button>
           );
         })}
+        <button
+          onClick={() => setVerPortada(true)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            verPortada
+              ? 'bg-teal-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <ImageIcon className="w-3.5 h-3.5" />
+          <span>8. Portada del acceso</span>
+        </button>
       </div>
 
       {/* Main Workspace: Form Tabs & Live Interactive Preview or Full Width Inventory */}
-      {activeTab === 'inventario' ? (
+      {verPortada ? (
+        <PortadaSettingsTab />
+      ) : activeTab === 'inventario' ? (
         <div className="w-full">
           <ReagentsInventoryTab />
         </div>
