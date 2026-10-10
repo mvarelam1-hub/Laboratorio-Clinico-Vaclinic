@@ -26,6 +26,36 @@
   --color-peach-wash: #ffede8;
   --color-cream: #faf7e8;
   --font-dm: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Toda la aplicación usa DM Sans. */
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* La escala "teal" que ya usa toda la app pasa a verde bosque. */
+  --color-teal-50: #e4f7ee;
+  --color-teal-100: #d2f2e3;
+  --color-teal-200: #a9e5c8;
+  --color-teal-300: #6fd3a3;
+  --color-teal-400: #35c07f;
+  --color-teal-500: #1dbf73;
+  --color-teal-600: #11814c;
+  --color-teal-700: #0d6a3d;
+  --color-teal-800: #0b5230;
+  --color-teal-900: #0a3922;
+  --color-teal-950: #062514;
+
+  /* Sombras casi planas; solo lo que flota (menús, ventanas) conserva un poco de relieve. */
+  --shadow-2xs: 0 0 #0000;
+  --shadow-xs: 0 1px 1px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 1px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 1px 2px 0 rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 6px 20px -4px rgb(0 0 0 / 0.10);
+  --shadow-xl: 0 10px 28px -6px rgb(0 0 0 / 0.12);
+  --shadow-2xl: 0 14px 36px -8px rgb(0 0 0 / 0.16);
+
+  /* Tarjetas más redondeadas. */
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 1.75rem;
 }
 
 .tema-vaclinic {
