@@ -416,28 +416,23 @@ export const CatalogAndProfilesManager: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Header Card */}
-      <div className="bg-gradient-to-r from-teal-800 via-cyan-900 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-200 border border-teal-400/30 text-xs font-semibold uppercase tracking-wider mb-3">
-              <Sparkles className="w-3.5 h-3.5" />
-              Nomenclador Oficial VACLINIC v2026
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+      {/* Encabezado compacto */}
+      <div className="bg-canopy rounded-2xl px-5 py-4 text-white">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-leaf">
+              <Sparkles className="w-3 h-3" />
+              Nomenclador oficial VACLINIC v2026
+            </p>
+            <h1 className="mt-0.5 text-xl font-bold tracking-tight text-white">
               Catálogo de Pruebas & Perfiles Clínicos
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-2xl mt-1.5 leading-relaxed">
-              Gestión centralizada de 161 pruebas de laboratorio de fábrica, tarifario en Quetzales (Q), rangos de referencia oficiales y constructor interactivo de perfiles personalizados.
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setActiveTestForModal('new')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-sm rounded-xl shadow-lg hover:shadow-teal-500/25 transition-all duration-200"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-leaf hover:bg-teal-400 text-canopy font-semibold text-sm rounded-full transition-colors"
             >
               <Plus className="w-4 h-4" />
               Nueva Prueba
@@ -455,7 +450,7 @@ export const CatalogAndProfilesManager: React.FC = () => {
                 });
                 setShowAddProfileModal(true);
               }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-semibold text-sm rounded-xl border border-white/20 backdrop-blur-sm transition-all duration-200"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-transparent hover:bg-white/10 text-white font-medium text-sm rounded-full border border-white/40 transition-colors"
             >
               <Layers className="w-4 h-4" />
               Crear Perfil
@@ -463,54 +458,41 @@ export const CatalogAndProfilesManager: React.FC = () => {
             <button
               onClick={handleDownloadJson}
               title="Descargar archivo JSON"
-              className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors"
+              className="p-2 bg-transparent hover:bg-white/10 text-white rounded-full border border-white/40 transition-colors"
             >
               <Download className="w-4 h-4" />
             </button>
             <button
               onClick={resetCatalogToFactory}
               title="Restablecer a las 161 pruebas de fábrica"
-              className="p-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/30 rounded-xl transition-colors"
+              className="p-2 bg-transparent hover:bg-rose-500/20 text-rose-200 border border-rose-300/40 rounded-full transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Live Metrics Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-white/10">
-          <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3.5 border border-white/10">
-            <span className="text-xs text-slate-300 block font-medium">Total Pruebas Catálogo</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-bold text-white">{stats.total}</span>
-              <span className="text-xs text-teal-300 font-semibold">161 de fábrica</span>
-            </div>
+        {/* Cifras en una sola línea */}
+        <dl className="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+          <div className="flex items-baseline gap-1.5">
+            <dt className="text-mint-wash/80">Pruebas</dt>
+            <dd className="text-base font-bold text-white">{stats.total}</dd>
+            <span className="text-leaf text-[11px] font-semibold">161 de fábrica</span>
           </div>
-
-          <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3.5 border border-white/10">
-            <span className="text-xs text-slate-300 block font-medium">Categorías Clínicas</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-bold text-white">{CATALOG_CATEGORIES_META.length}</span>
-              <span className="text-xs text-cyan-300 font-semibold">Especializadas</span>
-            </div>
+          <div className="flex items-baseline gap-1.5">
+            <dt className="text-mint-wash/80">Categorías</dt>
+            <dd className="text-base font-bold text-white">{CATALOG_CATEGORIES_META.length}</dd>
           </div>
-
-          <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3.5 border border-white/10">
-            <span className="text-xs text-slate-300 block font-medium">Perfiles Diseñados</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-bold text-white">{stats.profilesCount}</span>
-              <span className="text-xs text-indigo-300 font-semibold">Personalizados</span>
-            </div>
+          <div className="flex items-baseline gap-1.5">
+            <dt className="text-mint-wash/80">Perfiles</dt>
+            <dd className="text-base font-bold text-white">{stats.profilesCount}</dd>
           </div>
-
-          <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3.5 border border-white/10">
-            <span className="text-xs text-slate-300 block font-medium">Con Tarifa Individual</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-bold text-white">{stats.pricedCount}</span>
-              <span className="text-xs text-emerald-300 font-semibold">{stats.includedCount} en batería</span>
-            </div>
+          <div className="flex items-baseline gap-1.5">
+            <dt className="text-mint-wash/80">Con tarifa</dt>
+            <dd className="text-base font-bold text-white">{stats.pricedCount}</dd>
+            <span className="text-leaf text-[11px] font-semibold">{stats.includedCount} en batería</span>
           </div>
-        </div>
+        </dl>
       </div>
 
       {/* Main Tab Navigation */}
