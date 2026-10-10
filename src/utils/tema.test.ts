@@ -139,12 +139,13 @@ describe('estilo del sistema (Bosque / Monad)', () => {
     return { clases, destino: { classList: { add: (c: string) => void clases.add(c), remove: (c: string) => void clases.delete(c) } } };
   }
 
-  it('solo acepta los estilos conocidos y ofrece Bosque y Monad', () => {
+  it('solo acepta los estilos conocidos y ofrece Bosque, Monad y Apple', () => {
     expect(esEstiloValido('bosque')).toBe(true);
     expect(esEstiloValido('monad')).toBe(true);
+    expect(esEstiloValido('apple')).toBe(true);
     expect(esEstiloValido('rojo')).toBe(false);
     expect(esEstiloValido(null)).toBe(false);
-    expect(ESTILOS.map((e) => e.id)).toEqual(['bosque', 'monad']);
+    expect(ESTILOS.map((e) => e.id)).toEqual(['bosque', 'monad', 'apple']);
   });
 
   it('activa y quita la clase estilo-monad', () => {
@@ -153,6 +154,30 @@ describe('estilo del sistema (Bosque / Monad)', () => {
     expect(clases.has('estilo-monad')).toBe(true);
     aplicarEstilo('bosque', destino);
     expect(clases.has('estilo-monad')).toBe(false);
+  });
+
+  it('solo un estilo a la vez: Apple quita Monad y viceversa', () => {
+    const { clases, destino } = crearClases();
+    aplicarEstilo('monad', destino);
+    aplicarEstilo('apple', destino);
+    expect(clases.has('estilo-apple')).toBe(true);
+    expect(clases.has('estilo-monad')).toBe(false);
+    aplicarEstilo('monad', destino);
+    expect(clases.has('estilo-apple')).toBe(false);
+    expect(clases.has('estilo-monad')).toBe(true);
+    aplicarEstilo('bosque', destino);
+    expect(clases.size).toBe(0);
+  });
+
+  it('con Apple tampoco se pintan las variables de la paleta', () => {
+    const { clases, destino } = crearClases();
+    const valores = new Map<string, string>();
+    const raiz = { classList: destino.classList, style: { setProperty: (n: string, v: string) => void valores.set(n, v), removeProperty: (n: string) => void valores.delete(n) } };
+    vi.stubGlobal('document', { documentElement: raiz });
+    aplicarDiseno(PALETAS[1].colores, 'apple');
+    expect(clases.has('estilo-apple')).toBe(true);
+    expect(valores.size).toBe(0);
+    vi.unstubAllGlobals();
   });
 
   it('con Monad no se pintan las variables de la paleta; con Bosque sí', () => {
