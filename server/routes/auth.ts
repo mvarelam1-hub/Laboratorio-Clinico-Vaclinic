@@ -34,7 +34,7 @@ import { encryptSecret, decryptSecret } from '../crypto-aes';
 import { registrarBitacora } from '../bitacora';
 import { segundosDeBloqueo, registrarFallo, limpiarFallos, mensajeBloqueo } from '../loginLimiter';
 import { generarTokenRecuperacion, hashToken, esCorreoEntregable, validarNuevaContrasena, MINUTOS_RECUPERACION } from '../passwordReset';
-import { enviarCorreo, plantillaRecuperacion, urlBase } from '../mailer';
+import { enviarCorreo, plantillaRecuperacion, plantillaUsuario, urlBase } from '../mailer';
 
 /**
  * Registra el inicio de sesión exitoso en la bitácora REAL
@@ -282,6 +282,53 @@ authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
     }
   }
   return res.json({ ok: true, mensaje: MENSAJE_RECUPERACION });
+}));
+
+/**
+ * POST /api/auth/forgot-username
+ * "Perdí mi usuario": el usuario de VACLINIC es el correo registrado de la
+ * cuenta. La persona escribe su NOMBRE COMPLETO y el sistema manda un
+ * recordatorio SOLO al correo registrado de esa cuenta (nunca se muestra
+ * en pantalla). La respuesta es siempre la misma, exista o no la cuenta.
+ * Máximo 5 solicitudes por nombre cada 15 minutos. Si dos cuentas activas
+ * tienen el mismo nombre, cada una recibe el recordatorio en su propio correo.
+ */
+const MENSAJE_USUARIO =
+  'Si el nombre corresponde a una cuenta activa con correo real, enviamos un recordatorio de tu usuario a ese correo.';
+
+authRouter.post('/forgot-username', asyncHandler(async (req, res) => {
+  const nombre = String(req.body?.nombre || '').trim().replace(/\s+/g, ' ');
+  if (nombre.length < 3) return res.status(400).json({ error: 'Escribe tu nombre completo.' });
+  if (nombre.length > 150) return res.status(400).json({ error: 'El nombre es demasiado largo.' });
+
+  const clave = `usuario:${nombre.toLowerCase()}`;
+  if (segundosDeBloqueo(clave) > 0) return res.json({ ok: true, mensaje: MENSAJE_USUARIO });
+  registrarFallo(clave);
+
+  const { rows } = await pool.query(
+    `SELECT id_usuario, nombre_completo, correo
+       FROM usuario
+      WHERE LOWER(TRIM(nombre_completo)) = LOWER($1) AND estado = TRUE`,
+    [nombre]
+  );
+  for (const cuenta of rows) {
+    if (!esCorreoEntregable(cuenta.correo)) continue;
+    const plantilla = plantillaUsuario({ nombre: cuenta.nombre_completo, usuario: cuenta.correo, enlace: urlBase() });
+    const envio = await enviarCorreo({ para: cuenta.correo, ...plantilla });
+    if (!envio.enviado) console.error('[recuperación de usuario] No se pudo enviar el correo:', envio.motivo);
+    try {
+      await registrarBitacora({
+        idUsuario: cuenta.id_usuario,
+        accion: 'Solicitud de recordatorio de usuario',
+        modulo: 'autenticacion',
+        severidad: 'info',
+        detalles: envio.enviado ? 'Recordatorio enviado al correo registrado.' : 'No se pudo enviar el correo.'
+      });
+    } catch (err) {
+      console.error('No se pudo registrar el recordatorio de usuario en la bitácora:', err);
+    }
+  }
+  return res.json({ ok: true, mensaje: MENSAJE_USUARIO });
 }));
 
 /**
