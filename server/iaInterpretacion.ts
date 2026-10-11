@@ -69,11 +69,46 @@ export function sanearEntrada(body: any): { ok: boolean; entrada?: EntradaIA; er
 
 const ESTADO_ES: Record<string, string> = { normal: 'dentro del rango', high: 'por encima del rango', low: 'por debajo del rango', critical: 'valor crítico' };
 
+export interface EspecialistaSugerido {
+  profesional: string;
+  area: string;
+}
+
+// Especialista que normalmente valora cada grupo de pruebas. Es solo una referencia
+// orientativa: el médico tratante es quien decide si refiere al paciente.
+const ESPECIALISTAS: { patron: RegExp; profesional: string; area: string }[] = [
+  { patron: /glicosilad|hba1c|a1c|glucosa|glicemia|glucemia|insulina|tsh|\bt3\b|\bt4\b|tiroid|cortisol/i, profesional: 'endocrinólogo', area: 'glucosa y hormonas' },
+  { patron: /creatinina|crea\b|urea|\bbun\b|nitr[oó]geno ureico|cistatina|filtrado glomerular|\btfg\b|microalb/i, profesional: 'nefrólogo', area: 'riñones' },
+  { patron: /\btgo\b|\btgp\b|\bast\b|\balt\b|transaminasa|bilirrubina|fosfatasa alcalina|\bggt\b|g-glutamil/i, profesional: 'gastroenterólogo', area: 'hígado' },
+  { patron: /colesterol|triglic[eé]rido|\bldl\b|\bhdl\b|troponina|ck-?mb/i, profesional: 'cardiólogo', area: 'corazón y grasas en sangre' },
+  { patron: /hemoglobina|hematocrito|leucocito|plaqueta|eritrocito|hemat[ií]es|\bvcm\b|ferritina|hierro/i, profesional: 'hematólogo', area: 'sangre' }
+];
+
+/** Especialistas orientativos solo para las pruebas fuera de rango o críticas. */
+export function especialistasSugeridos(e: EntradaIA): EspecialistaSugerido[] {
+  const vistos = new Map<string, EspecialistaSugerido>();
+  for (const p of e.parametros) {
+    if (!p.status || p.status === 'normal') continue;
+    const hallado = ESPECIALISTAS.find((x) => x.patron.test(p.name));
+    if (hallado && !vistos.has(hallado.profesional)) vistos.set(hallado.profesional, { profesional: hallado.profesional, area: hallado.area });
+  }
+  return [...vistos.values()];
+}
+
+/** Frase fija para la conclusión; no diagnostica, solo orienta hacia quién puede valorar. */
+export function fraseEspecialista(lista: EspecialistaSugerido[]): string {
+  if (lista.length === 0) return '';
+  const nombres = lista.map((x) => `${x.profesional} (${x.area})`);
+  const unidos = nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(', ')} o ${nombres[nombres.length - 1]}`;
+  return `Su médico tratante podrá referirlo con un ${unidos} para su valoración.`;
+}
+
 export function construirPrompt(e: EntradaIA): string {
   const filas = e.parametros
     .map((p) => `- ${p.name}: ${p.value} ${p.unit || ''} (referencia: ${p.referenceRange || 'no indicada'}; marcado por el laboratorio: ${ESTADO_ES[p.status || 'normal']})`)
     .join('\n');
   const hayCriticos = e.parametros.some((p) => p.status === 'critical');
+  const especialistas = especialistasSugeridos(e);
   const hayFuera = hayCriticos || e.parametros.some((p) => p.status === 'high' || p.status === 'low');
   const instruccionConclusion = hayCriticos
     ? 'IMPORTANTE: hay valores críticos. La conclusión DEBE decir con claridad y sin alarmar que es importante que consulte a su médico tratante lo antes posible, y que su médico podrá referirlo con el especialista si lo considera necesario.'
@@ -85,7 +120,7 @@ export function construirPrompt(e: EntradaIA): string {
 REGLAS ESTRICTAS (si no puedes cumplirlas, responde con resumen vacío):
 - NO diagnostiques ni menciones enfermedades probables o posibles. NO concluyas nada sobre la salud de la persona.
 - NO recomiendes medicamentos, dietas, suplementos ni tratamientos.
-- Para cualquier valor fuera de rango o crítico, di únicamente que debe comentarlo con su médico tratante (quien decide si lo refiere con un especialista). NO nombres ni recomiendes una especialidad concreta.
+- Para cualquier valor fuera de rango o crítico, di únicamente que debe comentarlo con su médico tratante (quien decide si lo refiere con un especialista). No inventes especialidades: solo menciona la que se indica abajo, si hay una.
 - Usa un tono sereno y claro, sin causar alarma. No repitas datos personales.
 - Basa todo SOLO en los datos de abajo; no inventes valores ni rangos.
 - Sé breve: cada prueba lleva MÁXIMO 2 líneas (unas 25 palabras en total). Sin rodeos ni repeticiones.
@@ -95,11 +130,12 @@ DATOS (sin identificación personal):
 - Edad: ${e.edad ?? 'no indicada'} | Sexo: ${e.genero || 'no indicado'}
 - Resultados:
 ${filas}
+- Especialista orientativo para los valores fuera de rango: ${especialistas.length ? especialistas.map((x) => `${x.profesional} (${x.area})`).join(', ') : 'ninguno'}
 
 Devuelve ÚNICAMENTE un JSON con este formato:
 {
   "valores": [ { "nombre": "nombre de la prueba", "significado": "MÁXIMO 2 líneas: qué mide y cómo se ve este valor frente a la referencia (dentro, por encima o por debajo)." } ],
-  "resumen": "Conclusión final de 1 o 2 oraciones: cuántos valores están dentro y cuántos fuera del rango de referencia. ${instruccionConclusion} No diagnostiques ni nombres enfermedades.",
+  "resumen": "Conclusión final de 1 o 2 oraciones: cuántos valores están dentro y cuántos fuera del rango de referencia. ${instruccionConclusion} ${especialistas.length ? 'Incluye que su médico tratante podrá referirlo con el especialista indicado (' + especialistas.map((x) => x.profesional).join(', ') + ').' : ''} No diagnostiques ni nombres enfermedades.",
   "recordatorio": "Una oración corta: este texto es solo informativo y su médico debe interpretar los resultados."
 }`;
 }
