@@ -10,7 +10,7 @@ import { requireStaffAuth } from '../auth-staff';
 import { requirePermission } from '../permissions-middleware';
 import { asyncHandler } from '../asyncHandler';
 import { registrarBitacora } from '../bitacora';
-import { sanearEntrada, construirPrompt, validarSalida, textoParaInforme } from '../iaInterpretacion';
+import { sanearEntrada, construirPrompt, validarSalida, textoParaInforme, especialistasSugeridos, fraseEspecialista } from '../iaInterpretacion';
 
 export const iaRouter = Router();
 iaRouter.use(requireStaffAuth);
@@ -60,5 +60,10 @@ iaRouter.post('/interpretacion', requirePermission('validacion_redaccion'), asyn
   }
 
   const salida = validada.salida!;
+  // Garantiza que el especialista orientativo aparezca aunque la IA lo omita.
+  const especialistas = especialistasSugeridos(entrada);
+  if (especialistas.length && !especialistas.some((x) => salida.resumen.toLowerCase().includes(x.profesional))) {
+    salida.resumen = `${salida.resumen} ${fraseEspecialista(especialistas)}`.trim();
+  }
   return res.json({ modelo, ...salida, texto: textoParaInforme(salida) });
 }));
