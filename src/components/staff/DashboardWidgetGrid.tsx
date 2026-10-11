@@ -130,6 +130,7 @@ const DEFAULT_WIDGETS: WidgetConfig[] = DEMO_MODE
   : TODOS_LOS_WIDGETS.filter((w) => !WIDGETS_SIN_DATOS_REALES.includes(w.id));
 
 const LOCAL_STORAGE_KEY = 'vaclinic_staff_dashboard_widgets_v2';
+const PANEL_ABIERTO_KEY = 'vaclinic_staff_dashboard_widgets_abierto';
 
 export const DashboardWidgetGrid: React.FC = () => {
   const { 
@@ -180,6 +181,25 @@ export const DashboardWidgetGrid: React.FC = () => {
   });
 
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+  // El panel de widgets arranca plegado para no quitarle espacio al trabajo del día (ingreso de pacientes).
+  const [panelAbierto, setPanelAbierto] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(PANEL_ABIERTO_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const alternarPanel = () => {
+    setPanelAbierto(prev => {
+      const siguiente = !prev;
+      try {
+        localStorage.setItem(PANEL_ABIERTO_KEY, siguiente ? '1' : '0');
+      } catch {
+        /* sin almacenamiento: solo vale para esta sesión */
+      }
+      return siguiente;
+    });
+  };
   const [draggedWidgetId, setDraggedWidgetId] = useState<WidgetId | null>(null);
   const [dragOverWidgetId, setDragOverWidgetId] = useState<WidgetId | null>(null);
 
@@ -915,48 +935,49 @@ export const DashboardWidgetGrid: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
 
-      {/* Widget System Admin Top Bar */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-slate-900 text-cyan-400 flex items-center justify-center font-black">
-            <Zap className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-black text-slate-900 uppercase">
-                Panel Modular de Métricas & Widgets LIS
-              </h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
-                {visibleWidgets.length} de {widgets.length} activos
-              </span>
-            </div>
-            <p className="text-xs text-slate-500">
-              Arrastra y suelta (⋮⋮) para reordenar o activa/desactiva métricas clave
-            </p>
-          </div>
-        </div>
+      {/* Barra delgada del panel de widgets (se pliega para no robar espacio) */}
+      <div className="bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={alternarPanel}
+          aria-expanded={panelAbierto}
+          className="flex items-center gap-2 min-w-0 text-left cursor-pointer"
+          title={panelAbierto ? 'Plegar el panel de métricas' : 'Desplegar el panel de métricas'}
+        >
+          <Zap className="w-4 h-4 text-cyan-500 shrink-0" />
+          <span className="text-xs font-black text-slate-900 uppercase truncate">Métricas y widgets</span>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
+            {visibleWidgets.length}/{widgets.length}
+          </span>
+          {panelAbierto ? (
+            <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+          )}
+        </button>
 
-        <div className="flex items-center gap-2">
-          {hiddenCount > 0 && (
+        <div className="flex items-center gap-1.5 shrink-0">
+          {panelAbierto && hiddenCount > 0 && (
             <button
               onClick={handleShowAll}
-              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
+              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-slate-200"
               title="Mostrar todos los widgets ocultos"
             >
-              <Eye className="w-3.5 h-3.5 text-teal-600" />
-              <span>Mostrar Ocultos ({hiddenCount})</span>
+              <Eye className="w-3 h-3 text-teal-600" />
+              <span>Ocultos ({hiddenCount})</span>
             </button>
           )}
 
           <button
             onClick={() => setIsCustomizeOpen(true)}
             id="btn-customize-widgets"
-            className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            className="px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 transition-all shadow-xs cursor-pointer"
+            title="Personalizar widgets"
           >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Personalizar Widgets</span>
+            <Sliders className="w-3 h-3" />
+            <span className="hidden sm:inline">Personalizar</span>
           </button>
         </div>
       </div>
@@ -1075,7 +1096,8 @@ export const DashboardWidgetGrid: React.FC = () => {
       )}
 
       {/* The Draggable Grid Container */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {panelAbierto && (
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {visibleWidgets.map((widget, index) => {
           const isDragging = draggedWidgetId === widget.id;
           const isDragOver = dragOverWidgetId === widget.id && !isDragging;
@@ -1096,7 +1118,7 @@ export const DashboardWidgetGrid: React.FC = () => {
               `}
             >
               {/* Card Header (Drag Handle & Controls) */}
-              <div className="p-3.5 border-b border-slate-100 flex items-center justify-between gap-2 bg-slate-50/50">
+              <div className="p-2.5 border-b border-slate-100 flex items-center justify-between gap-2 bg-slate-50/50">
                 
                 {/* Left side: Drag handle + Title */}
                 <div className="flex items-center gap-2 truncate">
@@ -1161,7 +1183,7 @@ export const DashboardWidgetGrid: React.FC = () => {
 
               {/* Card Body (Collapsible) */}
               {!widget.isCollapsed && (
-                <div className="p-4 flex-1">
+                <div className="p-3 flex-1">
                   {renderWidgetBody(widget.id)}
                 </div>
               )}
@@ -1177,9 +1199,10 @@ export const DashboardWidgetGrid: React.FC = () => {
           );
         })}
       </div>
+      )}
 
       {/* Empty State when all widgets are hidden */}
-      {visibleWidgets.length === 0 && (
+      {panelAbierto && visibleWidgets.length === 0 && (
         <div className="p-12 text-center bg-white rounded-2xl border-2 border-dashed border-slate-300 space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
             <Sliders className="w-6 h-6" />
