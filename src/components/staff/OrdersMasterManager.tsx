@@ -558,7 +558,6 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
   const handleEditResultsInEditor = (ord: LabOrder) => {
     setActiveReportToEdit(informeDeLaOrden(ord) || borradorDeLaOrden(ord));
     setStaffActiveTab('redactor');
-    showNotification(`Orden ${ord.orderNumber} abierta en el Redactor`, 'info');
   };
 
   // Action: Confirm and process bulk orders liquidation
