@@ -729,11 +729,8 @@ export const NewOrderRegistration: React.FC = () => {
       laboratoryName: currentBranch?.name ? `VACLINIC - ${currentBranch.name}` : 'VACLINIC LABORATORIO CLÍNICO',
       tubeType: modalData.tubesRequired.map(t => t.label).join(', ')
     });
-    const parameters = draftReport.parameters;
-
     setActiveReportToEdit(draftReport);
     setStaffActiveTab('redactor');
-    showNotification(`Orden ${modalData.orderNumber} abierta en el Redactor: ${parameters.length} parámetros para capturar.`, 'success');
     setCreatedOrderModal(null);
   };
 
