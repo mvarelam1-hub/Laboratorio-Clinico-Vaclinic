@@ -771,6 +771,10 @@ export const ReportEditor: React.FC = () => {
       const resultado = await publishReport(reportId);
       if (resultado === 'ok') {
         showNotification('Informe firmado y publicado. El paciente lo consulta con el código de su orden.', 'success');
+        // La orden pasa sola a «Listo»: ya no hay que cambiarle el estado a mano.
+        if (ordenDelInforme && ordenDelInforme.status !== 'Listo' && ordenDelInforme.status !== 'Entregado') {
+          await updateOrder(ordenDelInforme.id, { status: 'Listo' });
+        }
         // Ya publicado: se ofrece enviar el aviso al paciente en lugar de volver al inicio sin más.
         setAvisoPublicado({
           nombre: currentPatient?.fullName || reportData.patientName,
@@ -783,6 +787,10 @@ export const ReportEditor: React.FC = () => {
       // 'solo_local' y 'detenido' ya mostraron su propio aviso: no se afirma que el paciente lo ve.
     } else {
       showNotification(yaExiste ? 'Informe actualizado correctamente' : 'Informe guardado como borrador', 'success');
+      // Al guardar resultados la muestra ya se está procesando: la orden pasa sola a «En Proceso».
+      if (ordenDelInforme && ordenDelInforme.status === 'Pendiente') {
+        await updateOrder(ordenDelInforme.id, { status: 'En Proceso' });
+      }
     }
 
     setActiveReportToEdit(null);
