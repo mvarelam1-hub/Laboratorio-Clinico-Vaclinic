@@ -16,6 +16,7 @@ import {
   AttachedAnalyzerReport
 } from '../../types';
 import { PdfExportModal } from './PdfExportModal';
+import { WhatsAppMessageModal } from './WhatsAppMessageModal';
 import { PhysicalPrintPreviewModal } from './PhysicalPrintPreviewModal';
 import { ThermalReportPrintModal } from './ThermalReportPrintModal';
 import { PdfReportService } from '../../services/pdfReportService';
@@ -203,6 +204,13 @@ export const ReportEditor: React.FC = () => {
   const [showPdfExportModal, setShowPdfExportModal] = useState<boolean>(false);
   const [showPhysicalPrintPreview, setShowPhysicalPrintPreview] = useState<boolean>(false);
   const [showThermalPrintModal, setShowThermalPrintModal] = useState<boolean>(false);
+  // Datos para ofrecer el aviso por WhatsApp apenas el informe queda firmado y publicado.
+  const [avisoPublicado, setAvisoPublicado] = useState<{ nombre: string; telefono: string; codigoPaciente: string; codigoConsulta: string } | null>(null);
+  const cerrarAvisoPublicado = () => {
+    setAvisoPublicado(null);
+    setActiveReportToEdit(null);
+    setStaffActiveTab('dashboard');
+  };
   const [showTubeGuideModal, setShowTubeGuideModal] = useState<boolean>(false);
   const [showAtlasModal, setShowAtlasModal] = useState<boolean>(false);
 
@@ -759,6 +767,14 @@ export const ReportEditor: React.FC = () => {
       const resultado = await publishReport(reportId);
       if (resultado === 'ok') {
         showNotification('Informe firmado y publicado. El paciente lo consulta con el código de su orden.', 'success');
+        // Ya publicado: se ofrece enviar el aviso al paciente en lugar de volver al inicio sin más.
+        setAvisoPublicado({
+          nombre: currentPatient?.fullName || reportData.patientName,
+          telefono: currentPatient?.phone || '',
+          codigoPaciente: currentPatient?.patientCode || '',
+          codigoConsulta: ordenDelInforme?.codigoConsulta || ''
+        });
+        return;
       }
       // 'solo_local' y 'detenido' ya mostraron su propio aviso: no se afirma que el paciente lo ve.
     } else {
@@ -2657,6 +2673,18 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
       />
 
       {/* Laboratory Thermal Print Modal */}
+      {avisoPublicado && (
+        <WhatsAppMessageModal
+          isOpen
+          onClose={cerrarAvisoPublicado}
+          patientName={avisoPublicado.nombre}
+          patientPhone={avisoPublicado.telefono}
+          patientCode={avisoPublicado.codigoPaciente}
+          accessCode={avisoPublicado.codigoConsulta}
+          type="aviso_resultados"
+        />
+      )}
+
       <ThermalReportPrintModal
         isOpen={showThermalPrintModal}
         onClose={() => setShowThermalPrintModal(false)}
