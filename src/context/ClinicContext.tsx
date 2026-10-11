@@ -665,6 +665,15 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Load Push Notifications
   const [pushNotifications, setPushNotifications] = useState<PatientPushNotification[]>(() => {
+    // En modo real no existe canal push: se descartan avisos simulados que hayan quedado guardados.
+    if (!DEMO_MODE) {
+      try {
+        localStorage.removeItem(PUSH_NOTIFICATIONS_STORAGE_KEY);
+      } catch {
+        /* sin almacenamiento */
+      }
+      return [];
+    }
     try {
       const saved = localStorage.getItem(PUSH_NOTIFICATIONS_STORAGE_KEY);
       if (saved) return JSON.parse(saved);
@@ -1241,7 +1250,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [isSimulatingOffline, setIsSimulatingOffline] = useState<boolean>(() => {
     try {
-      if (typeof window !== 'undefined') {
+      if (DEMO_MODE && typeof window !== 'undefined') {
         return localStorage.getItem(SIMULATE_OFFLINE_STORAGE_KEY) === 'true';
       }
     } catch {
@@ -1727,6 +1736,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       read: false,
       deliveredViaBrowser: pushPermissionStatus === 'granted'
     };
+
+    // Modo real: no hay canal push, así que no se muestra ni se guarda ningún aviso simulado.
+    if (!DEMO_MODE) return newNotif;
 
     setPushNotifications((prev) => [newNotif, ...prev]);
     setActivePushToast(newNotif);
@@ -2581,8 +2593,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       showNotification('¡Informe firmado digitalmente y publicado para el paciente!', 'success');
     }
 
-    // Automatic push notification trigger (Firebase Messaging & Web Push)
-    if (publishedRep) {
+    // Aviso push automático (Firebase/Web Push): solo en modo demo. En modo real no existe ese canal;
+    // el paciente consulta con su código y PIN.
+    if (DEMO_MODE && publishedRep) {
       const rep = publishedRep as MedicalReport;
       const targetPat = patients.find(p => p.id === rep.patientId || p.fullName.toLowerCase() === rep.patientName.toLowerCase());
       const pin = targetPat?.pinCode || targetPat?.accessCode || rep.patientNationalId?.substring(0, 6) || '123456';
