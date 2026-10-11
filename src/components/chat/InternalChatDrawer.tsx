@@ -33,6 +33,12 @@ import {
   CheckCheck
 } from 'lucide-react';
 
+/**
+ * El aviso flotante de «mensaje nuevo» ya no aparece solo: el chat se abre únicamente cuando el
+ * usuario pulsa el botón «Chat» del encabezado (que muestra la cantidad de mensajes sin leer).
+ */
+const AVISO_FLOTANTE_CHAT = false;
+
 export const InternalChatDrawer: React.FC = () => {
   const {
     role,
@@ -182,7 +188,7 @@ export const InternalChatDrawer: React.FC = () => {
       {/* FLOATING ACTION NOTIFICATION (Only active if someone wrote and unread > 0) */}
       {/* If no new messages, it stays completely hidden so it never obstructs other UI */}
       {/* ========================================================================= */}
-      {!isChatFloatingOpen && unreadChatCount > 0 && !isAlertDismissed && (
+      {AVISO_FLOTANTE_CHAT && !isChatFloatingOpen && unreadChatCount > 0 && !isAlertDismissed && (
         <div className="fixed bottom-4 right-4 z-40 animate-fade-in max-w-sm bg-slate-900 text-white rounded-2xl shadow-2xl border border-teal-500/50 p-3.5 flex items-start gap-3 backdrop-blur-md">
           <div className="relative p-2 bg-teal-600 rounded-xl flex-shrink-0 text-white shadow-md">
             <MessageSquare className="w-4 h-4" />
