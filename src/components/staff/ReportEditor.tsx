@@ -1340,8 +1340,8 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                         </span>
                       )}
                       {paramStats.critical > 0 && (
-                        <span className="bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded border border-rose-200 font-bold animate-pulse">
-                          {paramStats.critical} Crítico ⚠️
+                        <span className="bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded border border-rose-200 font-bold">
+                          {paramStats.critical} Crítico
                         </span>
                       )}
                     </div>
@@ -1514,46 +1514,6 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Visual validation alert banner if out-of-range parameters are detected */}
-                {outOfRangeParameters.length > 0 && (
-                  <div className={`rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs border ${
-                    parameters.some(p => p.status === 'critical')
-                      ? 'bg-rose-50 border-rose-300 text-rose-950'
-                      : 'bg-slate-50 border-slate-300 text-slate-900'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <AlertTriangle className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="font-bold flex items-center gap-2">
-                          <span>{outOfRangeParameters.length} resultado(s) fuera del rango de referencia</span>
-                          {parameters.filter(p => p.status === 'critical').length > 0 && (
-                            <span className="bg-rose-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full shadow-2xs">
-                              {parameters.filter(p => p.status === 'critical').length} crítico(s)
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-rose-700 mt-0.5">
-                          Los de borde negro están altos o bajos; <strong>rojo</strong> = valor crítico (pánico). Revísalos antes de guardar.
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPendingSaveTargetStatus(status);
-                        setShowCriticalConfirmModal(true);
-                      }}
-                      className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer shadow-xs flex items-center gap-1.5 shrink-0"
-                    >
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                      <span>Revisar y Confirmar Valores Críticos</span>
-                    </button>
-                  </div>
-                )}
-
                 <p className="px-3 pt-2 text-[11px] text-slate-500">
                   Navega con el teclado en cualquier tabla: <kbd className="font-mono">↑</kbd> <kbd className="font-mono">↓</kbd> cambian de fila, <kbd className="font-mono">←</kbd> <kbd className="font-mono">→</kbd> de celda y <kbd className="font-mono">Enter</kbd> baja al siguiente resultado.
                 </p>
@@ -2154,8 +2114,8 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                 <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
                   <span>{soloOrden ? 'Validación' : 'Validación Analítica del Informe'}</span>
                   {outOfRangeParameters.length > 0 ? (
-                    <span className="bg-rose-100 text-rose-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-rose-300">
-                      {outOfRangeParameters.length} fuera de rango ({parameters.filter(p => p.status === 'critical').length} crítico/s)
+                    <span className="bg-amber-50 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300">
+                      {outOfRangeParameters.length} fuera de rango
                     </span>
                   ) : parameters.every((p) => !String(p.value ?? '').trim()) ? (
                     <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-300">
