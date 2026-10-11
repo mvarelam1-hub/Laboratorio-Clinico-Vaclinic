@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useClinic } from '../../context/ClinicContext';
+import { DEMO_MODE } from '../../config/demoMode';
 import { 
   Wifi, 
   WifiOff, 
@@ -221,7 +222,8 @@ export const ConnectionStatusIndicator: React.FC = () => {
               </div>
             </div>
 
-            {/* Offline Simulation Control & Safe Storage Badge */}
+            {/* Simulación de corte de conexión: solo en modo demo */}
+            {DEMO_MODE && (
             <div className="px-6 py-3 bg-slate-800/40 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -273,6 +275,7 @@ export const ConnectionStatusIndicator: React.FC = () => {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Offline Queue Items List */}
             <div className="p-6 overflow-y-auto flex-1 space-y-4">
