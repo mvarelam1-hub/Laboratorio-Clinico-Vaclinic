@@ -74,15 +74,24 @@ export interface EspecialistaSugerido {
   area: string;
 }
 
-// Especialista que normalmente valora cada grupo de pruebas. Es solo una referencia
-// orientativa: el médico tratante es quien decide si refiere al paciente.
-const ESPECIALISTAS: { patron: RegExp; profesional: string; area: string }[] = [
-  { patron: /glicosilad|hba1c|a1c|glucosa|glicemia|glucemia|insulina|tsh|\bt3\b|\bt4\b|tiroid|cortisol/i, profesional: 'endocrinólogo', area: 'glucosa y hormonas' },
-  { patron: /creatinina|crea\b|urea|\bbun\b|nitr[oó]geno ureico|cistatina|filtrado glomerular|\btfg\b|microalb/i, profesional: 'nefrólogo', area: 'riñones' },
-  { patron: /\btgo\b|\btgp\b|\bast\b|\balt\b|transaminasa|bilirrubina|fosfatasa alcalina|\bggt\b|g-glutamil/i, profesional: 'gastroenterólogo', area: 'hígado' },
-  { patron: /colesterol|triglic[eé]rido|\bldl\b|\bhdl\b|troponina|ck-?mb/i, profesional: 'cardiólogo', area: 'corazón y grasas en sangre' },
-  { patron: /hemoglobina|hematocrito|leucocito|plaqueta|eritrocito|hemat[ií]es|\bvcm\b|ferritina|hierro/i, profesional: 'hematólogo', area: 'sangre' }
+// Especialista que normalmente valora cada grupo de pruebas (nombres del catálogo de
+// especialidades). Es solo una referencia orientativa: el médico tratante es quien decide si
+// refiere al paciente. Se omiten a propósito oncología e infecciones: nombrarlas en un texto
+// para el paciente sugeriría un diagnóstico grave.
+export const ESPECIALISTAS_POR_PRUEBA: { patron: RegExp; nombre: string; area: string }[] = [
+  { patron: /\bpsa\b|ant[ií]geno prost[aá]tico/i, nombre: 'Urólogo', area: 'sistema urinario y próstata' },
+  { patron: /glicosilad|hba1c|a1c|glucosa|glicemia|glucemia|insulina|tsh|\bt3\b|\bt4\b|tiroid|cortisol|paratiroid|\bpth\b|prolactina/i, nombre: 'Endocrinólogo', area: 'glucosa y hormonas' },
+  { patron: /creatinina|crea\b|urea|\bbun\b|nitr[oó]geno ureico|cistatina|filtrado glomerular|\btfg\b|microalb|dep[uú]raci[oó]n/i, nombre: 'Nefrólogo', area: 'riñones' },
+  { patron: /\btgo\b|\btgp\b|\bast\b|\balt\b|transaminasa|bilirrubina|fosfatasa alcalina|\bggt\b|g-glutamil/i, nombre: 'Hepatólogo', area: 'hígado' },
+  { patron: /amilasa|lipasa|calprotectina|sangre oculta|helicobacter/i, nombre: 'Gastroenterólogo', area: 'aparato digestivo' },
+  { patron: /colesterol|triglic[eé]rido|\bldl\b|\bhdl\b|troponina|ck-?mb|\bbnp\b|nt-?probnp/i, nombre: 'Cardiólogo', area: 'corazón y grasas en sangre' },
+  { patron: /factor reumatoide|\bana\b|antinucleares|anti-?ccp|[aá]cido [uú]rico|complemento c[34]/i, nombre: 'Reumatólogo', area: 'articulaciones y sistema inmunitario' },
+  { patron: /\bige\b|inmunoglobulina e/i, nombre: 'Alergólogo', area: 'alergias' },
+  { patron: /beta-?hcg|\bhcg\b|estradiol|progesterona|\bfsh\b|\blh\b/i, nombre: 'Ginecólogo', area: 'sistema reproductor femenino' },
+  { patron: /hemoglobina|hematocrito|leucocito|plaqueta|eritrocito|hemat[ií]es|\bvcm\b|ferritina|hierro|vitamina b12|folato|\btp\b|\bttp\b|\binr\b|fibrin[oó]geno/i, nombre: 'Hematólogo', area: 'sangre y coagulación' }
 ];
+
+const ESPECIALISTAS = ESPECIALISTAS_POR_PRUEBA.map((x) => ({ patron: x.patron, profesional: x.nombre.toLowerCase(), area: x.area }));
 
 /** Especialistas orientativos solo para las pruebas fuera de rango o críticas. */
 export function especialistasSugeridos(e: EntradaIA): EspecialistaSugerido[] {
