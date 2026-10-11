@@ -3651,7 +3651,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const updated = { ...o, ...updates };
 
         // Automatic Push Notification when order is ready / Listo
-        if (o.status !== 'Listo' && updates.status === 'Listo') {
+        // Aviso push de la orden lista: solo en modo demo (en modo real no existe ese canal ni se inventa un PIN).
+        if (DEMO_MODE && o.status !== 'Listo' && updates.status === 'Listo') {
           const targetPat = patients.find(p => p.fullName.toLowerCase() === o.patientName.toLowerCase() || p.nationalId === o.nationalId);
           const pin = targetPat?.pinCode || targetPat?.accessCode || o.nationalId?.substring(0, 6) || '123456';
 
