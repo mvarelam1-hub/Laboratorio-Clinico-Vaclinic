@@ -33,6 +33,7 @@ import {
   Zap
 } from 'lucide-react';
 import { playNotificationChime } from '../../../utils/audioChime';
+import { DEMO_MODE } from '../../../config/demoMode';
 
 export const ReagentsInventoryTab: React.FC = () => {
   const { 
@@ -368,7 +369,7 @@ export const ReagentsInventoryTab: React.FC = () => {
               <span>Ver Alertas en Dashboard</span>
             </button>
 
-            {reagents.length > 0 && (
+            {DEMO_MODE && reagents.length > 0 && (
               <button
                 onClick={() => simulateReagentConsumption(reagents[0].id, Math.max(1, reagents[0].currentStock - 3))}
                 className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1"
