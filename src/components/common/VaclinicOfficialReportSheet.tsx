@@ -251,14 +251,14 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
             </div>
           )}
 
-          <div className="flex-shrink-0 rounded-xl px-4 py-2.5 text-right min-w-[230px]" style={{ background: NAVY, color: '#ffffff' }}>
+          <div className="rounded-xl px-4 py-2.5 text-right min-w-0 max-w-[48%]" style={{ background: NAVY, color: '#ffffff' }}>
             <span
               className="inline-block rounded-full px-3 py-0.5 text-[8px] font-black uppercase tracking-wider"
               style={{ border: `1px solid ${MINT}`, color: MINT }}
             >
               Informe oficial de resultados
             </span>
-            <div className="mt-1.5 text-[12px] font-black leading-snug">
+            <div className="mt-1.5 text-[11px] font-black leading-snug break-words">
               N.° DE ORDEN: <span style={{ color: MINT }}>{numeroOrden || report.reportNumber}</span>
             </div>
             {codigoPaciente && (
@@ -328,7 +328,7 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
             <span className="text-[11px] font-semibold">{sinPaciente(report.referringDoctor, 'Particular')}</span>
           </Campo>
           <Campo etiqueta="Contacto / ID">
-            <span className="text-[11px] font-semibold">{sinPaciente(report.patientNationalId)}</span>
+            <span className="text-[11px] font-semibold">{sinPaciente(/^0+$/.test(report.patientNationalId || '') ? '' : report.patientNationalId)}</span>
           </Campo>
           <Campo etiqueta="Código de acceso (portal)" visible={Boolean(codigoConsulta)}>
             <span className="text-[11px] font-black font-mono">{codigoConsulta}</span>
