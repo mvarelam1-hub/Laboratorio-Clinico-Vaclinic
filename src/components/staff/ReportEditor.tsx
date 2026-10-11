@@ -932,6 +932,50 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             </div>
           </div>
 
+          {/* Guía de pasos: qué falta para que el paciente vea sus resultados */}
+          {(() => {
+            const pasoActual = parameters.length === 0 || sinResultado > 0 ? 1 : status === 'publicado' ? 3 : 2;
+            const pasos = [
+              { n: 1, titulo: 'Capturar resultados', detalle: 'Escribe el valor de cada examen' },
+              { n: 2, titulo: 'Firmar y publicar', detalle: 'Solo así el paciente lo ve en el portal' },
+              { n: 3, titulo: 'Avisar al paciente', detalle: 'Envía su código por WhatsApp' }
+            ];
+            const ayuda =
+              pasoActual === 1
+                ? sinResultado > 0
+                  ? `Faltan ${sinResultado} resultado${sinResultado === 1 ? '' : 's'}. Complétalos, o usa «Devolver orden» si ese examen todavía no está listo.`
+                  : 'Captura los resultados de los exámenes de la orden.'
+                : pasoActual === 2
+                  ? 'Resultados completos. Revísalos y pulsa «Firmar y Publicar». Un borrador o un informe «En revisión» NO lo ve el paciente.'
+                  : 'Informe publicado. Ya puedes avisarle al paciente con «Enviar al paciente».';
+            return (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3" data-testid="guia-pasos">
+                <ol className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {pasos.map((paso) => {
+                    const hecho = paso.n < pasoActual;
+                    const actual = paso.n === pasoActual;
+                    return (
+                      <li
+                        key={paso.n}
+                        aria-current={actual ? 'step' : undefined}
+                        className={`flex items-start gap-2 rounded-xl px-3 py-2 border ${actual ? 'bg-white border-teal-400' : hecho ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 opacity-70'}`}
+                      >
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${hecho ? 'bg-emerald-600 text-white' : actual ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                          {hecho ? '✓' : paso.n}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-xs font-black text-slate-900 leading-tight">{paso.titulo}</span>
+                          <span className="block text-[11px] text-slate-500 leading-tight">{paso.detalle}</span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+                <p className="mt-2 text-xs font-semibold text-slate-700">{ayuda}</p>
+              </div>
+            );
+          })()}
+
           {/* Tarjeta del paciente y la orden */}
           <div className="mt-4 rounded-2xl border border-slate-200 p-4 space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
