@@ -58,6 +58,8 @@ export interface LabSettings {
   phoneSecondary?: string;
   whatsappNumber: string;
   email: string;
+  /** Horario de atención que se imprime en el encabezado del informe. Si no existe, se usa el predeterminado. */
+  businessHours?: string;
   website: string;
   specialtiesList: string;
 
