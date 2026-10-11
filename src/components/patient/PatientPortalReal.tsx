@@ -176,7 +176,12 @@ export const ConsultaResultados: React.FC = () => {
           </div>
         ) : (
           <p className="border-t border-slate-200 pt-4 mt-1 text-sm text-slate-600">
-            Tus resultados aparecerán aquí cuando el laboratorio los publique. Si ya pasó el tiempo indicado en tu orden, comunícate con el laboratorio.
+            {!pasos.find((x) => x.clave === 'muestra')?.completado
+              ? 'El laboratorio todavía no registra la recepción de tu muestra.'
+              : !pasos.find((x) => x.clave === 'ingresados')?.completado
+                ? 'Tu muestra ya fue recibida y tus exámenes están en proceso.'
+                : 'Tus resultados ya fueron ingresados y están en revisión del laboratorio.'}{' '}
+            Aparecerán aquí cuando el laboratorio los publique. Si ya pasó el tiempo indicado en tu orden, comunícate con el laboratorio.
           </p>
         )}
       </section>
