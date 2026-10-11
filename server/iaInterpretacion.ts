@@ -73,14 +73,15 @@ export function construirPrompt(e: EntradaIA): string {
   const filas = e.parametros
     .map((p) => `- ${p.name}: ${p.value} ${p.unit || ''} (referencia: ${p.referenceRange || 'no indicada'}; marcado por el laboratorio: ${ESTADO_ES[p.status || 'normal']})`)
     .join('\n');
-  return `Eres un asistente de comunicación de un laboratorio clínico. Tu única tarea es EXPLICAR en lenguaje sencillo, en español, qué mide cada prueba y cómo se ve el resultado frente a su rango de referencia, para que el personal del laboratorio revise tu texto antes de entregarlo al paciente.
+  return `Eres un Químico Biólogo clínico (profesional de laboratorio clínico) que redacta una explicación breve para el paciente. Tu única tarea es EXPLICAR en lenguaje sencillo, en español, qué mide cada prueba y cómo se ve el resultado frente a su rango de referencia. El personal del laboratorio revisará tu texto antes de entregarlo.
 
 REGLAS ESTRICTAS (si no puedes cumplirlas, responde con resumen vacío):
 - NO diagnostiques ni menciones enfermedades probables o posibles. NO concluyas nada sobre la salud de la persona.
 - NO recomiendes medicamentos, dietas, suplementos ni tratamientos.
-- Para cualquier valor fuera de rango o crítico, di únicamente que debe comentarlo con su médico.
+- Para cualquier valor fuera de rango o crítico, di únicamente que debe comentarlo con su médico tratante.
 - Usa un tono sereno y claro, sin causar alarma. No repitas datos personales.
 - Basa todo SOLO en los datos de abajo; no inventes valores ni rangos.
+- Sé breve: cada prueba lleva MÁXIMO 2 líneas (unas 25 palabras en total). Sin rodeos ni repeticiones.
 
 DATOS (sin identificación personal):
 - Estudio: ${e.titulo || 'Estudio de laboratorio'}
@@ -90,9 +91,9 @@ ${filas}
 
 Devuelve ÚNICAMENTE un JSON con este formato:
 {
-  "resumen": "2 a 4 oraciones que expliquen en general qué se midió y cuántos valores están dentro o fuera del rango, sin concluir nada.",
-  "valores": [ { "nombre": "nombre de la prueba", "significado": "1 oración: qué mide y cómo se ve este valor frente a la referencia." } ],
-  "recordatorio": "Una oración recordando que este texto es informativo y que su médico debe interpretar los resultados."
+  "valores": [ { "nombre": "nombre de la prueba", "significado": "MÁXIMO 2 líneas: qué mide y cómo se ve este valor frente a la referencia (dentro, por encima o por debajo)." } ],
+  "resumen": "Conclusión final de 1 o 2 oraciones: cuántos valores están dentro y cuántos fuera del rango de referencia, y que los que están fuera debe comentarlos con su médico tratante. No diagnostiques.",
+  "recordatorio": "Una oración corta: este texto es solo informativo y su médico debe interpretar los resultados."
 }`;
 }
 
@@ -113,10 +114,10 @@ const PROHIBIDAS = [
 
 export function validarSalida(crudo: unknown): { ok: boolean; salida?: SalidaIA; motivo?: string } {
   const o: any = crudo;
-  const resumen = limpiar(o?.resumen, 900);
+  const resumen = limpiar(o?.resumen, 400);
   const recordatorio = limpiar(o?.recordatorio, 300);
   const valores = Array.isArray(o?.valores)
-    ? o.valores.slice(0, MAX_PARAMETROS).map((v: any) => ({ nombre: limpiar(v?.nombre, 100), significado: limpiar(v?.significado, 400) })).filter((v: any) => v.nombre && v.significado)
+    ? o.valores.slice(0, MAX_PARAMETROS).map((v: any) => ({ nombre: limpiar(v?.nombre, 100), significado: limpiar(v?.significado, 220) })).filter((v: any) => v.nombre && v.significado)
     : [];
   if (!resumen || valores.length === 0) {
     return { ok: false, motivo: 'La IA no devolvió una explicación utilizable. Intenta de nuevo.' };
@@ -137,5 +138,5 @@ export function validarSalida(crudo: unknown): { ok: boolean; salida?: SalidaIA;
 
 /** Texto plano listo para el campo "Explicación para el paciente" del informe. */
 export function textoParaInforme(s: SalidaIA): string {
-  return [s.resumen, '', ...s.valores.map((v) => `• ${v.nombre}: ${v.significado}`), '', s.recordatorio].join('\n');
+  return [...s.valores.map((v) => `• ${v.nombre}: ${v.significado}`), '', `Conclusión: ${s.resumen}`, s.recordatorio].join('\n');
 }
