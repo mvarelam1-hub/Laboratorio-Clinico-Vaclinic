@@ -103,6 +103,7 @@ export const ReportEditor: React.FC = () => {
     setActiveReportToEdit, 
     addReport, 
     updateReport, 
+    updateOrder,
     publishReport, 
     setStaffActiveTab,
     setActiveReportToPrint,
@@ -206,6 +207,9 @@ export const ReportEditor: React.FC = () => {
   const [showThermalPrintModal, setShowThermalPrintModal] = useState<boolean>(false);
   // Datos para ofrecer el aviso por WhatsApp apenas el informe queda firmado y publicado.
   const [avisoPublicado, setAvisoPublicado] = useState<{ nombre: string; telefono: string; codigoPaciente: string; codigoConsulta: string } | null>(null);
+  // Acciones del informe en el ingreso de resultados: enviar el aviso y devolver la orden.
+  const [enviarAviso, setEnviarAviso] = useState<boolean>(false);
+  const [confirmarDevolver, setConfirmarDevolver] = useState<boolean>(false);
   const cerrarAvisoPublicado = () => {
     setAvisoPublicado(null);
     setActiveReportToEdit(null);
@@ -852,6 +856,37 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
     // If all normal, proceed immediately
     await executeSave(targetStatus, parameters);
+  };
+
+  const enviarAlPaciente = () => {
+    if (!currentPatient) {
+      showNotification('Elige el paciente del informe antes de enviarlo.', 'warning');
+      return;
+    }
+    if (status !== 'publicado') {
+      showNotification('Primero firma y publica el informe; después podrás enviar el aviso al paciente.', 'warning');
+      return;
+    }
+    setEnviarAviso(true);
+  };
+
+  // Devuelve la orden a «Pendiente» cuando falta algún examen. Lo ya capturado se guarda como borrador.
+  const devolverOrden = async () => {
+    if (!ordenDelInforme) return;
+    const faltan = parameters.filter((p) => !String(p.value ?? '').trim()).map((p) => p.name || 'prueba sin nombre');
+    const hayCaptura = parameters.some((p) => String(p.value ?? '').trim());
+    setConfirmarDevolver(false);
+    if (currentPatient && hayCaptura && title.trim()) {
+      await executeSave('borrador', parameters);
+    }
+    const nota = `Devuelta a pendiente el ${new Date().toLocaleDateString('es-GT')}${faltan.length ? `: falta ${faltan.join(', ')}` : ''}`;
+    await updateOrder(ordenDelInforme.id, {
+      status: 'Pendiente',
+      notes: ordenDelInforme.notes ? `${ordenDelInforme.notes} | ${nota}` : nota
+    });
+    showNotification(`Orden ${ordenDelInforme.orderNumber} devuelta a pendiente.`, 'success');
+    setActiveReportToEdit(null);
+    setStaffActiveTab('ordenes');
   };
 
   return (
@@ -2090,6 +2125,74 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               </div>
             </div>
 
+            {soloOrden && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2" data-testid="acciones-informe">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Acciones del informe</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAiInterpretation(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl cursor-pointer"
+                    title="Genera una explicación sencilla con IA (no diagnostica) y la agrega al informe cuando tú la apruebas"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{incluirExplicacion && patientExplanation.trim() ? 'Interpretación IA agregada ✓' : 'Agregar interpretación IA'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPhysicalPrintPreview(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-300 rounded-xl cursor-pointer"
+                    title="Ver cómo queda el informe"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-sky-600" />
+                    <span>Ver informe</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPhysicalPrintPreview(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl cursor-pointer"
+                    title="Abre la vista previa y desde ahí se imprime"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Imprimir</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={enviarAlPaciente}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-green-800 bg-green-50 hover:bg-green-100 border border-green-300 rounded-xl cursor-pointer"
+                    title="Enviar el aviso de resultados al paciente por WhatsApp (el informe debe estar publicado)"
+                  >
+                    <Send className="w-3.5 h-3.5 text-green-600" />
+                    <span>Enviar al paciente</span>
+                  </button>
+                  {ordenDelInforme && (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmarDevolver(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-rose-700 bg-white hover:bg-rose-50 border border-rose-300 rounded-xl cursor-pointer"
+                      title="Si falta algún examen, regresa la orden a pendiente"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Devolver orden (falta examen)</span>
+                    </button>
+                  )}
+                </div>
+                {confirmarDevolver && ordenDelInforme && (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs px-3 py-2 flex flex-wrap items-center justify-between gap-2" data-testid="confirmar-devolver">
+                    <span>
+                      Se devolverá la orden <strong>{ordenDelInforme.orderNumber}</strong> a pendiente
+                      {sinResultado > 0 ? <> porque falta: <strong>{parameters.filter((p) => !String(p.value ?? '').trim()).map((p) => p.name).join(', ')}</strong></> : null}.
+                      Lo que ya capturaste se guarda como borrador.
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <button type="button" onClick={devolverOrden} className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">Devolver</button>
+                      <button type="button" onClick={() => setConfirmarDevolver(false)} className="px-3 py-1 rounded-lg bg-white border border-amber-300 font-semibold cursor-pointer">Cancelar</button>
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2">
               {outOfRangeParameters.length > 0 && (
                 <button
@@ -2673,6 +2776,18 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
       />
 
       {/* Laboratory Thermal Print Modal */}
+      {enviarAviso && (
+        <WhatsAppMessageModal
+          isOpen
+          onClose={() => setEnviarAviso(false)}
+          patientName={currentPatient?.fullName || ''}
+          patientPhone={currentPatient?.phone || ''}
+          patientCode={currentPatient?.patientCode || ''}
+          accessCode={ordenDelInforme?.codigoConsulta || ''}
+          type="aviso_resultados"
+        />
+      )}
+
       {avisoPublicado && (
         <WhatsAppMessageModal
           isOpen
