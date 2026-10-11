@@ -76,10 +76,11 @@ export interface EspecialistaSugerido {
 
 // Especialista que normalmente valora cada grupo de pruebas (nombres del catálogo de
 // especialidades). Es solo una referencia orientativa: el médico tratante es quien decide si
-// refiere al paciente. Se omiten a propósito oncología e infecciones: nombrarlas en un texto
-// para el paciente sugeriría un diagnóstico grave.
+// refiere al paciente.
 export const ESPECIALISTAS_POR_PRUEBA: { patron: RegExp; nombre: string; area: string }[] = [
   { patron: /\bpsa\b|ant[ií]geno prost[aá]tico/i, nombre: 'Urólogo', area: 'sistema urinario y próstata' },
+  { patron: /\bcea\b|\bca[ -]?125\b|\bca[ -]?19[ -]?9\b|\bca[ -]?15[ -]?3\b|alfa-?fetoprote[ií]na|\bafp\b|marcador(?:es)? tumoral/i, nombre: 'Oncólogo', area: 'marcadores tumorales' },
+  { patron: /\bvih\b|\bhiv\b|vdrl|\brpr\b|hbsag|ant[ií]geno de superficie|anti-?hcv|hepatitis|dengue|covid|sars-?cov/i, nombre: 'Infectólogo', area: 'enfermedades infecciosas' },
   { patron: /glicosilad|hba1c|a1c|glucosa|glicemia|glucemia|insulina|tsh|\bt3\b|\bt4\b|tiroid|cortisol|paratiroid|\bpth\b|prolactina/i, nombre: 'Endocrinólogo', area: 'glucosa y hormonas' },
   { patron: /creatinina|crea\b|urea|\bbun\b|nitr[oó]geno ureico|cistatina|filtrado glomerular|\btfg\b|microalb|dep[uú]raci[oó]n/i, nombre: 'Nefrólogo', area: 'riñones' },
   { patron: /\btgo\b|\btgp\b|\bast\b|\balt\b|transaminasa|bilirrubina|fosfatasa alcalina|\bggt\b|g-glutamil/i, nombre: 'Hepatólogo', area: 'hígado' },
