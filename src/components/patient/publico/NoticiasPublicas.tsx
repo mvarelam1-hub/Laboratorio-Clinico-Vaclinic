@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { ContenidoPublico, ContenidoPublicoRespuesta } from '../../../services/publicoApiService';
 import { TituloSeccion, fechaLarga } from './comunes';
+import { NoticiasExternas } from './NoticiasExternas';
 
 const Tarjeta: React.FC<{ c: ContenidoPublico; promo?: boolean }> = ({ c, promo }) => {
   const [abierta, setAbierta] = useState(false);
@@ -41,7 +42,9 @@ export const NoticiasPublicas: React.FC<{ contenido: ContenidoPublicoRespuesta }
     <div id="titulo-noticias"><TituloSeccion titulo="Noticias y Salud" subtitulo="Consejos de salud y novedades del laboratorio." /></div>
     <ListaContenido items={contenido.noticias} vacio="Aún no hay noticias publicadas. Vuelve pronto." />
 
-    <h2 className="text-xl font-extrabold text-slate-900 mt-8 mb-3">Promociones vigentes</h2>
+    <NoticiasExternas />
+
+<h2 className="text-xl font-extrabold text-slate-900 mt-8 mb-3">Promociones vigentes</h2>
     <ListaContenido items={contenido.promociones} promo vacio="Por ahora no hay promociones vigentes. Consulta en recepción." />
   </section>
 );
