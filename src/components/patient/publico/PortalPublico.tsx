@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   obtenerCatalogoPublico, obtenerContenidoPublico, obtenerLaboratorioPublico,
   CatalogoPublico as Catalogo, ContenidoPublicoRespuesta, LaboratorioPublico
@@ -9,6 +9,7 @@ import { GuiaPreparacionPublica } from './GuiaPreparacionPublica';
 import { PanelesPublicos } from './PanelesPublicos';
 import { NoticiasPublicas, ListaContenido } from './NoticiasPublicas';
 import { NosotrosPublico } from './NosotrosPublico';
+import { FondoMargenes } from './FondoAnimado';
 import { EstadoCarga, TarjetaContacto, TituloSeccion } from './comunes';
 import { categoriasConConteo, completarConFabrica } from '../../../utils/catalogoPublico';
 import { contactoFinal } from '../../../data/contactoLaboratorio';
@@ -60,6 +61,7 @@ export const PortalPublico: React.FC = () => {
 
   const ir = (v: VistaPortal) => { window.location.hash = `/${v}`; window.scrollTo({ top: 0 }); };
 
+  const raiz = useRef<HTMLDivElement>(null);
   const lab = useCarga<LaboratorioPublico>(obtenerLaboratorioPublico);
   const cat = useCarga<Catalogo>(obtenerCatalogoPublico);
   const con = useCarga<ContenidoPublicoRespuesta>(obtenerContenidoPublico);
@@ -68,8 +70,9 @@ export const PortalPublico: React.FC = () => {
   const nombreLab = contacto.nombre || 'Laboratorio Clínico';
 
   return (
-    <div className="tema-vaclinic max-w-6xl mx-auto">
-      <header className="pt-2 pb-3">
+    <div ref={raiz} className="tema-vaclinic max-w-6xl mx-auto">
+      <FondoMargenes referencia={raiz} />
+      <header className="relative z-10 pt-2 pb-3">
         <p className="text-xs font-semibold text-graphite">Portal del Paciente</p>
         <p className="text-xl font-semibold text-canopy tracking-tight">{nombreLab}</p>
       </header>
@@ -89,7 +92,7 @@ export const PortalPublico: React.FC = () => {
         </ul>
       </nav>
 
-      <div className="pb-10">
+      <div className="relative z-10 pb-10">
         {vista === 'inicio' && (
           <Inicio lab={contacto} catalogo={cat.datos} contenido={con.datos} ir={ir}
             verCategoria={(c) => { setCategoria(c); ir('catalogo'); }} />
