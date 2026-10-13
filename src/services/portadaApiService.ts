@@ -8,7 +8,7 @@
  */
 import { getStaffSessionToken } from './staffSessionToken';
 
-export type ClavePortada = 'logo' | 'fondo' | 'fondo_pagina' | 'escudo' | 'area_hematologia' | 'area_parasitos' | 'area_cristales' | 'area_quimica';
+export type ClavePortada = 'logo' | 'fondo' | 'fondo_pagina' | 'escudo' | 'area_hematologia' | 'area_parasitos' | 'area_cristales' | 'area_quimica' | 'nosotros_vision' | 'nosotros_mision' | 'nosotros_servicios' | 'equipo_1' | 'equipo_2' | 'equipo_3' | 'equipo_4';
 export type MapaPortada = Record<string, { version: number }>;
 
 export interface PosicionPortada {
@@ -27,7 +27,14 @@ export const POSICIONES_PORTADA: PosicionPortada[] = [
   { clave: 'area_hematologia', etiqueta: 'Ícono de Hematología', ayuda: 'Imagen cuadrada (por ejemplo, células de la sangre). Se muestra en un círculo.', maxLado: 300 },
   { clave: 'area_parasitos', etiqueta: 'Ícono de Parásitos', ayuda: 'Imagen cuadrada. Se muestra en un círculo.', maxLado: 300 },
   { clave: 'area_cristales', etiqueta: 'Ícono de Cristales', ayuda: 'Imagen cuadrada. Se muestra en un círculo.', maxLado: 300 },
-  { clave: 'area_quimica', etiqueta: 'Ícono de Química sanguínea', ayuda: 'Imagen cuadrada (por ejemplo, tubos de ensayo). Se muestra en un círculo.', maxLado: 300 }
+  { clave: 'area_quimica', etiqueta: 'Ícono de Química sanguínea', ayuda: 'Imagen cuadrada (por ejemplo, tubos de ensayo). Se muestra en un círculo.', maxLado: 300 },
+  { clave: 'nosotros_vision', etiqueta: 'Nosotros: foto de Visión', ayuda: 'Foto horizontal para la página Nosotros del portal del paciente. Si no pones una, se muestra un dibujo.', maxLado: 1200 },
+  { clave: 'nosotros_mision', etiqueta: 'Nosotros: foto de Misión', ayuda: 'Foto horizontal para la página Nosotros del portal del paciente. Si no pones una, se muestra un dibujo.', maxLado: 1200 },
+  { clave: 'nosotros_servicios', etiqueta: 'Nosotros: fondo de la invitación final', ayuda: 'Imagen horizontal que va tenue detrás de la invitación del final de la página Nosotros. Si no pones una, solo se ve el color.', maxLado: 1600 },
+  { clave: 'equipo_1', etiqueta: 'Nosotros: foto del integrante 1', ayuda: 'Foto cuadrada de la persona 1 del equipo (la que escribas en el editor de Nosotros). Si no pones una, se muestran sus iniciales.', maxLado: 600 },
+  { clave: 'equipo_2', etiqueta: 'Nosotros: foto del integrante 2', ayuda: 'Foto cuadrada de la persona 2 del equipo (la que escribas en el editor de Nosotros). Si no pones una, se muestran sus iniciales.', maxLado: 600 },
+  { clave: 'equipo_3', etiqueta: 'Nosotros: foto del integrante 3', ayuda: 'Foto cuadrada de la persona 3 del equipo (la que escribas en el editor de Nosotros). Si no pones una, se muestran sus iniciales.', maxLado: 600 },
+  { clave: 'equipo_4', etiqueta: 'Nosotros: foto del integrante 4', ayuda: 'Foto cuadrada de la persona 4 del equipo (la que escribas en el editor de Nosotros). Si no pones una, se muestran sus iniciales.', maxLado: 600 }
 ];
 
 export const MAX_BYTES_IMAGEN = 1.5 * 1024 * 1024;
