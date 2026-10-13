@@ -11,6 +11,7 @@
 import { Router } from 'express';
 import { pool } from '../db';
 import { asyncHandler } from '../asyncHandler';
+import { obtenerNoticiasExternas } from '../noticiasExternas';
 
 export const publicoRouter = Router();
 
@@ -126,4 +127,15 @@ publicoRouter.get('/contenido', asyncHandler(async (_req, res) => {
     noticias: rows.filter((r: any) => r.tipo === 'noticia').map(mapear),
     promociones: rows.filter((r: any) => r.tipo === 'promocion').map(mapear),
   });
+}));
+
+/**
+ * Titulares de salud de una fuente externa (LabMedica en Español). Se leen del
+ * feed público de la fuente y se renuevan solos cada 30 minutos; ver
+ * server/noticiasExternas.ts. Si la fuente no responde, devuelve lo último
+ * guardado o una lista vacía (nunca un error).
+ */
+publicoRouter.get('/noticias-externas', asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=600');
+  return res.json(await obtenerNoticiasExternas());
 }));
