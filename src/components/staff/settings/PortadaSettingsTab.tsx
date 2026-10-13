@@ -11,6 +11,7 @@ import {
   type MapaPortada
 } from '../../../services/portadaApiService';
 import { PortadaLogin } from '../PortadaLogin';
+import { NosotrosEditor } from './NosotrosEditor';
 
 /**
  * Ajustes → "8. Portada del acceso": el laboratorio elige las imágenes que
@@ -143,6 +144,8 @@ export const PortadaSettingsTab: React.FC = () => {
             );
           })}
         </ul>
+
+        <NosotrosEditor />
       </div>
 
       <div className="xl:col-span-5">
