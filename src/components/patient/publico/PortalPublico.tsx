@@ -17,7 +17,7 @@ import { PortadaLogin, ImagenPortada, usePortadaImagenes } from '../../staff/Por
 
 const AtlasPublico = lazy(() => import('./AtlasPublico'));
 
-export type VistaPortal = 'inicio' | 'resultados' | 'catalogo' | 'preparacion' | 'paneles' | 'atlas' | 'noticias' | 'nosotros' | 'contacto';
+export type VistaPortal = 'inicio' | 'resultados' | 'catalogo' | 'preparacion' | 'paneles' | 'atlas' | 'noticias' | 'contacto';
 
 const MENU: { id: VistaPortal; etiqueta: string }[] = [
   { id: 'inicio', etiqueta: 'Inicio' },
@@ -27,7 +27,6 @@ const MENU: { id: VistaPortal; etiqueta: string }[] = [
   { id: 'paneles', etiqueta: 'Paneles Preventivos' },
   { id: 'atlas', etiqueta: 'Atlas Microscópico' },
   { id: 'noticias', etiqueta: 'Noticias y Salud' },
-  { id: 'nosotros', etiqueta: 'Nosotros' },
   { id: 'contacto', etiqueta: 'Contacto' },
 ];
 
@@ -120,7 +119,6 @@ export const PortalPublico: React.FC = () => {
             {con.datos && <NoticiasPublicas contenido={con.datos} />}
           </EstadoCarga>
         )}
-        {vista === 'nosotros' && <NosotrosPublico nombreLab={nombreLab} ir={ir} />}
         {vista === 'contacto' && (
           <section aria-labelledby="titulo-contacto">
             <div id="titulo-contacto"><TituloSeccion titulo="Contacto" subtitulo={`Escríbenos o visítanos en ${nombreLab}.`} /></div>
@@ -218,6 +216,8 @@ const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCatego
           </ul>
         </section>
       )}
+
+      <NosotrosPublico />
 
       {noticias.length > 0 && (
         <section aria-labelledby="noticias-inicio">
