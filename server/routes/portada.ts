@@ -22,8 +22,9 @@ import { requireStaffAuth } from '../auth-staff';
 import { requirePermission } from '../permissions-middleware';
 import { asyncHandler } from '../asyncHandler';
 import { registrarBitacora } from '../bitacora';
+import { combinarNosotros, normalizarNosotros, type Nosotros } from '../nosotros';
 
-export const CLAVES_PORTADA = ['logo', 'fondo', 'fondo_pagina', 'escudo', 'area_hematologia', 'area_parasitos', 'area_cristales', 'area_quimica'] as const;
+export const CLAVES_PORTADA = ['logo', 'fondo', 'fondo_pagina', 'escudo', 'area_hematologia', 'area_parasitos', 'area_cristales', 'area_quimica', 'nosotros_vision', 'nosotros_mision', 'nosotros_servicios', 'equipo_1', 'equipo_2', 'equipo_3', 'equipo_4'] as const;
 export type ClavePortada = (typeof CLAVES_PORTADA)[number];
 export const MAX_BYTES_PORTADA = 1.5 * 1024 * 1024;
 
@@ -47,7 +48,14 @@ const NOMBRES: Record<ClavePortada, string> = {
   area_hematologia: 'ícono de Hematología',
   area_parasitos: 'ícono de Parásitos',
   area_cristales: 'ícono de Cristales',
-  area_quimica: 'ícono de Química sanguínea'
+  area_quimica: 'ícono de Química sanguínea',
+  nosotros_vision: 'foto de Visión (Nosotros)',
+  nosotros_mision: 'foto de Misión (Nosotros)',
+  nosotros_servicios: 'fondo de la invitación final (Nosotros)',
+  equipo_1: 'foto del integrante 1 del equipo',
+  equipo_2: 'foto del integrante 2 del equipo',
+  equipo_3: 'foto del integrante 3 del equipo',
+  equipo_4: 'foto del integrante 4 del equipo'
 };
 
 // ---------------------------------------------------------------- público
@@ -135,4 +143,44 @@ portadaAdminRouter.delete('/imagen/:clave', asyncHandler(async (req, res) => {
     }
   }
   return res.json({ ok: true });
+}));
+
+// ---------------------------------------------------------------- Nosotros
+/** Textos de la pestaña "Nosotros" del portal: lo guardado mezclado con los textos por defecto. */
+async function leerNosotros(): Promise<Nosotros> {
+  const { rows } = await pool.query('SELECT datos FROM nosotros_contenido WHERE id = 1');
+  return combinarNosotros(rows[0]?.datos);
+}
+
+portadaPublicaRouter.get('/nosotros', asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.json(await leerNosotros());
+}));
+
+portadaAdminRouter.get('/nosotros', asyncHandler(async (_req, res) => {
+  res.json(await leerNosotros());
+}));
+
+portadaAdminRouter.put('/nosotros', asyncHandler(async (req, res) => {
+  const r = normalizarNosotros(req.body);
+  if ('error' in r) return res.status(400).json({ error: r.error });
+  await pool.query(
+    `INSERT INTO nosotros_contenido (id, datos, actualizado_en, id_usuario)
+     VALUES (1, $1::jsonb, NOW(), $2)
+     ON CONFLICT (id) DO UPDATE
+       SET datos = EXCLUDED.datos, actualizado_en = NOW(), id_usuario = EXCLUDED.id_usuario`,
+    [JSON.stringify(r.datos), req.staffUser!.idUsuario]
+  );
+  try {
+    await registrarBitacora({
+      idUsuario: req.staffUser!.idUsuario,
+      accion: 'Portal del paciente: se actualizó la página "Nosotros"',
+      modulo: 'catalogo',
+      severidad: 'info',
+      detalles: 'Presentación, visión, misión, valores y equipo.'
+    });
+  } catch (err) {
+    console.error('No se pudo registrar el cambio de Nosotros en la bitácora:', err);
+  }
+  return res.json({ ok: true, datos: r.datos });
 }));
