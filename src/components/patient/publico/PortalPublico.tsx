@@ -10,14 +10,14 @@ import { PanelesPublicos } from './PanelesPublicos';
 import { NoticiasPublicas, ListaContenido } from './NoticiasPublicas';
 import { NosotrosPublico } from './NosotrosPublico';
 import { FondoMargenes } from './FondoAnimado';
-import { EstadoCarga, TarjetaContacto, TituloSeccion } from './comunes';
+import { EstadoCarga, TarjetaContacto } from './comunes';
 import { categoriasConConteo, completarConFabrica } from '../../../utils/catalogoPublico';
 import { contactoFinal } from '../../../data/contactoLaboratorio';
 import { PortadaLogin, ImagenPortada, usePortadaImagenes } from '../../staff/PortadaLogin';
 
 const AtlasPublico = lazy(() => import('./AtlasPublico'));
 
-export type VistaPortal = 'inicio' | 'resultados' | 'catalogo' | 'preparacion' | 'paneles' | 'atlas' | 'noticias' | 'contacto';
+export type VistaPortal = 'inicio' | 'resultados' | 'catalogo' | 'preparacion' | 'paneles' | 'atlas' | 'noticias';
 
 const MENU: { id: VistaPortal; etiqueta: string }[] = [
   { id: 'inicio', etiqueta: 'Inicio' },
@@ -27,7 +27,6 @@ const MENU: { id: VistaPortal; etiqueta: string }[] = [
   { id: 'paneles', etiqueta: 'Paneles Preventivos' },
   { id: 'atlas', etiqueta: 'Atlas Microscópico' },
   { id: 'noticias', etiqueta: 'Noticias y Salud' },
-  { id: 'contacto', etiqueta: 'Contacto' },
 ];
 
 export const vistaDesdeHash = (hash: string): VistaPortal => {
@@ -118,14 +117,6 @@ export const PortalPublico: React.FC = () => {
           <EstadoCarga cargando={con.cargando} error={con.error} onReintentar={con.recargar}>
             {con.datos && <NoticiasPublicas contenido={con.datos} />}
           </EstadoCarga>
-        )}
-        {vista === 'contacto' && (
-          <section aria-labelledby="titulo-contacto">
-            <div id="titulo-contacto"><TituloSeccion titulo="Contacto" subtitulo={`Escríbenos o visítanos en ${nombreLab}.`} /></div>
-            <div className="bg-cream rounded-3xl p-6">
-                <TarjetaContacto lab={contacto} />
-              </div>
-          </section>
         )}
       </div>
     </div>
