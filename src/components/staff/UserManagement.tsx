@@ -201,7 +201,8 @@ export const UserManagement: React.FC = () => {
     auditLogs.forEach(l => {
       if (l.action) actionsSet.add(l.action);
     });
-    return Array.from(actionsSet).sort();
+    // Lista visible para el usuario: orden alfabetico en espanol (acentos y enes en su lugar).
+    return Array.from(actionsSet).sort((a, b) => a.localeCompare(b, 'es'));
   }, [auditLogs]);
 
   // Human friendly period text
