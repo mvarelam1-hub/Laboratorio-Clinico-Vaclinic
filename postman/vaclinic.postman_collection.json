@@ -46,7 +46,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -82,7 +83,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('respuesta es un arreglo', () => Array.isArray(pm.response.json()));"
+                  "pm.test('respuesta es un arreglo', () => Array.isArray(pm.response.json()));",
+                  "pm.test('esquema JSON valido (PENDIENTES)', () => pm.response.to.have.jsonSchema({\"type\": \"array\", \"items\": {\"type\": \"object\", \"required\": [\"id_orden\", \"numero_orden\", \"paciente\", \"fecha_registro\"], \"properties\": {\"id_orden\": {\"type\": \"integer\"}, \"numero_orden\": {\"type\": \"string\"}, \"paciente\": {\"type\": \"string\"}, \"fecha_registro\": {\"type\": \"string\"}}}}));"
                 ]
               }
             }
@@ -135,7 +137,8 @@
                   "    pm.expect(body.id_orden).to.be.a('number');",
                   "    pm.expect(body.numero_orden).to.be.a('string');",
                   "});",
-                  "pm.collectionVariables.set('nuevaOrdenId', body.id_orden);"
+                  "pm.collectionVariables.set('nuevaOrdenId', body.id_orden);",
+                  "pm.test('esquema JSON valido (ORDEN_CREADA)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"id_orden\", \"numero_orden\", \"codigo_consulta\", \"detalle\"], \"properties\": {\"id_orden\": {\"type\": \"integer\"}, \"numero_orden\": {\"type\": \"string\"}, \"codigo_consulta\": {\"type\": \"string\", \"minLength\": 1}, \"detalle\": {\"type\": \"array\", \"minItems\": 1}}}));"
                 ]
               }
             }
@@ -177,7 +180,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -219,7 +223,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -261,7 +266,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -308,7 +314,8 @@
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
                   "const body = pm.response.json();",
                   "pm.test('trae token', () => pm.expect(body.token).to.be.a('string'));",
-                  "pm.collectionVariables.set('portalToken', body.token);"
+                  "pm.collectionVariables.set('portalToken', body.token);",
+                  "pm.test('esquema JSON valido (LOGIN_PORTAL)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"token\", \"expiresInSeconds\"], \"properties\": {\"token\": {\"type\": \"string\", \"minLength\": 20}, \"expiresInSeconds\": {\"type\": \"integer\", \"minimum\": 1}}}));"
                 ]
               }
             }
@@ -346,7 +353,8 @@
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
                   "pm.test('0 resultados visibles (Borrador se filtra)', () => {",
                   "    pm.expect(pm.response.json().resultados).to.have.lengthOf(0);",
-                  "});"
+                  "});",
+                  "pm.test('esquema JSON valido (ORDEN_PORTAL)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"idOrden\", \"resultados\"], \"properties\": {\"idOrden\": {\"type\": \"integer\"}, \"resultados\": {\"type\": \"array\"}}}));"
                 ]
               }
             }
@@ -383,7 +391,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('estadoNuevo Validado', () => pm.expect(pm.response.json().estadoNuevo).to.eql('Validado'));"
+                  "pm.test('estadoNuevo Validado', () => pm.expect(pm.response.json().estadoNuevo).to.eql('Validado'));",
+                  "pm.test('esquema JSON valido (TRANSICION)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"ok\", \"idResultado\", \"estadoAnterior\", \"estadoNuevo\"], \"properties\": {\"ok\": {\"type\": \"boolean\", \"const\": true}, \"idResultado\": {\"type\": \"integer\"}, \"estadoAnterior\": {\"type\": \"string\"}, \"estadoNuevo\": {\"type\": \"string\"}}}));"
                 ]
               }
             }
@@ -420,7 +429,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('estadoNuevo Publicado', () => pm.expect(pm.response.json().estadoNuevo).to.eql('Publicado'));"
+                  "pm.test('estadoNuevo Publicado', () => pm.expect(pm.response.json().estadoNuevo).to.eql('Publicado'));",
+                  "pm.test('esquema JSON valido (TRANSICION)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"ok\", \"idResultado\", \"estadoAnterior\", \"estadoNuevo\"], \"properties\": {\"ok\": {\"type\": \"boolean\", \"const\": true}, \"idResultado\": {\"type\": \"integer\"}, \"estadoAnterior\": {\"type\": \"string\"}, \"estadoNuevo\": {\"type\": \"string\"}}}));"
                 ]
               }
             }
@@ -460,7 +470,8 @@
                   "pm.test('1 resultado visible con valor correcto', () => {",
                   "    pm.expect(body.resultados).to.have.lengthOf(1);",
                   "    pm.expect(body.resultados[0].valor).to.eql('150');",
-                  "});"
+                  "});",
+                  "pm.test('esquema JSON valido (ORDEN_PORTAL)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"idOrden\", \"resultados\"], \"properties\": {\"idOrden\": {\"type\": \"integer\"}, \"resultados\": {\"type\": \"array\"}}}));"
                 ]
               }
             }
@@ -499,7 +510,8 @@
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
                   "pm.test('al menos una version en el historial', () => {",
                   "    pm.expect(pm.response.json().versiones.length).to.be.above(0);",
-                  "});"
+                  "});",
+                  "pm.test('esquema JSON valido (HISTORIAL)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"idResultado\", \"versiones\"], \"properties\": {\"idResultado\": {\"type\": \"integer\"}, \"versiones\": {\"type\": \"array\"}}}));"
                 ]
               }
             }
@@ -543,7 +555,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -588,7 +601,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('estadoNuevo En correccion', () => pm.expect(pm.response.json().estadoNuevo).to.eql('En correccion'));"
+                  "pm.test('estadoNuevo En correccion', () => pm.expect(pm.response.json().estadoNuevo).to.eql('En correccion'));",
+                  "pm.test('esquema JSON valido (TRANSICION)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"ok\", \"idResultado\", \"estadoAnterior\", \"estadoNuevo\"], \"properties\": {\"ok\": {\"type\": \"boolean\", \"const\": true}, \"idResultado\": {\"type\": \"integer\"}, \"estadoAnterior\": {\"type\": \"string\"}, \"estadoNuevo\": {\"type\": \"string\"}}}));"
                 ]
               }
             }
@@ -626,7 +640,8 @@
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
                   "pm.test('0 resultados visibles otra vez', () => {",
                   "    pm.expect(pm.response.json().resultados).to.have.lengthOf(0);",
-                  "});"
+                  "});",
+                  "pm.test('esquema JSON valido (ORDEN_PORTAL)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"idOrden\", \"resultados\"], \"properties\": {\"idOrden\": {\"type\": \"integer\"}, \"resultados\": {\"type\": \"array\"}}}));"
                 ]
               }
             }
@@ -662,7 +677,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                  "pm.test('status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -701,7 +717,8 @@
                   "pm.test('status 400', () => pm.response.to.have.status(400));",
                   "pm.test('lista acciones validas en el mensaje', () => {",
                   "    pm.expect(pm.response.json().error).to.match(/validar, publicar, corregir/);",
-                  "});"
+                  "});",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -745,7 +762,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -784,7 +802,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -823,7 +842,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -862,7 +882,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -901,7 +922,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -940,7 +962,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -979,7 +1002,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1018,7 +1042,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1057,7 +1082,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1096,7 +1122,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1135,7 +1162,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1174,7 +1202,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1213,7 +1242,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1252,7 +1282,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1291,7 +1322,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1330,7 +1362,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1369,7 +1402,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1408,7 +1442,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1447,7 +1482,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1486,7 +1522,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 429', () => pm.response.to.have.status(429));"
+                  "pm.test('status 429', () => pm.response.to.have.status(429));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1527,7 +1564,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 403', () => pm.response.to.have.status(403));"
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1563,7 +1601,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 403', () => pm.response.to.have.status(403));"
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
@@ -1598,7 +1637,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 403', () => pm.response.to.have.status(403));"
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('esquema JSON valido (ERROR)', () => pm.response.to.have.jsonSchema({\"type\": \"object\", \"required\": [\"error\"], \"properties\": {\"error\": {\"type\": \"string\", \"minLength\": 1}}}));"
                 ]
               }
             }
