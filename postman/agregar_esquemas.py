@@ -2,10 +2,14 @@
 E11 (ACS, Fase 2): agrega aserciones de ESQUEMA JSON (pm.response.to.have.jsonSchema) a las
 40 solicitudes de la coleccion, sin tocar las aserciones existentes de codigo y contenido.
 Es idempotente: si una solicitud ya tiene la prueba de esquema, no la duplica.
-Uso: python3 postman/agregar_esquemas.py postman/vaclinic.postman_collection.json
+Uso: python3 postman/agregar_esquemas.py
+Solo modifica postman/vaclinic.postman_collection.json (ruta fija junto a este script): no recibe
+rutas por linea de comandos, para no poder escribir fuera de la carpeta postman/ (Sonar S8707).
 """
 import json
-import sys
+from pathlib import Path
+
+RUTA_COLECCION = Path(__file__).resolve().parent / "vaclinic.postman_collection.json"
 
 ERROR = {"type": "object", "required": ["error"],
          "properties": {"error": {"type": "string", "minLength": 1}}}
@@ -33,7 +37,7 @@ MARCA = "esquema JSON valido"
 
 def esquema_para(nombre):
     n = nombre.lower()
-    if any(x in n for x in ["-> 401", "-> 400", "-> 403", "-> 404", "-> 429"]) or "-> 400" in n:
+    if any(x in n for x in ["-> 401", "-> 400", "-> 403", "-> 404", "-> 429"]):
         return "ERROR", ERROR
     if "pendientes-validacion con bypass" in n:
         return "PENDIENTES", PENDIENTES
@@ -50,8 +54,9 @@ def esquema_para(nombre):
     return None, None
 
 
-def main(ruta):
-    col = json.load(open(ruta, encoding="utf-8"))
+def main():
+    ruta = RUTA_COLECCION
+    col = json.loads(ruta.read_text(encoding="utf-8"))
     conteo, sin = {}, []
     for carpeta in col["item"]:
         for r in carpeta["item"]:
@@ -68,10 +73,9 @@ def main(ruta):
                 continue
             exec_.append(f"pm.test('{MARCA} ({nombre_esq})', () => pm.response.to.have.jsonSchema({json.dumps(esq)}));")
             conteo[nombre_esq] = conteo.get(nombre_esq, 0) + 1
-    json.dump(col, open(ruta, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-    open(ruta, "a", encoding="utf-8").write("\n")
+    ruta.write_text(json.dumps(col, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print("esquemas agregados:", conteo, "| sin esquema:", sin)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main()
