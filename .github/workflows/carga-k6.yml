@@ -1,0 +1,38 @@
+# VACLINIC - Fase 2 (ACS) - E14: prueba de carga contra el ambiente DESPLEGADO en la nube.
+# Se ejecuta a mano (Actions > "Carga k6 (E14)" > Run workflow) desde un runner de GitHub,
+# que tiene salida a Internet sin el bloqueo de red que impide correrla desde otros entornos.
+name: Carga k6 (E14)
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: URL base del ambiente desplegado
+        default: https://laboratorio-clinico-vaclinic.onrender.com
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  carga:
+    name: Rampa 0 a 50 VUs, sostenida 5 min
+    runs-on: ubuntu-24.04
+    env:
+      CODIGO_CONSULTA_VALIDO: ${{ secrets.CODIGO_CARGA }}
+      BASE_URL: ${{ inputs.base_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar el secreto CODIGO_CARGA
+        run: |
+          if [ -z "$CODIGO_CONSULTA_VALIDO" ]; then
+            echo "::error::Falta el secreto CODIGO_CARGA (codigo de consulta de un paciente de PRUEBA). Ver load-test/README.md"; exit 1
+          fi
+      - uses: grafana/setup-k6-action@v1
+      - name: Ejecutar k6
+        run: k6 run load-test/k6-vaclinic-e14.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-carga-e14
+          path: load-test/resultados_e14.json
