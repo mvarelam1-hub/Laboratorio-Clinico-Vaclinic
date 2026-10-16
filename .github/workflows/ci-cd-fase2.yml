@@ -31,8 +31,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
-      # tsc --noEmit hoy reporta 41 errores de tipos, todos en el frontend (src/), heredados de la
+      # --ignore-scripts: no ejecuta scripts de instalacion de dependencias de terceros (Sonar S6505).
+      - run: npm ci --ignore-scripts
+      # tsc --noEmit reporta 42 errores de tipos (medido el 15-oct-2026), todos en el frontend (src/), heredados de la
       # aplicacion bajo evaluacion. Se ejecuta y se publica, pero no bloquea: lo que bloquea es el build.
       # Se documenta como deuda tecnica en E12 y se quita continue-on-error cuando lleguen a 0.
       - name: Verificacion de tipos (tsc --noEmit) - informativa
@@ -58,7 +59,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      # --ignore-scripts: no ejecuta scripts de instalacion de dependencias de terceros (Sonar S6505).
+      - run: npm ci --ignore-scripts
       - name: Vitest con cobertura (modulos criticos de E2)
         run: npm run test:coverage
       - uses: actions/upload-artifact@v4
@@ -88,7 +90,7 @@ jobs:
           name: coverage-report
           path: coverage
       - name: SonarCloud Scan y espera del Quality Gate
-        uses: SonarSource/sonarqube-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@689fb39b34b9aa95ebc5f8f119343ddd51542402 # v4
         env:
           SONAR_HOST_URL: https://sonarcloud.io
         with:
@@ -106,7 +108,8 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          # Base desechable del runner, sin contrasena escrita en el codigo (Sonar S2068).
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: vaclinic_ci
         ports:
           - 5432:5432
@@ -116,7 +119,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/vaclinic_ci
+      DATABASE_URL: postgres://postgres@localhost:5432/vaclinic_ci
       PGSSLMODE: disable
       PORTAL_TOKEN_SECRET: clave-larga-de-prueba-para-ci-1234567890abcdef
       NODE_ENV: development
@@ -126,7 +129,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      # --ignore-scripts: no ejecuta scripts de instalacion de dependencias de terceros (Sonar S6505).
+      - run: npm ci --ignore-scripts
       - uses: actions/download-artifact@v4
         with:
           name: build-dist

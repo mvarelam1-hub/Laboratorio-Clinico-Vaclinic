@@ -28,7 +28,7 @@ jobs:
           if [ -z "$CODIGO_CONSULTA_VALIDO" ]; then
             echo "::error::Falta el secreto CODIGO_CARGA (codigo de consulta de un paciente de PRUEBA). Ver load-test/README.md"; exit 1
           fi
-      - uses: grafana/setup-k6-action@v1
+      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1
       - name: Ejecutar k6
         run: k6 run load-test/k6-vaclinic-e14.js
       - uses: actions/upload-artifact@v4
