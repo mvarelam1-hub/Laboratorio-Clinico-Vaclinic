@@ -8,7 +8,7 @@
  * - Escanear un código en recepción solo funciona con códigos YA registrados:
  *   un código desconocido no se asigna a ningún paciente.
  * - Registrar, escanear y cambiar de estado exigen el permiso
- *   `flebotomia_recoleccion`; ver el listado es para todo el personal.
+ *   `flebotomia_etiquetado`; ver el listado es para todo el personal.
  */
 import { Router } from 'express';
 import { pool } from '../db';
@@ -81,7 +81,7 @@ muestrasRouter.get('/', asyncHandler(async (req, res) => {
 }));
 
 // Registrar un tubo/recipiente de una orden.
-muestrasRouter.post('/', requirePermission('flebotomia_recoleccion'), asyncHandler(async (req, res) => {
+muestrasRouter.post('/', requirePermission('flebotomia_etiquetado'), asyncHandler(async (req, res) => {
   const { idOrden, categoria, tipoContenedor, etiquetaContenedor, examenes, flebotomista, calidad } = req.body || {};
 
   const id = Number(idOrden);
@@ -132,7 +132,7 @@ muestrasRouter.post('/', requirePermission('flebotomia_recoleccion'), asyncHandl
 
 // Escanear un código en recepción: pasa de "recolectada" a "en_proceso".
 // Declarado ANTES de '/:id' para que "escanear" no se confunda con un :id.
-muestrasRouter.post('/escanear', requirePermission('flebotomia_recoleccion'), asyncHandler(async (req, res) => {
+muestrasRouter.post('/escanear', requirePermission('flebotomia_etiquetado'), asyncHandler(async (req, res) => {
   const codigo = String(req.body?.codigo ?? '').trim().toUpperCase();
   if (!codigo) return res.status(400).json({ error: 'codigo es obligatorio.' });
 
@@ -158,7 +158,7 @@ muestrasRouter.post('/escanear', requirePermission('flebotomia_recoleccion'), as
 }));
 
 // Cambiar estado y/o calidad de una muestra.
-muestrasRouter.patch('/:id', requirePermission('flebotomia_recoleccion'), asyncHandler(async (req, res) => {
+muestrasRouter.patch('/:id', requirePermission('flebotomia_etiquetado'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'El id de la muestra no es válido.' });
 
