@@ -93,7 +93,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
         <div className="flex items-center justify-between min-h-15 py-1 gap-3 sm:gap-4">
           
           {/* Left: Mobile Menu Toggle & Logo */}
-          <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+          <div className="flex items-center gap-3 min-w-[11rem] flex-1 overflow-hidden">
             {/* Hamburger button for mobile staff navigation */}
             {role === 'personal' && (
               <button
@@ -113,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-none">
+                <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-none whitespace-nowrap">
                   VACLINIC
                 </span>
                 <span className="text-[10px] font-extrabold uppercase tracking-wider bg-mint-wash text-canopy px-2 py-0.5 rounded-full hidden xs:inline-block">
@@ -180,7 +180,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             {/* Active Branch indicator (Desktop) */}
             {role === 'personal' && (
               <div 
-                className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition-all"
+                className="hidden min-[1800px]:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition-all"
                 title={isMultiBranchEnabled ? `Sede Activa: ${currentBranch.name}` : "Operando en Modo Sede Única (Multi-sede desactivado por el momento)"}
                 onClick={() => setStaffActiveTab('ajustes')}
               >
