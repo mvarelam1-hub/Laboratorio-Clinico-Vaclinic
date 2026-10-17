@@ -18,7 +18,6 @@ import {
   SlidersHorizontal, 
   BarChart3, 
   AlertTriangle, 
-  Send, 
   Sparkles, 
   ShieldCheck, 
   Cloud, 
@@ -29,7 +28,6 @@ import {
   ChevronRight,
   MessageSquare,
   Building2,
-  Users,
   Activity,
   LayoutDashboard,
   FileSpreadsheet,
@@ -76,7 +74,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     staffActiveTab,
     setStaffActiveTab,
     episodes,
-    patients,
     orders,
     showNotification,
     unreadChatCount,
@@ -149,11 +146,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'recepcion', titulo: '1 · Recepción',
       items: [
         { tab: 'nueva_orden', etiqueta: 'Nueva orden', icono: Plus, domId: 'btn-nav-nueva-orden', atajo: 'Ctrl+N', destacado: true, titulo: 'Nueva Orden de Laboratorio (Ctrl+N)' },
-        { tab: 'pacientes', etiqueta: 'Pacientes', icono: Users, domId: 'btn-nav-pacientes', contador: patients.length, titulo: 'Directorio de Pacientes (Alt+3 • Búsqueda rápida: Ctrl+B)' },
         {
-          tab: 'ordenes', etiqueta: 'Órdenes', icono: FileText, domId: 'btn-nav-ordenes', contador: ordenesActivasCount,
-          tambien: ['episodios', 'historial_ordenes', 'ordenes_archivadas', 'papelera'],
-          titulo: 'Órdenes: activas, flujo de trabajo, historial, archivadas y papelera'
+          tab: 'ordenes', etiqueta: 'Pacientes y órdenes', icono: FileText, domId: 'btn-nav-ordenes', contador: ordenesActivasCount,
+          tambien: ['pacientes', 'episodios', 'historial_ordenes', 'ordenes_archivadas', 'papelera'],
+          titulo: 'Pacientes y órdenes: directorio, órdenes activas, flujo de trabajo, historial, archivadas y papelera (Alt+3 • Búsqueda rápida: Ctrl+B)'
         },
         { tab: 'muestras', etiqueta: 'Recepción de muestras', icono: FlaskConical, domId: 'btn-nav-muestras' }
       ]
@@ -161,13 +157,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'resultados', titulo: '2 · Resultados y entrega',
       items: [
-        { tab: 'redactor', etiqueta: 'Ingresar resultados', icono: FileEdit, domId: 'btn-nav-redactor', titulo: 'Ingresar y validar resultados de una orden' },
+        { tab: 'redactor', etiqueta: 'Resultados', icono: FileEdit, domId: 'btn-nav-redactor', tambien: ['envios'], titulo: 'Ingresar y validar resultados de una orden y entregarlos al paciente' },
         {
           tab: 'alertas', etiqueta: 'Alertas y críticos', icono: AlertTriangle, contador: totalAlertas, alerta: true,
           tambien: ['verificacion_criticos'],
           titulo: 'Alertas del laboratorio y verificación de valores críticos'
         },
-        { tab: 'envios', etiqueta: 'Entrega de resultados', icono: Send }
       ]
     },
     {
