@@ -102,8 +102,8 @@ describe('POST /api/muestras', () => {
     expect(queryMock.mock.calls[2][1][0]).toMatch(/^REC-\d{4}-000012$/);
   });
 
-  it('un rol sin el permiso de recolección recibe 403', async () => {
-    currentStaffUser = { idUsuario: 9, roleId: 'recepcionista_sin_permiso', status: 'activo', nombreCompleto: 'X' };
+  it('un rol sin el permiso de rotulado de tubos (p. ej. administrador de TI) recibe 403', async () => {
+    currentStaffUser = { idUsuario: 9, roleId: 'administrador_ti', status: 'activo', nombreCompleto: 'X' };
     const app = await buildApp();
     const res = await request(app).post('/api/muestras').send(cuerpoValido);
     expect(res.status).toBe(403);
