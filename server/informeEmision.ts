@@ -28,9 +28,12 @@ export async function emitirPdfInforme(idInforme: number, opts: OpcionesEmision)
   const { rows } = await pool.query(
     `SELECT i.*, c.nombre_laboratorio, c.nombre_legal, c.nit_ruc, c.registro_sanitario, c.acreditacion_iso,
             c.direccion AS lab_direccion, c.telefono AS lab_telefono, c.email AS lab_email,
-            c."tamaño_papel" AS lab_papel, c.color_primario, c.color_valor_critico
+            c."tamaño_papel" AS lab_papel, c.color_primario, c.color_valor_critico,
+            c.datos_adicionales AS lab_extra,
+            o.numero_orden AS numero_orden_oficial
      FROM informe_clinico i
      LEFT JOIN configuracion_laboratorio c ON c.id_laboratorio = 1
+     LEFT JOIN orden o ON o.id_orden = i.id_orden
      WHERE i.id_informe = $1 AND i.eliminado = FALSE`,
     [idInforme]
   );
@@ -72,9 +75,28 @@ export async function emitirPdfInforme(idInforme: number, opts: OpcionesEmision)
     verificado = unicos(firmantes.map((f: any) => f.verificado_por_nombre));
   }
 
+  // Firmantes configurados en Ajustes: hasta 3, en el orden Elaborado por → Visto bueno → Autorizado por.
+  const extra = (i.lab_extra && typeof i.lab_extra === 'object') ? i.lab_extra : {};
+  const ROTULOS: Record<string, { orden: number; rotulo: string }> = {
+    signer_1_prep: { orden: 1, rotulo: 'Elaborado por' },
+    signer_2_qb: { orden: 2, rotulo: 'Visto bueno' },
+    signer_3_tech: { orden: 3, rotulo: 'Autorizado por' }
+  };
+  const firmantes = (Array.isArray(extra.signers) ? extra.signers : [])
+    .filter((s: any) => s && s.enabled && typeof s.name === 'string' && s.name.trim())
+    .sort((a: any, b: any) => (ROTULOS[a.id]?.orden ?? 9) - (ROTULOS[b.id]?.orden ?? 9))
+    .slice(0, 3)
+    .map((s: any, k: number) => ({
+      rotulo: ROTULOS[s.id]?.rotulo ?? ['Elaborado por', 'Visto bueno', 'Autorizado por'][k],
+      nombre: s.name.trim(), cargo: s.roleTitle || null, especialidad: s.specialty || null,
+      colegiado: s.licenseNumber || null, imagen: typeof s.signatureImageUrl === 'string' ? s.signatureImageUrl : null
+    }));
+
   const d = i.datos_json || {};
   const pdf = await generarInformePdf({
     numero_informe: i.numero_informe,
+    // Único código visible del informe: el número de la orden.
+    numero_orden: i.numero_orden_oficial,
     titulo: i.titulo,
     estado: i.estado,
     fecha_muestra: i.fecha_muestra,
@@ -96,17 +118,18 @@ export async function emitirPdfInforme(idInforme: number, opts: OpcionesEmision)
       nombre: i.nombre_laboratorio || 'Laboratorio clínico', nombre_legal: i.nombre_legal, nit: i.nit_ruc,
       registro_sanitario: i.registro_sanitario, acreditacion: i.acreditacion_iso, direccion: i.lab_direccion,
       telefono: i.lab_telefono, email: i.lab_email, color_primario: i.color_primario,
-      color_critico: i.color_valor_critico, papel: i.lab_papel
+      color_critico: i.color_valor_critico, papel: i.lab_papel,
+      horario: typeof extra.businessHours === 'string' ? extra.businessHours : null
     },
     firmas: {
       publicado_por: i.publicado_por_nombre, colegiado: i.publicado_por_colegiado,
-      especialidad: i.publicado_por_especialidad, validado_por: validado, verificado_por: verificado
+      especialidad: i.publicado_por_especialidad, validado_por: validado, verificado_por: verificado, firmantes
     },
     sello: publicado
       ? { codigo: i.codigo_verificacion, hash: i.hash_contenido, url: construirUrlVerificacion(opts.baseUrl, i.codigo_verificacion, i.hash_contenido) }
       : undefined
   });
 
-  const nombreArchivo = `Informe-${String(i.numero_informe).replace(/[^A-Za-z0-9._-]/g, '_')}${publicado ? '' : '-BORRADOR'}.pdf`;
+  const nombreArchivo = `Informe-${String(i.numero_orden_oficial || i.numero_informe).replace(/[^A-Za-z0-9._-]/g, '_')}${publicado ? '' : '-BORRADOR'}.pdf`;
   return { ok: true, pdf, nombreArchivo, publicado, numeroInforme: i.numero_informe };
 }
