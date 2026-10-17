@@ -33,7 +33,21 @@ ordenesRouter.post('/', requirePermission('admision_crear_ordenes'), asyncHandle
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const numeroOrden = `ORD-${Date.now()}`;
+    // N.º de orden corto y legible: ORD-AAMMDD-NNN (día en hora de Guatemala + correlativo del día).
+    // El candado de transacción evita que dos órdenes simultáneas tomen el mismo correlativo
+    // (numero_orden es UNIQUE). Las órdenes antiguas (ORD-<milisegundos>) no se tocan.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['numero_orden']);
+    const { rows: diaRows } = await client.query(
+      "SELECT to_char(now() AT TIME ZONE 'America/Guatemala', 'YYMMDD') AS dia"
+    );
+    const dia: string = diaRows?.[0]?.dia ?? new Date().toISOString().slice(2, 10).replace(/-/g, '');
+    const { rows: sigRows } = await client.query(
+      `SELECT COALESCE(MAX(substring(numero_orden FROM '[0-9]+$')::int), 0) + 1 AS siguiente
+       FROM orden WHERE numero_orden LIKE $1`,
+      [`ORD-${dia}-%`]
+    );
+    const siguiente = Number(sigRows?.[0]?.siguiente) || 1;
+    const numeroOrden = `ORD-${dia}-${String(siguiente).padStart(3, '0')}`;
 
     // Se acumulan las filas de detalle_orden creadas (con su codigo_examen)
     // para devolverlas en la respuesta: el frontend las necesita para poder
