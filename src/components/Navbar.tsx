@@ -147,7 +147,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                   PIN
                 </span>
               ) : (
-                <span className="hidden xl:inline-block text-[10px] bg-teal-100 text-teal-800 font-bold px-1.5 py-0.2 rounded">
+                <span className="hidden min-[2000px]:inline-block text-[10px] bg-teal-100 text-teal-800 font-bold px-1.5 py-0.2 rounded">
                   Staff
                 </span>
               )}
@@ -165,7 +165,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
               <UserCheck className={`w-3.5 sm:w-4 h-3.5 sm:h-4 ${role === 'paciente' ? 'text-cyan-600' : 'text-slate-500'}`} />
               <span>Pacientes</span>
               {currentPatient && (
-                <span className="hidden md:inline-block text-[10px] bg-cyan-100 text-cyan-800 font-bold px-1.5 py-0.2 rounded truncate max-w-[90px]">
+                <span className="hidden min-[1600px]:inline-block text-[10px] bg-cyan-100 text-cyan-800 font-bold px-1.5 py-0.2 rounded truncate max-w-[90px]">
                   {currentPatient.fullName.split(' ')[0]}
                 </span>
               )}
@@ -180,7 +180,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             {/* Active Branch indicator (Desktop) */}
             {role === 'personal' && (
               <div 
-                className="hidden min-[1800px]:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition-all"
+                className="hidden min-[2400px]:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition-all"
                 title={isMultiBranchEnabled ? `Sede Activa: ${currentBranch.name}` : "Operando en Modo Sede Única (Multi-sede desactivado por el momento)"}
                 onClick={() => setStaffActiveTab('ajustes')}
               >
@@ -230,7 +230,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                     </span>
                   )}
                 </div>
-                <span className="hidden xl:inline text-xs font-bold">Chat</span>
+                <span className="hidden min-[2200px]:inline text-xs font-bold">Chat</span>
               </button>
             )}
 
@@ -244,7 +244,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                 title="Atajos de Teclado Globales (Ctrl+N, Ctrl+B, etc.)"
               >
                 <Keyboard className="w-4 h-4 text-teal-600" />
-                <span className="hidden 2xl:inline text-[11px] font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                <span className="hidden min-[2400px]:inline text-[11px] font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
                   Ctrl+B / N
                 </span>
               </button>
@@ -260,7 +260,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                 title="Copia de Seguridad y Respaldo de Datos (.json)"
               >
                 <Database className="w-4 h-4 text-teal-600" />
-                <span className="hidden xl:inline text-xs font-bold">Respaldo</span>
+                <span className="hidden min-[2200px]:inline text-xs font-bold">Respaldo</span>
               </button>
             )}
 
@@ -276,7 +276,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                   title="Abrir Editor de Informes Clínicos y Analizador Ozelle"
                 >
                   <PlusCircle className="w-4 h-4" />
-                  <span className="hidden lg:inline">Editor de Informes</span>
+                  <span className="hidden min-[2200px]:inline">Editor de Informes</span>
                 </button>
 
                 {/* Staff Lock / Logout Button */}
@@ -288,7 +288,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                   className="flex items-center gap-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-200 text-xs font-semibold transition-all cursor-pointer"
                 >
                   <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 hover:text-rose-600" />
-                  <span className="hidden xl:inline">Bloquear Terminal</span>
+                  <span className="hidden min-[2200px]:inline">Bloquear Terminal</span>
                 </button>
               </div>
             ) : (
