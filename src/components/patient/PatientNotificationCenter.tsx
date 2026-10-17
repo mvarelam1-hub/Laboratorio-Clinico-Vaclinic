@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
+import { DEMO_MODE } from '../../config/demoMode';
 import { 
   Bell, 
   CheckCircle2, 
@@ -218,6 +219,8 @@ export const PatientNotificationCenter: React.FC<PatientNotificationCenterProps>
             <span>Canales y Preferencias</span>
           </button>
 
+          {/* El simulador usa un teléfono y un PIN de ejemplo: solo en modo demostración. */}
+          {DEMO_MODE && (
           <button
             onClick={() => setActiveTab('simulador')}
             className={`flex items-center gap-2 pb-3 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
@@ -229,6 +232,7 @@ export const PatientNotificationCenter: React.FC<PatientNotificationCenterProps>
             <FlaskConical className="w-4 h-4" />
             <span>Simulador de Push en Vivo</span>
           </button>
+          )}
         </div>
 
         {/* Tab Content */}
@@ -571,7 +575,7 @@ export const PatientNotificationCenter: React.FC<PatientNotificationCenterProps>
             </div>
           )}
 
-          {activeTab === 'simulador' && (
+          {DEMO_MODE && activeTab === 'simulador' && (
             <div className="space-y-4">
               <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
                 <div className="flex items-center gap-2 border-b pb-2">
