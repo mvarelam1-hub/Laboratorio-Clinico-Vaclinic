@@ -1099,7 +1099,7 @@ export const PatientManager: React.FC = () => {
             <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white">Registrar Nuevo Paciente</h3>
-                <p className="text-xs text-slate-400">Se asignará automáticamente el código VAC-{String(patients.length + 1).padStart(6, '0')}</p>
+                <p className="text-xs text-slate-400">El código VAC se asigna automáticamente al guardar</p>
               </div>
               <button
                 onClick={() => setShowAddModal(false)}
