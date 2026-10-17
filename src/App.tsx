@@ -4,8 +4,7 @@ import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { StaffDashboard } from './components/staff/StaffDashboard';
 import { MultisiteManager } from './components/staff/MultisiteManager';
-import { ResultsWorkspace } from './components/staff/ResultsWorkspace';
-import { PatientManager } from './components/staff/PatientManager';
+import { ResultsHub, esPestanaResultados } from './components/staff/ResultsHub';
 import { TemplateManager } from './components/staff/TemplateManager';
 import { CatalogAndProfilesManager } from './components/staff/CatalogAndProfilesManager';
 import { SampleReception } from './components/staff/SampleReception';
@@ -29,7 +28,6 @@ import { AlertsHub, esPestanaAlertas } from './components/staff/AlertsHub';
 import { PromotionsManagerView } from './components/staff/PromotionsManagerView';
 import { LabSettingsView } from './components/staff/LabSettingsView';
 import { LabStatisticsView } from './components/staff/LabStatisticsView';
-import { LabDispatchesView } from './components/staff/LabDispatchesView';
 import { AiLabAssistantView } from './components/staff/AiLabAssistantView';
 import { AuditLogsView } from './components/staff/AuditLogsView';
 import { StaffLoginView } from './components/staff/StaffLoginView';
@@ -121,7 +119,6 @@ const MainContent: React.FC = () => {
                 {esPestanaAlertas(staffActiveTab) && <AlertsHub />}
 
                 {/* 4. Comunicación */}
-                {staffActiveTab === 'envios' && <LabDispatchesView />}
                 {DEMO_MODE && staffActiveTab === 'asistente_ia' && <AiLabAssistantView />}
                 {staffActiveTab === 'chat_interno' && <InternalChatView />}
 
@@ -133,8 +130,7 @@ const MainContent: React.FC = () => {
                 {staffActiveTab === 'muestras' && <SampleReception />}
                 {DEMO_MODE && staffActiveTab === 'analizadores' && <AnalyzerBatchEntry />}
                 {staffActiveTab === 'control_calidad' && <QualityControlQC />}
-                {staffActiveTab === 'redactor' && <ResultsWorkspace />}
-                {staffActiveTab === 'pacientes' && <PatientManager />}
+                {esPestanaResultados(staffActiveTab) && <ResultsHub />}
                 {staffActiveTab === 'usuarios' && <UserManagement />}
                 {staffActiveTab === 'plantillas' && <TemplateManager />}
                 {staffActiveTab === 'respaldos' && <BackupRestoreView />}
