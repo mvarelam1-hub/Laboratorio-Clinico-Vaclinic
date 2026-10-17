@@ -59,6 +59,35 @@ import {
 } from '../../services/validacionPaciente';
 import { construirBorradorDeOrden } from '../../utils/borradorInforme';
 
+// Edad detallada (años, meses y días) a partir de la fecha de nacimiento
+function edadDetallada(fecha: string): { anios: number; meses: number; dias: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(fecha || '');
+  if (!m) return null;
+  const hoy = new Date();
+  let anios = hoy.getFullYear() - Number(m[1]);
+  let meses = hoy.getMonth() + 1 - Number(m[2]);
+  let dias = hoy.getDate() - Number(m[3]);
+  if (dias < 0) {
+    meses -= 1;
+    dias += new Date(hoy.getFullYear(), hoy.getMonth(), 0).getDate();
+  }
+  if (meses < 0) {
+    anios -= 1;
+    meses += 12;
+  }
+  return anios < 0 ? null : { anios, meses, dias };
+}
+
+// Fecha de nacimiento aproximada a partir de años, meses y días
+function fechaDesdeEdadDetallada(anios: number, meses: number, dias: number): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - anios);
+  d.setMonth(d.getMonth() - meses);
+  d.setDate(d.getDate() - dias);
+  const dos = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}
+
 export function getStaffFriendlyCapLabel(tube: TubeDefinition): string {
   if (tube.id === 'lila') return 'Tapa Morada (EDTA)';
   if (tube.id === 'celeste') return 'Tapa Azul (Citrato)';
@@ -133,6 +162,8 @@ export const NewOrderRegistration: React.FC = () => {
   const [nationalId, setNationalId] = useState('');
   const [gender, setGender] = useState<'' | 'M' | 'F' | 'Otro'>('');
   const [age, setAge] = useState('');
+  const [ageMonths, setAgeMonths] = useState('');
+  const [ageDays, setAgeDays] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [birthDateEstimated, setBirthDateEstimated] = useState(false);
   const [phone, setPhone] = useState('');
@@ -267,6 +298,9 @@ export const NewOrderRegistration: React.FC = () => {
     setBirthDateEstimated(p.birthDateEstimated === true);
     const edad = p.birthDate ? edadDesdeFecha(p.birthDate) : null;
     setAge(edad !== null ? String(edad) : (p.age ? String(p.age) : ''));
+      const detP = edadDetallada(p.birthDate || '');
+      setAgeMonths(detP ? String(detP.meses) : '');
+      setAgeDays(detP ? String(detP.dias) : '');
     setPhone(p.phone || '');
     setEmail(p.email || '');
     setGuardianName(p.emergencyContact?.relation === 'Encargado legal' ? p.emergencyContact.name : '');
@@ -281,6 +315,8 @@ export const NewOrderRegistration: React.FC = () => {
     setNationalId('');
     setGender('');
     setAge('');
+    setAgeMonths('');
+    setAgeDays('');
     setBirthDate('');
     setBirthDateEstimated(false);
     setPhone('');
@@ -297,22 +333,40 @@ export const NewOrderRegistration: React.FC = () => {
     setBirthDateEstimated(false);
     const edad = edadDesdeFecha(val);
     setAge(edad !== null ? String(edad) : '');
+    const det = edadDetallada(val);
+    setAgeMonths(det ? String(det.meses) : '');
+    setAgeDays(det ? String(det.dias) : '');
   };
 
   // Solo se conoce la edad -> se guarda una fecha APROXIMADA y se marca como estimada
   const handleAgeChange = (val: string) => {
     const limpio = val.replace(/[^\d]/g, '').slice(0, 3);
     setAge(limpio);
-    if (limpio === '') {
+    if (limpio === '' && !ageMonths && !ageDays) {
       setBirthDate('');
       setBirthDateEstimated(false);
       return;
     }
-    const n = parseInt(limpio, 10);
+    const n = parseInt(limpio || '0', 10);
     if (n >= 0 && n <= 120) {
-      setBirthDate(fechaDesdeEdadAproximada(n));
+      setBirthDate(ageMonths || ageDays ? fechaDesdeEdadDetallada(n, parseInt(ageMonths || '0', 10), parseInt(ageDays || '0', 10)) : fechaDesdeEdadAproximada(n));
       setBirthDateEstimated(true);
     }
+  };
+
+  const handleAgeDetailChange = (campo: 'meses' | 'dias', val: string) => {
+    const limpio = val.replace(/[^\d]/g, '').slice(0, 2);
+    const meses = campo === 'meses' ? limpio : ageMonths;
+    const dias = campo === 'dias' ? limpio : ageDays;
+    if (campo === 'meses') setAgeMonths(limpio);
+    else setAgeDays(limpio);
+    if (!age && !meses && !dias) {
+      setBirthDate('');
+      setBirthDateEstimated(false);
+      return;
+    }
+    setBirthDate(fechaDesdeEdadDetallada(parseInt(age || '0', 10), parseInt(meses || '0', 10), parseInt(dias || '0', 10)));
+    setBirthDateEstimated(true);
   };
 
   const validacion = useMemo(
@@ -995,16 +1049,40 @@ export const NewOrderRegistration: React.FC = () => {
                 </div>
                 <div className="md:col-span-2">
                   <label htmlFor="input-patient-age" className="block text-xs font-semibold text-slate-700 mb-1">
-                    Edad <span className="text-slate-400 font-normal">(años)</span>
+                    Edad <span className="text-slate-400 font-normal">(años · meses · días)</span>
                   </label>
-                  <input
-                    id="input-patient-age"
-                    type="text"
-                    inputMode="numeric"
-                    value={age}
-                    onChange={(e) => handleAgeChange(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
-                  />
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <input
+                      id="input-patient-age"
+                      type="text"
+                      inputMode="numeric"
+                      value={age}
+                      onChange={(e) => handleAgeChange(e.target.value)}
+                      placeholder="Años"
+                      aria-label="Edad en años"
+                      className="w-full px-2 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                    />
+                    <input
+                      id="input-patient-age-months"
+                      type="text"
+                      inputMode="numeric"
+                      value={ageMonths}
+                      onChange={(e) => handleAgeDetailChange('meses', e.target.value)}
+                      placeholder="Meses"
+                      aria-label="Edad en meses"
+                      className="w-full px-2 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                    />
+                    <input
+                      id="input-patient-age-days"
+                      type="text"
+                      inputMode="numeric"
+                      value={ageDays}
+                      onChange={(e) => handleAgeDetailChange('dias', e.target.value)}
+                      placeholder="Días"
+                      aria-label="Edad en días"
+                      className="w-full px-2 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                    />
+                  </div>
                 </div>
 
                 {/* Contacto */}
