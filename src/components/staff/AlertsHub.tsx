@@ -1,7 +1,5 @@
 import React from 'react';
-import { useClinic, StaffTabType } from '../../context/ClinicContext';
-import { calcularAlertasReales } from '../../utils/alertasReales';
-import { HubTabs, PestanaHub } from './HubTabs';
+import { StaffTabType } from '../../context/ClinicContext';
 import { LabAlertsView } from './LabAlertsView';
 import { CriticalVerificationQueueView } from './CriticalVerificationQueueView';
 
@@ -13,24 +11,13 @@ export const esPestanaAlertas = (tab: StaffTabType): tab is PestanaAlertas =>
   (PESTANAS_ALERTAS as readonly string[]).includes(tab);
 
 /**
- * Alertas del laboratorio y verificación de valores críticos en una sola
- * pantalla (antes eran dos botones del menú que trataban de lo mismo).
+ * Una sola lista de pendientes: primero los valores críticos que esperan a un
+ * segundo bioanalista y debajo las alertas del laboratorio (críticos en
+ * informes y reactivos). Sin cambiar de pestaña.
  */
-export const AlertsHub: React.FC = () => {
-  const { staffActiveTab, setStaffActiveTab, reports, reagents } = useClinic();
-  const activa: PestanaAlertas = esPestanaAlertas(staffActiveTab) ? staffActiveTab : 'alertas';
-  const totalAlertas = calcularAlertasReales(reports, reagents).length;
-
-  const pestanas: PestanaHub<PestanaAlertas>[] = [
-    { id: 'alertas', etiqueta: 'Alertas', contador: totalAlertas, alerta: true },
-    { id: 'verificacion_criticos', etiqueta: 'Verificación de críticos' }
-  ];
-
-  return (
-    <div>
-      <HubTabs pestanas={pestanas} activa={activa} onCambiar={setStaffActiveTab} etiquetaAccesible="Alertas y valores críticos" />
-      {activa === 'alertas' && <LabAlertsView />}
-      {activa === 'verificacion_criticos' && <CriticalVerificationQueueView />}
-    </div>
-  );
-};
+export const AlertsHub: React.FC = () => (
+  <div className="space-y-8">
+    <CriticalVerificationQueueView />
+    <LabAlertsView />
+  </div>
+);
