@@ -206,7 +206,7 @@ export const ReportEditor: React.FC = () => {
   const [showPhysicalPrintPreview, setShowPhysicalPrintPreview] = useState<boolean>(false);
   const [showThermalPrintModal, setShowThermalPrintModal] = useState<boolean>(false);
   // Datos para ofrecer el aviso por WhatsApp apenas el informe queda firmado y publicado.
-  const [avisoPublicado, setAvisoPublicado] = useState<{ nombre: string; telefono: string; codigoPaciente: string; codigoConsulta: string } | null>(null);
+  const [avisoPublicado, setAvisoPublicado] = useState<{ nombre: string; telefono: string; codigoPaciente: string; codigoConsulta: string; numeroOrden: string } | null>(null);
   // Acciones del informe en el ingreso de resultados: enviar el aviso y devolver la orden.
   const [enviarAviso, setEnviarAviso] = useState<boolean>(false);
   const [confirmarDevolver, setConfirmarDevolver] = useState<boolean>(false);
@@ -780,7 +780,8 @@ export const ReportEditor: React.FC = () => {
           nombre: currentPatient?.fullName || reportData.patientName,
           telefono: currentPatient?.phone || '',
           codigoPaciente: currentPatient?.patientCode || '',
-          codigoConsulta: ordenDelInforme?.codigoConsulta || ''
+          codigoConsulta: ordenDelInforme?.codigoConsulta || '',
+          numeroOrden: ordenDelInforme?.orderNumber || ''
         });
         return;
       }
@@ -2796,6 +2797,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
           patientPhone={currentPatient?.phone || ''}
           patientCode={currentPatient?.patientCode || ''}
           accessCode={ordenDelInforme?.codigoConsulta || ''}
+          orderNumber={ordenDelInforme?.orderNumber || ''}
           type="aviso_resultados"
         />
       )}
@@ -2808,6 +2810,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
           patientPhone={avisoPublicado.telefono}
           patientCode={avisoPublicado.codigoPaciente}
           accessCode={avisoPublicado.codigoConsulta}
+          orderNumber={avisoPublicado.numeroOrden}
           type="aviso_resultados"
         />
       )}
