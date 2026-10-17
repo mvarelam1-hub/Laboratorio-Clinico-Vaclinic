@@ -1,4 +1,4 @@
-name: Respaldo diario de la base de datos (con prueba de restauración)
+name: Respaldo de la base de datos cada 6 horas (con prueba de restauración)
 
 # Respaldo automático de la base de datos real (Neon) de VACLINIC.
 # Cada corrida: (1) pg_dump + cifrado AES-256-GCM + manifiesto, y
@@ -10,7 +10,7 @@ name: Respaldo diario de la base de datos (con prueba de restauración)
 
 on:
   schedule:
-    - cron: '0 8 * * *'   # 08:00 UTC = 02:00 en Guatemala (poca actividad)
+    - cron: '0 0,6,12,18 * * *'   # cada 6 horas: 00:00, 06:00, 12:00 y 18:00 (igual en UTC y en Guatemala)
   workflow_dispatch: {}
 
 permissions:
