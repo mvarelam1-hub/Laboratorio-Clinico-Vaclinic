@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DEMO_MODE } from '../../config/demoMode';
 import { useClinic } from '../../context/ClinicContext';
 import { 
@@ -34,11 +34,22 @@ import {
   ContainerCategory 
 } from '../../utils/sampleTubeRegistry';
 import { TubeBadge } from '../common/TubeBadge';
+import {
+  actualizarMuestraRemota,
+  crearMuestraRemota,
+  escanearMuestraRemota,
+  listarMuestrasRemotas,
+  MuestraApiRow
+} from '../../services/muestrasApiService';
 
 export type LabContainerType = 'rojo' | 'lila' | 'celeste' | 'verde' | 'orina' | 'gris' | 'urocultivo' | 'heces' | 'galon_orina' | 'hisopo';
 
 interface LabSample {
   id: string;
+  /** id real en la base de datos (tabla `muestra`); vacío solo en modo demostración. */
+  remoteId?: number;
+  orderId?: number;
+  orderNumber?: string;
   barcode: string;
   patientId: string;
   patientName: string;
@@ -54,8 +65,30 @@ interface LabSample {
   rejectionReason?: string;
 }
 
+const desdeApi = (r: MuestraApiRow): LabSample => ({
+  id: `mue-${r.id_muestra}`,
+  remoteId: r.id_muestra,
+  orderId: r.id_orden,
+  orderNumber: r.numero_orden,
+  barcode: r.codigo_barras,
+  patientId: String(r.id_paciente),
+  patientName: r.paciente_nombre,
+  nationalId: r.paciente_dni || '—',
+  containerCategory: r.categoria,
+  tubeType: r.tipo_contenedor as LabContainerType,
+  tubeLabel: r.etiqueta_contenedor,
+  requestedTests: r.examenes || [],
+  phlebotomist: r.flebotomista || '',
+  collectedAt: r.fecha_recoleccion,
+  status: r.estado,
+  sampleQuality: r.calidad,
+  rejectionReason: r.motivo_rechazo || undefined
+});
+
 export const SampleReception: React.FC = () => {
-  const { patients, showNotification, setStaffActiveTab, setActiveReportToEdit, currentStaffUser } = useClinic();
+  const { patients, orders, reports, showNotification, setStaffActiveTab, setActiveReportToEdit, currentStaffUser } = useClinic();
+  const [cargando, setCargando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
 
   // Initial demo samples reflecting Tubes vs Containers (Heces, Orina, Urocultivo)
   const [samples, setSamples] = useState<LabSample[]>(!DEMO_MODE ? [] : [
@@ -158,6 +191,26 @@ export const SampleReception: React.FC = () => {
   const [activeBarcodeLabel, setActiveBarcodeLabel] = useState<LabSample | null>(null);
   const [lastValidatedSample, setLastValidatedSample] = useState<LabSample | null>(null);
 
+  // Modo real: las muestras viven en la base de datos (tabla `muestra`), no en la pantalla.
+  const cargarMuestras = async () => {
+    if (DEMO_MODE) return;
+    setCargando(true);
+    try {
+      const filas = await listarMuestrasRemotas();
+      setSamples(filas.map(desdeApi));
+    } catch (err) {
+      showNotification(`No se pudieron cargar las muestras: ${err instanceof Error ? err.message : 'error desconocido'}`, 'error');
+    } finally {
+      setCargando(false);
+    }
+  };
+  useEffect(() => { void cargarMuestras(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Órdenes sobre las que se puede rotular (solo las que ya existen en el servidor).
+  const ordenesDisponibles = orders.filter((o) => !o.isArchived && !o.isDeleted && typeof o.remoteId === 'number');
+  const [newOrderId, setNewOrderId] = useState('');
+  const ordenElegida = ordenesDisponibles.find((o) => o.id === newOrderId);
+
   // New sample form state
   const [newPatientId, setNewPatientId] = useState(DEMO_MODE ? (patients[0]?.id || '') : '');
   const [autoContainerMode, setAutoContainerMode] = useState<boolean>(true);
@@ -171,8 +224,46 @@ export const SampleReception: React.FC = () => {
   // Inferred container computed automatically from the test description
   const inferredContainer = inferTubeForTest(newTests, undefined, undefined, autoContainerMode ? undefined : newTubeType);
 
-  const handleRegisterSample = (e: React.FormEvent) => {
+  const elegirOrden = (id: string) => {
+    setNewOrderId(id);
+    const o = ordenesDisponibles.find((x) => x.id === id);
+    if (o) setNewTests(o.testsList.join(', '));
+  };
+
+  const handleRegisterSample = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!DEMO_MODE) {
+      if (!ordenElegida || typeof ordenElegida.remoteId !== 'number') {
+        showNotification('Elige la orden a la que pertenece la muestra.', 'warning');
+        return;
+      }
+      const def = autoContainerMode ? inferredContainer : (LAB_TUBE_REGISTRY.find(t => t.id === newTubeType) || inferredContainer);
+      setGuardando(true);
+      try {
+        const fila = await crearMuestraRemota({
+          idOrden: ordenElegida.remoteId,
+          categoria: def.containerType,
+          tipoContenedor: def.id,
+          etiquetaContenedor: def.name,
+          examenes: newTests.split(',').map(t => t.trim()).filter(t => t.length > 0),
+          flebotomista: newPhlebotomist || undefined,
+          calidad: newQuality
+        });
+        const nueva = desdeApi(fila);
+        setSamples(prev => [nueva, ...prev]);
+        setShowNewSampleModal(false);
+        setNewOrderId('');
+        setActiveBarcodeLabel(nueva);
+        showNotification(`${def.containerType === 'recipiente' ? 'Recipiente' : 'Tubo'} rotulado con código ${nueva.barcode} y guardado en la orden ${nueva.orderNumber}.`, 'success');
+      } catch (err) {
+        showNotification(`No se pudo guardar la muestra: ${err instanceof Error ? err.message : 'error desconocido'}`, 'error');
+      } finally {
+        setGuardando(false);
+      }
+      return;
+    }
+
     if (!selectedPatient) return;
 
     const chosenDef = autoContainerMode ? inferredContainer : (LAB_TUBE_REGISTRY.find(t => t.id === newTubeType) || inferredContainer);
@@ -200,14 +291,41 @@ export const SampleReception: React.FC = () => {
     showNotification(`${chosenDef.containerType === 'recipiente' ? 'Recipiente' : 'Tubo'} rotulado con código ${newSampleItem.barcode} registrado correctamente.`, 'success');
   };
 
-  const handleUpdateStatus = (id: string, newStatus: LabSample['status']) => {
+  const handleUpdateStatus = async (id: string, newStatus: LabSample['status']) => {
+    const muestra = samples.find(s => s.id === id);
+    if (!DEMO_MODE) {
+      if (!muestra || typeof muestra.remoteId !== 'number') return;
+      try {
+        const fila = await actualizarMuestraRemota(muestra.remoteId, { estado: newStatus });
+        setSamples(prev => prev.map(s => s.id === id ? desdeApi(fila) : s));
+        showNotification(`Estado de muestra actualizado a: ${newStatus.toUpperCase()}`, 'info');
+      } catch (err) {
+        showNotification(`No se pudo cambiar el estado: ${err instanceof Error ? err.message : 'error desconocido'}`, 'error');
+        await cargarMuestras();
+      }
+      return;
+    }
     setSamples(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
     showNotification(`Estado de muestra actualizado a: ${newStatus.toUpperCase()}`, 'info');
   };
 
   // Barcode Camera Scanner validation handler
-  const handleBarcodeScanSuccess = (scannedCode: string) => {
+  const handleBarcodeScanSuccess = async (scannedCode: string) => {
     const clean = scannedCode.trim().toUpperCase();
+
+    if (!DEMO_MODE) {
+      // Modo real: el servidor valida el código. Uno que no esté registrado NO se asigna a nadie.
+      try {
+        const fila = await escanearMuestraRemota(clean);
+        const escaneada = desdeApi(fila);
+        setSamples(prev => prev.some(s => s.id === escaneada.id) ? prev.map(s => s.id === escaneada.id ? escaneada : s) : [escaneada, ...prev]);
+        setLastValidatedSample(escaneada);
+        showNotification(`¡Muestra validada por escáner! ${escaneada.containerCategory === 'recipiente' ? 'Recipiente' : 'Tubo'} ${escaneada.barcode} - Paciente: ${escaneada.patientName}`, 'success');
+      } catch (err) {
+        showNotification(err instanceof Error ? err.message : `No se pudo validar el código ${clean}.`, 'error');
+      }
+      return;
+    }
     
     // Find sample in list
     const foundSample = samples.find(
@@ -465,6 +583,18 @@ export const SampleReception: React.FC = () => {
               </optgroup>
             </select>
 
+            {!DEMO_MODE && (
+              <button
+                type="button"
+                onClick={() => void cargarMuestras()}
+                disabled={cargando}
+                title="Volver a cargar las muestras desde el servidor"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl cursor-pointer disabled:opacity-60"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin' : ''}`} />
+                <span>Actualizar</span>
+              </button>
+            )}
             <button
               id="btn-scan-barcode-camera-table"
               onClick={() => setShowBarcodeScannerModal(true)}
@@ -491,6 +621,17 @@ export const SampleReception: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {filteredSamples.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-10 px-4 text-center text-xs text-slate-500">
+                    {cargando
+                      ? 'Cargando muestras…'
+                      : samples.length === 0
+                        ? 'Todavía no hay muestras registradas. Usa "Registrar Toma de Muestra" para ligar un tubo a una orden.'
+                        : 'Ninguna muestra coincide con la búsqueda.'}
+                  </td>
+                </tr>
+              )}
               {filteredSamples.map((sample) => (
                 <tr key={sample.id} className="hover:bg-slate-50/80 transition-colors">
                   
@@ -516,6 +657,9 @@ export const SampleReception: React.FC = () => {
                   <td className="py-3 px-4">
                     <strong className="text-slate-900 block">{sample.patientName}</strong>
                     <span className="text-[10px] text-slate-500 font-mono">DNI: {sample.nationalId}</span>
+                    {sample.orderNumber && (
+                      <span className="text-[10px] text-teal-700 font-mono font-bold block">Orden {sample.orderNumber}</span>
+                    )}
                   </td>
 
                   {/* Container / Tube Type */}
@@ -596,8 +740,12 @@ export const SampleReception: React.FC = () => {
                       {/* Go to Report Editor for this patient */}
                       <button
                         onClick={() => {
+                          const informe = sample.orderId !== undefined
+                            ? reports.find((r) => orders.find((o) => o.id === r.orderId)?.remoteId === sample.orderId)
+                            : undefined;
+                          if (informe) setActiveReportToEdit(informe);
                           setStaffActiveTab('redactor');
-                          showNotification(`Cargando redacción para ${sample.patientName}...`);
+                          showNotification(informe ? `Abriendo el informe de ${sample.patientName}...` : `Elige la orden ${sample.orderNumber || ''} en la lista para ingresar resultados.`);
                         }}
                         title="Pasar a redactar informe diagnóstico"
                         className="flex items-center gap-1 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer"
@@ -639,21 +787,44 @@ export const SampleReception: React.FC = () => {
             </div>
 
             <form onSubmit={handleRegisterSample} className="p-6 space-y-4 text-xs">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Paciente *</label>
-                <select
-                  value={newPatientId}
-                  onChange={(e) => setNewPatientId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-teal-500"
-                >
-                  {!DEMO_MODE && <option value="">Selecciona un paciente…</option>}
-                  {patients.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.fullName} • DNI: {p.nationalId}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {DEMO_MODE ? (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Paciente *</label>
+                  <select
+                    value={newPatientId}
+                    onChange={(e) => setNewPatientId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-teal-500"
+                  >
+                    {patients.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.fullName} • DNI: {p.nationalId}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Orden *</label>
+                  <select
+                    required
+                    value={newOrderId}
+                    onChange={(e) => elegirOrden(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="">Selecciona la orden de la muestra…</option>
+                    {ordenesDisponibles.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.orderNumber} • {o.patientName}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    {ordenElegida
+                      ? `Paciente: ${ordenElegida.patientName} • Las pruebas se llenan con las de la orden.`
+                      : 'Cada tubo queda ligado a una orden; el paciente y las pruebas salen de ella.'}
+                  </p>
+                </div>
+              )}
 
               {/* Requested tests with quick preset buttons */}
               <div>
@@ -851,7 +1022,8 @@ export const SampleReception: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-sm cursor-pointer flex items-center gap-1.5"
+                  disabled={guardando}
+                  className="px-4 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-sm cursor-pointer flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-wait"
                 >
                   <Tag className="w-3.5 h-3.5" />
                   <span>
