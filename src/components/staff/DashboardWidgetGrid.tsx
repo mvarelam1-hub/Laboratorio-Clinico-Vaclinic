@@ -721,7 +721,7 @@ export const DashboardWidgetGrid: React.FC = () => {
       </div>
 
       <button
-        onClick={() => setStaffActiveTab('calidad_qc')}
+        onClick={() => setStaffActiveTab('control_calidad')}
         className="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-slate-300"
       >
         <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
