@@ -31,6 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
     setStaffActiveTab, 
     currentPatient, 
     currentBranch,
+    branches,
     isMultiBranchEnabled,
     currentStaffUser,
     setActiveReportToEdit,
@@ -45,6 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
     setIsChatFloatingOpen,
     setIsBackupModalOpen
   } = useClinic();
+  const nombreSedeActiva = branches.find((b) => b.id === currentBranch)?.name ?? currentBranch;
 
   const [showNotificationCenter, setShowNotificationCenter] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -181,12 +183,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             {role === 'personal' && (
               <div 
                 className="hidden min-[2400px]:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition-all"
-                title={isMultiBranchEnabled ? `Sede Activa: ${currentBranch.name}` : "Operando en Modo Sede Única (Multi-sede desactivado por el momento)"}
+                title={isMultiBranchEnabled ? `Sede Activa: ${nombreSedeActiva}` : "Operando en Modo Sede Única (Multi-sede desactivado por el momento)"}
                 onClick={() => setStaffActiveTab('ajustes')}
               >
                 <MapPin className="w-3.5 h-3.5 text-teal-600" />
                 <span className="font-bold">
-                  {isMultiBranchEnabled ? currentBranch.name : 'Sede Única: VACLINIC'}
+                  {isMultiBranchEnabled ? nombreSedeActiva : 'Sede Única: VACLINIC'}
                 </span>
                 {!isMultiBranchEnabled && (
                   <span className="text-[10px] bg-teal-50 text-teal-700 font-bold px-1.5 py-0.2 rounded border border-teal-200">
