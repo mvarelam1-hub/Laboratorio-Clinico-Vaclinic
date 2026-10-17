@@ -3,6 +3,8 @@ import { DEMO_MODE } from '../../config/demoMode';
 import React, { useRef, useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { PdfReportService } from '../../services/pdfReportService';
+import { tienePdfOficial, descargarPdfOficial, abrirPdfOficial } from '../../services/pdfOficial';
+import { InformesApiError } from '../../services/informesApiService';
 import { VaclinicOfficialReportSheet } from './VaclinicOfficialReportSheet';
 import { buildVerificationUrl } from '../../services/verificacionInforme';
 import { AiSummaryModeModal } from './AiSummaryModeModal';
@@ -26,7 +28,7 @@ import {
 } from 'lucide-react';
 
 export const PrintReportModal: React.FC = () => {
-  const { activeReportToPrint, setActiveReportToPrint, reports, labSettings, currentStaffUser } = useClinic();
+  const { activeReportToPrint, setActiveReportToPrint, reports, labSettings, currentStaffUser, orders, showNotification } = useClinic();
   const printSheetRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -54,6 +56,24 @@ export const PrintReportModal: React.FC = () => {
   if (!activeReportToPrint) return null;
 
   const report = activeReportToPrint;
+
+  // Único código visible del informe: el N.º de orden.
+  const numeroOrden = report.orderId ? orders.find((o) => o.id === report.orderId)?.orderNumber : undefined;
+
+  // UN solo formato: si el informe está en el servidor, descargar e imprimir es siempre el PDF oficial.
+  const conPdfOficial = async (accion: () => Promise<void>) => {
+    setIsExporting(true);
+    try {
+      await accion();
+    } catch (err) {
+      showNotification(
+        err instanceof InformesApiError ? err.message : 'No se pudo obtener el PDF oficial. Revisa tu conexión e inténtalo de nuevo.',
+        'warning'
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Custom Signers mapped from labSettings
   const activeSigners = labSettings.signers.filter(s => s.enabled);
@@ -104,6 +124,10 @@ export const PrintReportModal: React.FC = () => {
   });
 
   const handlePrint = () => {
+    if (tienePdfOficial(report)) {
+      void conPdfOficial(() => abrirPdfOficial(report, numeroOrden));
+      return;
+    }
     // Inject dynamic print media stylesheet to guarantee exact print margins
     const styleId = 'vaclinic-official-print-margins-style';
     let styleEl = document.getElementById(styleId) as HTMLStyleElement;
@@ -177,6 +201,10 @@ export const PrintReportModal: React.FC = () => {
   };
 
   const handleDownloadPdf = async () => {
+    if (tienePdfOficial(report)) {
+      await conPdfOficial(() => descargarPdfOficial(report, numeroOrden));
+      return;
+    }
     if (!printSheetRef.current) return;
     setIsExporting(true);
     try {
@@ -200,7 +228,7 @@ export const PrintReportModal: React.FC = () => {
   };
 
   const handleShareWhatsApp = () => {
-    const text = `Hola, adjunto el informe oficial de laboratorio VACLINIC para ${report.patientName}. Folio: ${report.reportNumber}.${verificationUrl ? ` Verificación en: ${verificationUrl}` : ''}`;
+    const text = `Hola, le comparto el informe oficial de laboratorio VACLINIC de ${report.patientName}.${numeroOrden ? ` N.º de orden: ${numeroOrden}.` : ''}${verificationUrl ? ` Puede comprobar que es auténtico aquí: ${verificationUrl}` : ''}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
