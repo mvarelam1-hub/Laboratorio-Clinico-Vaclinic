@@ -18,7 +18,6 @@ import {
   SlidersHorizontal, 
   BarChart3, 
   AlertTriangle, 
-  Send, 
   Sparkles, 
   ShieldCheck, 
   Cloud, 
@@ -29,7 +28,6 @@ import {
   ChevronRight,
   MessageSquare,
   Building2,
-  Users,
   Activity,
   LayoutDashboard,
   FileSpreadsheet,
@@ -38,7 +36,9 @@ import {
   Fingerprint,
   Microscope,
   Database,
-  FileEdit
+  FileEdit,
+  UserCog,
+  ScrollText
 } from 'lucide-react';
 
 interface ItemNav {
@@ -52,6 +52,8 @@ interface ItemNav {
   /** Contador en rojo (algo que atender) en lugar de gris (solo informativo). */
   alerta?: boolean;
   destacado?: boolean;
+  /** Otras pestañas que viven dentro de esta pantalla (el botón se marca activo en todas). */
+  tambien?: StaffTabType[];
 }
 interface SeccionNav { id: string; titulo: string; items: ItemNav[]; }
 
@@ -72,7 +74,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     staffActiveTab,
     setStaffActiveTab,
     episodes,
-    patients,
     orders,
     showNotification,
     unreadChatCount,
@@ -84,23 +85,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   } = useClinic();
   const totalAlertas = calcularAlertasReales(reports, reagents).length;
 
-  // Órdenes Archivadas / Papelera: antes eran números fijos en el código
-  // ("34" y "0") que nunca reflejaban el arreglo `orders` real -ver
-  // OrdersMasterManager.tsx/TrashOrdersView.tsx para el mismo arreglo que
-  // ahora alimenta estos contadores de verdad.
-  const ordenesArchivadasCount = orders.filter(o => o.isArchived && !o.isDeleted).length;
-  const ordenesEnPapeleraCount = orders.filter(o => o.isDeleted).length;
+  // Contador de órdenes activas (real, calculado de `orders`). Archivadas y
+  // papelera se cuentan dentro de la pantalla de Órdenes.
+  const ordenesActivasCount = orders.filter(o => !o.isArchived && !o.isDeleted).length;
 
   // Accordion collapsed state for groups
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     principal: true,
     recepcion: true,
     resultados: true,
-    entrega: true,
-    archivo: false,
     catalogo: false,
-    analisis: false,
-    equipo: true,
     administracion: false
   });
 
@@ -131,79 +125,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }, 1000);
       return;
     }
-    setStaffActiveTab(tab);
+    const item = secciones.flatMap(sec => sec.items).find(it => it.tab === tab);
+    // Si ya estás dentro de esa pantalla (por ejemplo en "Papelera" dentro de Órdenes), no te saca de ahí.
+    const yaDentro = item?.tambien?.includes(staffActiveTab);
+    if (!yaDentro) setStaffActiveTab(tab);
     if (isMobileOpen) {
       setIsMobileOpen(false);
     }
   };
 
-  // Contadores reales (nada de números fijos).
-  const ordenesActivasCount = orders.filter(o => !o.isArchived && !o.isDeleted).length;
-
   const secciones: SeccionNav[] = [
     {
       id: 'principal', titulo: 'Inicio',
       items: [
-        { tab: 'dashboard', etiqueta: 'Dashboard', icono: LayoutDashboard, domId: 'btn-nav-dashboard' }
+        { tab: 'dashboard', etiqueta: 'Dashboard', icono: LayoutDashboard, domId: 'btn-nav-dashboard' },
+        { tab: 'estadisticas', etiqueta: 'Estadísticas', icono: BarChart3 },
+        { tab: 'chat_interno', etiqueta: 'Chat interno', icono: MessageSquare, contador: unreadChatCount, alerta: true }
       ]
     },
     {
       id: 'recepcion', titulo: '1 · Recepción',
       items: [
         { tab: 'nueva_orden', etiqueta: 'Nueva orden', icono: Plus, domId: 'btn-nav-nueva-orden', atajo: 'Ctrl+N', destacado: true, titulo: 'Nueva Orden de Laboratorio (Ctrl+N)' },
-        { tab: 'pacientes', etiqueta: 'Pacientes', icono: Users, domId: 'btn-nav-pacientes', contador: patients.length, titulo: 'Directorio de Pacientes (Alt+3 • Búsqueda rápida: Ctrl+B)' },
-        { tab: 'ordenes', etiqueta: 'Órdenes', icono: FileText, domId: 'btn-nav-ordenes', contador: ordenesActivasCount },
+        {
+          tab: 'ordenes', etiqueta: 'Pacientes y órdenes', icono: FileText, domId: 'btn-nav-ordenes', contador: ordenesActivasCount,
+          tambien: ['pacientes', 'episodios', 'historial_ordenes', 'ordenes_archivadas', 'papelera'],
+          titulo: 'Pacientes y órdenes: directorio, órdenes activas, flujo de trabajo, historial, archivadas y papelera (Alt+3 • Búsqueda rápida: Ctrl+B)'
+        },
         { tab: 'muestras', etiqueta: 'Recepción de muestras', icono: FlaskConical, domId: 'btn-nav-muestras' }
       ]
     },
     {
-      id: 'resultados', titulo: '2 · Resultados',
+      id: 'resultados', titulo: '2 · Resultados y entrega',
       items: [
-        { tab: 'redactor', etiqueta: 'Ingresar resultados', icono: FileEdit, domId: 'btn-nav-redactor', titulo: 'Ingresar y validar resultados de una orden' },
-        { tab: 'verificacion_criticos', etiqueta: 'Verificación de críticos', icono: ShieldCheck },
-        { tab: 'alertas', etiqueta: 'Alertas', icono: AlertTriangle, contador: totalAlertas, alerta: true }
+        { tab: 'redactor', etiqueta: 'Resultados', icono: FileEdit, domId: 'btn-nav-redactor', tambien: ['envios'], titulo: 'Ingresar y validar resultados de una orden y entregarlos al paciente' },
+        {
+          tab: 'alertas', etiqueta: 'Alertas y críticos', icono: AlertTriangle, contador: totalAlertas, alerta: true,
+          tambien: ['verificacion_criticos'],
+          titulo: 'Alertas del laboratorio y verificación de valores críticos'
+        },
       ]
     },
     {
-      id: 'entrega', titulo: '3 · Entrega',
-      items: [
-        { tab: 'envios', etiqueta: 'Entrega de resultados', icono: Send },
-        { tab: 'historial_ordenes', etiqueta: 'Historial de órdenes', icono: Clock }
-      ]
-    },
-    {
-      id: 'archivo', titulo: 'Archivo',
-      items: [
-        { tab: 'ordenes_archivadas', etiqueta: 'Órdenes archivadas', icono: Archive, contador: ordenesArchivadasCount },
-        { tab: 'papelera', etiqueta: 'Papelera', icono: Trash2, contador: ordenesEnPapeleraCount }
-      ]
-    },
-    {
-      id: 'catalogo', titulo: 'Catálogo',
+      id: 'catalogo', titulo: 'Catálogo y portal',
       items: [
         { tab: 'catalogo_perfiles', etiqueta: 'Catálogo y perfiles', icono: Layers },
         { tab: 'promociones', etiqueta: 'Noticias y promociones', icono: BadgePercent, titulo: 'Lo que se muestra en el Portal del Paciente' },
-        { tab: 'atlas_microscopico', etiqueta: 'Atlas microscópico', icono: Microscope, domId: 'btn-nav-atlas-microscopico' }
-      ]
-    },
-    {
-      id: 'analisis', titulo: 'Análisis',
-      items: [
-        { tab: 'estadisticas', etiqueta: 'Estadísticas', icono: BarChart3 }
-      ]
-    },
-    {
-      id: 'equipo', titulo: 'Equipo',
-      items: [
-        { tab: 'chat_interno', etiqueta: 'Chat interno', icono: MessageSquare, contador: unreadChatCount, alerta: true },
-        { tab: 'episodios', etiqueta: 'Flujo de trabajo', icono: Activity }
+        { tab: 'atlas_microscopico', etiqueta: 'Atlas microscópico', icono: Microscope, domId: 'btn-nav-atlas-microscopico', titulo: 'Atlas que se muestra en el Portal del Paciente' }
       ]
     },
     {
       id: 'administracion', titulo: 'Administración',
       items: [
-        { tab: 'usuarios', etiqueta: 'Usuarios y roles', icono: Users },
-        { tab: 'auditoria', etiqueta: 'Auditoría', icono: ShieldCheck },
+        { tab: 'usuarios', etiqueta: 'Usuarios y roles', icono: UserCog },
+        { tab: 'auditoria', etiqueta: 'Auditoría', icono: ScrollText },
         { tab: 'ajustes', etiqueta: 'Ajustes', icono: SlidersHorizontal, contador: reagentsBelowMinThreshold.length, alerta: true, titulo: 'Ajustes del laboratorio (el contador son reactivos bajo el mínimo)' },
         { tab: 'respaldos', etiqueta: 'Respaldos', icono: Database },
         // Solo en demostración: simuladores sin datos reales.
@@ -317,7 +292,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Navegación ordenada por flujo de trabajo: Recepción → Resultados → Entrega → Archivo → Catálogo → Análisis → Equipo → Administración */}
+        {/* Navegación ordenada por flujo de trabajo: Recepción → Resultados y entrega → Catálogo y portal → Administración */}
         <div className="flex-1 overflow-y-auto py-2 px-2.5 space-y-3 scrollbar-thin scrollbar-thumb-slate-800">
           {secciones.map((sec) => (
             <div key={sec.id} className="space-y-1">
@@ -335,7 +310,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="space-y-0.5">
                   {sec.items.map((it) => {
                     const Icono = it.icono;
-                    const activo = staffActiveTab === it.tab;
+                    const activo = staffActiveTab === it.tab || !!it.tambien?.includes(staffActiveTab);
                     return (
                       <button
                         key={it.tab}

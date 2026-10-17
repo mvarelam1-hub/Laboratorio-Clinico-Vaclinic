@@ -3,10 +3,8 @@ import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { StaffDashboard } from './components/staff/StaffDashboard';
-import { FourDimensionControlHub } from './components/staff/FourDimensionControlHub';
 import { MultisiteManager } from './components/staff/MultisiteManager';
-import { ResultsWorkspace } from './components/staff/ResultsWorkspace';
-import { PatientManager } from './components/staff/PatientManager';
+import { ResultsHub, esPestanaResultados } from './components/staff/ResultsHub';
 import { TemplateManager } from './components/staff/TemplateManager';
 import { CatalogAndProfilesManager } from './components/staff/CatalogAndProfilesManager';
 import { SampleReception } from './components/staff/SampleReception';
@@ -25,16 +23,11 @@ import { PushNotificationToast } from './components/common/PushNotificationToast
 
 // New Navigation Modules
 import { NewOrderRegistration } from './components/staff/NewOrderRegistration';
-import { OrdersListView } from './components/staff/OrdersListView';
-import { ArchivedOrdersView } from './components/staff/ArchivedOrdersView';
-import { OrderHistoryView } from './components/staff/OrderHistoryView';
-import { TrashOrdersView } from './components/staff/TrashOrdersView';
+import { OrdersHub, esPestanaOrdenes } from './components/staff/OrdersHub';
+import { AlertsHub, esPestanaAlertas } from './components/staff/AlertsHub';
 import { PromotionsManagerView } from './components/staff/PromotionsManagerView';
 import { LabSettingsView } from './components/staff/LabSettingsView';
 import { LabStatisticsView } from './components/staff/LabStatisticsView';
-import { LabAlertsView } from './components/staff/LabAlertsView';
-import { CriticalVerificationQueueView } from './components/staff/CriticalVerificationQueueView';
-import { LabDispatchesView } from './components/staff/LabDispatchesView';
 import { AiLabAssistantView } from './components/staff/AiLabAssistantView';
 import { AuditLogsView } from './components/staff/AuditLogsView';
 import { StaffLoginView } from './components/staff/StaffLoginView';
@@ -113,40 +106,31 @@ const MainContent: React.FC = () => {
               <div className="animate-fade-in">
                 {/* 1. Gestión de Órdenes */}
                 {staffActiveTab === 'nueva_orden' && <NewOrderRegistration />}
-                {staffActiveTab === 'ordenes' && <OrdersListView />}
+                {esPestanaOrdenes(staffActiveTab) && <OrdersHub />}
 
-                {/* 2. Gestión y Archivo */}
-                {staffActiveTab === 'ordenes_archivadas' && <ArchivedOrdersView />}
-                {staffActiveTab === 'historial_ordenes' && <OrderHistoryView />}
-                {staffActiveTab === 'papelera' && <TrashOrdersView />}
-
-                {/* 3. Catálogos y Configuración */}
+                {/* 2. Catálogos y Configuración */}
                 {staffActiveTab === 'atlas_microscopico' && <MicroscopicAtlasView />}
                 {staffActiveTab === 'catalogo_perfiles' && <CatalogAndProfilesManager />}
                 {staffActiveTab === 'promociones' && <PromotionsManagerView />}
                 {staffActiveTab === 'ajustes' && <LabSettingsView />}
 
-                {/* 4. Reportes y Estadísticas */}
+                {/* 3. Reportes, Estadísticas y Alertas */}
                 {staffActiveTab === 'estadisticas' && <LabStatisticsView />}
-                {staffActiveTab === 'alertas' && <LabAlertsView />}
-                {staffActiveTab === 'verificacion_criticos' && <CriticalVerificationQueueView />}
+                {esPestanaAlertas(staffActiveTab) && <AlertsHub />}
 
-                {/* 5. Comunicación */}
-                {staffActiveTab === 'envios' && <LabDispatchesView />}
+                {/* 4. Comunicación */}
                 {DEMO_MODE && staffActiveTab === 'asistente_ia' && <AiLabAssistantView />}
                 {staffActiveTab === 'chat_interno' && <InternalChatView />}
 
-                {/* 6. Administración & Flujo */}
+                {/* 5. Administración & Flujo */}
                 {staffActiveTab === 'auditoria' && <AuditLogsView />}
                 {DEMO_MODE && staffActiveTab === 'biometria' && <BiometricSecuritySection />}
-                {staffActiveTab === 'episodios' && <FourDimensionControlHub />}
                 {staffActiveTab === 'dashboard' && <StaffDashboard />}
                 {staffActiveTab === 'multisucursal' && <MultisiteManager />}
                 {staffActiveTab === 'muestras' && <SampleReception />}
                 {DEMO_MODE && staffActiveTab === 'analizadores' && <AnalyzerBatchEntry />}
                 {staffActiveTab === 'control_calidad' && <QualityControlQC />}
-                {staffActiveTab === 'redactor' && <ResultsWorkspace />}
-                {staffActiveTab === 'pacientes' && <PatientManager />}
+                {esPestanaResultados(staffActiveTab) && <ResultsHub />}
                 {staffActiveTab === 'usuarios' && <UserManagement />}
                 {staffActiveTab === 'plantillas' && <TemplateManager />}
                 {staffActiveTab === 'respaldos' && <BackupRestoreView />}
