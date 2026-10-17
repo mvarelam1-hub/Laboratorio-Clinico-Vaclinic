@@ -1280,7 +1280,7 @@ export const PatientManager: React.FC = () => {
         onClose={() => setPatientForOrdersHistory(null)}
         onNewOrder={(pat) => {
           setPatientForOrdersHistory(null);
-          setStaffActiveTab('nueva-orden');
+          setStaffActiveTab('nueva_orden');
           showNotification(`Iniciando nueva orden para ${pat.fullName}`, 'info');
         }}
         onOpenPdfReport={(pat) => {
