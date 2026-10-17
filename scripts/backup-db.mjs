@@ -100,7 +100,7 @@ async function main() {
       `SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`
     );
     for (const { tablename } of tablas) {
-      const { rows } = await cliente.query(`SELECT count(*)::bigint AS n FROM "${tablename.replace(/"/g, '""')}"`);
+      const { rows } = await cliente.query(`SELECT count(*)::bigint AS n FROM "public"."${tablename.replace(/"/g, '""')}"`);
       conteos[tablename] = Number(rows[0].n);
     }
 
