@@ -51,6 +51,8 @@ import {
 import { TubeBadge } from '../common/TubeBadge';
 import { LabCatalogItem, OriginDepartment, PatientType, MedicalReport, LabOrder, Patient } from '../../types';
 import { PacientesApiError } from '../../services/pacientesApiService';
+import { crearMuestraRemota } from '../../services/muestrasApiService';
+import { DEMO_MODE } from '../../config/demoMode';
 import {
   CampoPaciente,
   edadDesdeFecha,
@@ -612,6 +614,9 @@ export const NewOrderRegistration: React.FC = () => {
       drawOrder: g.tube.drawOrder
     }));
 
+    // Solo en modo demostración el código se inventa en el navegador. En
+    // producción los códigos de tubo los genera el servidor (tabla `muestra`)
+    // cuando la orden ya existe, ver más abajo.
     const barcodeNumber = `TUB-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
 
     // Calculate dates & times
@@ -666,7 +671,7 @@ export const NewOrderRegistration: React.FC = () => {
       folderId: priority === 'stat_panico' ? 'folder-stat' : priority === 'urgente' ? 'folder-urgentes' : 'folder-unassigned',
       priority,
       branchId: currentBranch || 'central',
-      tubeBarcodes: [barcodeNumber],
+      tubeBarcodes: DEMO_MODE ? [barcodeNumber] : [],
       isHighRisk: isCritical,
       origin,
       patientType,
@@ -689,6 +694,37 @@ export const NewOrderRegistration: React.FC = () => {
       return;
     }
 
+    // Tubos reales: una muestra por cada tubo/recipiente que pide el análisis,
+    // guardada en la base de datos y ligada a ESTA orden. El código de barras
+    // lo genera el servidor. Si algo falla la orden ya está guardada y los tubos
+    // se pueden registrar después en "Recepción de muestras".
+    let codigosTubo: string[] = DEMO_MODE ? [barcodeNumber] : [];
+    let tubosSinRegistrar = 0;
+    if (!DEMO_MODE) {
+      if (typeof savedOrder.remoteId === 'number') {
+        for (const g of phlebotomyAudit.tubesGrouped) {
+          const unidades = Math.min(Math.max(g.count, 1), 20);
+          for (let i = 0; i < unidades; i++) {
+            try {
+              const fila = await crearMuestraRemota({
+                idOrden: savedOrder.remoteId,
+                categoria: g.tube.containerType,
+                tipoContenedor: g.tube.id,
+                etiquetaContenedor: g.tube.name,
+                examenes: g.parameters,
+                flebotomista: phlebotomistName || undefined
+              });
+              codigosTubo.push(fila.codigo_barras);
+            } catch (err) {
+              console.error('[NewOrderRegistration] No se pudo registrar el tubo en el servidor:', err);
+              tubosSinRegistrar += 1;
+            }
+          }
+        }
+      } else {
+        for (const g of phlebotomyAudit.tubesGrouped) tubosSinRegistrar += Math.max(g.count, 1);
+      }
+    }
 
     // Create 4D Lab Episode
     const createdEpisode = await addEpisode({
@@ -704,7 +740,7 @@ export const NewOrderRegistration: React.FC = () => {
       currentDimension: 'D1_admision',
       priority,
       requestedTests: selectedTests.map(t => t.name),
-      tubeBarcodes: [barcodeNumber],
+      tubeBarcodes: codigosTubo,
       sampleType,
       tatTargetMinutes: priority === 'stat_panico' ? 45 : priority === 'urgente' ? 90 : 180,
       tatElapsedMinutes: 0,
@@ -720,6 +756,12 @@ export const NewOrderRegistration: React.FC = () => {
 
     playNotificationChime('success');
     showNotification(`¡Orden ${numeroOrdenVisible} liquidada y registrada exitosamente!`, 'success');
+    if (tubosSinRegistrar > 0) {
+      showNotification(
+        `La orden se guardó, pero ${tubosSinRegistrar} tubo(s) no se pudieron registrar. Regístralos en "Recepción de muestras".`,
+        'warning'
+      );
+    }
 
     setIsReviewModalOpen(false);
 
@@ -728,7 +770,7 @@ export const NewOrderRegistration: React.FC = () => {
       orderNumber: numeroOrdenVisible,
       orderDate: orderDate || getTodayStr(),
       orderTime: formattedTime,
-      barcode: barcodeNumber,
+      barcode: codigosTubo.join(', '),
       patientName: patientObj.fullName,
       nationalId: patientDni,
       patientAge: validacion.edad ?? patientObj.age,
@@ -1970,7 +2012,7 @@ export const NewOrderRegistration: React.FC = () => {
 
               <div className="flex justify-between items-center pb-2 border-b border-slate-200">
                 <span className="font-bold text-slate-500 uppercase">Código Tubos (LABVACLINIC LIS):</span>
-                <span className="font-mono font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">{createdOrderModal.barcode}</span>
+                <span className="font-mono font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">{createdOrderModal.barcode || 'Sin registrar (ver Recepción de muestras)'}</span>
               </div>
 
               <div className="flex justify-between items-center pb-2 border-b border-slate-200">
