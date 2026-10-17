@@ -1918,7 +1918,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (isEffectiveOnline) {
       try {
         const fila = await createPacienteRemote(patientDataToApiInput(patientData) as CrearPacienteInput);
-        const newPatient: Patient = mapPacienteApiToPatient(fila, { ...patientData, patientCode: generatedCode });
+        // El código definitivo lo da el número real del registro en la base, no el conteo local.
+        const newPatient: Patient = mapPacienteApiToPatient(fila, { ...patientData, patientCode: undefined });
         setPatients((prev) => [newPatient, ...prev]);
         showNotification(`Paciente ${newPatient.fullName} registrado en la base de datos real. Código: ${newPatient.patientCode}`);
         createBackupSnapshot('save_patient', `Nuevo paciente: ${newPatient.fullName} (${newPatient.patientCode})`);
