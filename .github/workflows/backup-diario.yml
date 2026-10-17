@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 30
     services:
       restore_db:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_PASSWORD: restore
           POSTGRES_DB: restore_check
@@ -46,13 +46,15 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Instalar cliente de PostgreSQL 17 (pg_dump debe ser >= versión del servidor)
+      - name: Instalar cliente de PostgreSQL 18 (pg_dump debe ser >= versión del servidor)
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-          sudo apt-get install -y postgresql-client-17
-          pg_dump --version
+          sudo apt-get install -y postgresql-client-18
+          # El cliente 18 va primero en el PATH: el pg_dump que trae el runner (16) no puede respaldar un servidor 18.
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_dump --version
 
       - name: Comprobar que los secretos están configurados
         env:
