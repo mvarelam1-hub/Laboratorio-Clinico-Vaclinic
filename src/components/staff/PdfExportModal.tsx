@@ -6,6 +6,7 @@ import { PdfReportService } from '../../services/pdfReportService';
 import { VaclinicOfficialReportSheet } from '../common/VaclinicOfficialReportSheet';
 import { buildVerificationUrl, formatVerificationCode } from '../../services/verificacionInforme';
 import { descargarInformePdfOficial, InformesApiError } from '../../services/informesApiService';
+import { tienePdfOficial, descargarPdfOficial, abrirPdfOficial } from '../../services/pdfOficial';
 import { LabSettings } from '../../types/labSettings';
 import { 
   X, 
@@ -46,7 +47,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   defaultBioanalyst,
   defaultDoctor
 }) => {
-  const { labSettings, updateLabSettings, showNotification, currentStaffUser } = useClinic();
+  const { labSettings, updateLabSettings, showNotification, currentStaffUser, orders } = useClinic();
   const firmantesIniciales = firmantesPorDefecto(labSettings, currentStaffUser);
   const bioInicial = defaultBioanalyst ?? firmantesIniciales.bioanalista;
   const medicoInicial = defaultDoctor ?? firmantesIniciales.medico;
@@ -141,7 +142,28 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   };
 
   // Trigger PDF file download via html2canvas and jsPDF
+  const numeroOrden = report.orderId ? orders.find((o) => o.id === report.orderId)?.orderNumber : undefined;
+
+  // UN solo formato: si el informe está en el servidor, se descarga e imprime el PDF oficial.
+  const conPdfOficial = async (accion: () => Promise<void>) => {
+    setIsGeneratingPdf(true);
+    try {
+      await accion();
+    } catch (err) {
+      showNotification(
+        err instanceof InformesApiError ? err.message : 'No se pudo obtener el PDF oficial. Revisa tu conexión e inténtalo de nuevo.',
+        'warning'
+      );
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const handleDownloadPdf = async () => {
+    if (tienePdfOficial(report)) {
+      await conPdfOficial(() => descargarPdfOficial(report, numeroOrden));
+      return;
+    }
     if (!printAreaRef.current) return;
     setIsGeneratingPdf(true);
     try {
@@ -159,6 +181,10 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
 
   // Trigger browser print
   const handleNativePrint = () => {
+    if (tienePdfOficial(report)) {
+      void conPdfOficial(() => abrirPdfOficial(report, numeroOrden));
+      return;
+    }
     window.print();
   };
 
