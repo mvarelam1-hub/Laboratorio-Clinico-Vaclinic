@@ -3776,7 +3776,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           ...o,
           isArchived: true,
           archivedAt: formattedDate,
-          archivedBy: currentStaffUser?.name || 'Administrador VACLINIC'
+          archivedBy: currentStaffUser?.fullName || 'Administrador VACLINIC'
         };
       }
       return o;
@@ -3828,7 +3828,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           ...o,
           isArchived: true,
           archivedAt: formattedDate,
-          archivedBy: currentStaffUser?.name || 'Administrador VACLINIC'
+          archivedBy: currentStaffUser?.fullName || 'Administrador VACLINIC'
         };
       }
       return o;
@@ -4094,7 +4094,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         previousStock: 0,
         newStock: newItem.currentStock,
         reason: 'Ingreso inicial al catálogo',
-        operator: currentStaffUser?.name || 'Administrador',
+        operator: currentStaffUser?.fullName || 'Administrador',
         timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16)
       };
       setReagentMovements(prev => [initialLog, ...prev]);
@@ -4247,7 +4247,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       previousStock,
       newStock,
       reason,
-      operator: currentStaffUser?.name || 'Bioanalista en Turno',
+      operator: currentStaffUser?.fullName || 'Bioanalista en Turno',
       timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16),
       remoteId: remoteMovementId
     };
@@ -4395,7 +4395,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }, {
         userId: currentStaffUser?.id,
         userName: currentStaffUser?.fullName,
-        userRole: currentStaffUser?.role
+        userRole: currentStaffUser?.roleName || currentStaffUser?.roleId
       });
 
       const jsonStr = JSON.stringify(fullBackup);
@@ -4453,7 +4453,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, {
       userId: currentStaffUser?.id,
       userName: currentStaffUser?.fullName,
-      userRole: currentStaffUser?.role
+      userRole: currentStaffUser?.roleName || currentStaffUser?.roleId
     });
 
     const filename = BackupService.downloadFullBackup(fullBackup);
@@ -4468,7 +4468,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAuditEvent({
       userId: currentStaffUser?.id || 'usr-system',
       userName: currentStaffUser?.fullName || 'Personal',
-      userRole: currentStaffUser?.role || 'staff',
+      userRole: currentStaffUser?.roleName || currentStaffUser?.roleId || 'staff',
       module: 'seguridad',
       action: 'Exportación de Respaldo Completo',
       details: `Descargado archivo de respaldo ${filename} con ${fullBackup.backupMetadata.totalRecords} registros clínicos.`,
@@ -4575,7 +4575,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       logAuditEvent({
         userId: currentStaffUser?.id || 'usr-system',
         userName: currentStaffUser?.fullName || 'Personal',
-        userRole: currentStaffUser?.role || 'staff',
+        userRole: currentStaffUser?.roleName || currentStaffUser?.roleId || 'staff',
         module: 'seguridad',
         action: 'Restauración de Respaldo',
         details: `Restauración de datos ejecutada exitosamente (${mode.toUpperCase()}). Informes: ${restoredReports}, Pacientes: ${restoredPatients}, Órdenes: ${restoredOrders}.`,
