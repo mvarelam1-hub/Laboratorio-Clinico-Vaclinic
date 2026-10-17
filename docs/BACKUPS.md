@@ -14,7 +14,7 @@ respaldo sirve, y qué hacer en una emergencia.
 |---|---|
 | `scripts/backup-db.mjs` (`npm run backup`) | `pg_dump` consistente + cifrado AES-256-GCM + manifiesto (SHA-256 y filas por tabla) + retención |
 | `scripts/restore-verify.mjs` (`npm run backup:verify`) | Restaura el respaldo en una base **vacía y desechable** y compara conteos con el manifiesto |
-| `.github/workflows/backup-diario.yml` | Corre ambos todos los días a las 02:00 (Guatemala) y guarda el archivo cifrado 30 días |
+| `.github/workflows/backup-diario.yml` | Corre ambos cada 6 horas (00:00, 06:00, 12:00 y 18:00 en Guatemala) y guarda el archivo cifrado 30 días |
 
 ## Configuración (una sola vez)
 
@@ -28,7 +28,7 @@ En GitHub: **Settings → Secrets and variables → Actions → New repository s
    un respaldo cifrado es irrecuperable, y quien tenga el archivo + la clave
    puede leer todos los datos: trátala como un secreto de producción.
 
-Luego, en la pestaña **Actions → Respaldo diario… → Run workflow** haz una
+Luego, en la pestaña **Actions → Respaldo de la base de datos cada 6 horas → Run workflow** haz una
 corrida manual y confirma que termina en verde. La primera vez es la prueba
 de que todo quedó bien configurado.
 
@@ -65,7 +65,7 @@ de que todo quedó bien configurado.
 
 ## Límites conocidos (honestos)
 
-- **RPO de 24 h**: el respaldo es diario. Neon además ofrece restauración a un
+- **RPO de 6 h**: el respaldo corre cada 6 horas (como máximo se pierden 6 horas de datos). Neon además ofrece restauración a un
   punto en el tiempo (PITR) según el plan; actívala para reducir esa ventana.
   Este respaldo es la copia **independiente** (fuera de Neon) por si falla el
   proveedor o la cuenta.
