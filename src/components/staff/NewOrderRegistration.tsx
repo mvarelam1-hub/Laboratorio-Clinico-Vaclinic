@@ -144,6 +144,8 @@ export const NewOrderRegistration: React.FC = () => {
     showNotification,
     setStaffActiveTab,
     currentBranch,
+    branches,
+    isMultiBranchEnabled,
     selectedPatientId,
     setSelectedPatientId,
     staffUsers,
@@ -834,7 +836,9 @@ export const NewOrderRegistration: React.FC = () => {
       catalogTests,
       customProfiles,
       sampleDate: modalData.orderDate,
-      laboratoryName: currentBranch?.name ? `VACLINIC - ${currentBranch.name}` : 'VACLINIC LABORATORIO CLÍNICO',
+      laboratoryName: isMultiBranchEnabled && branches.find((b) => b.id === currentBranch)?.name
+        ? `VACLINIC - ${branches.find((b) => b.id === currentBranch)!.name}`
+        : 'VACLINIC LABORATORIO CLÍNICO',
       tubeType: modalData.tubesRequired.map(t => t.label).join(', ')
     });
     setActiveReportToEdit(draftReport);

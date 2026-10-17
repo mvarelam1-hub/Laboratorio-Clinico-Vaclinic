@@ -45,10 +45,15 @@ const EXAM_PRICES: Record<number, number> = { 1: 45.0, 2: 120.5 };
 // migración 0010_catalogo_examenes_real.sql).
 const EXAM_CODES: Record<number, string> = { 1: 'GLU-001', 2: 'PAN-01' };
 let detalleAutoId = 900;
+// Correlativo que devolvería la base de datos para el día simulado (MAX del día + 1).
+let SIGUIENTE_DEL_DIA = 1;
 
 function programClient(client: { query: ReturnType<typeof vi.fn> }) {
   client.query.mockImplementation(async (sql: string, params: any[] = []) => {
     if (sql.startsWith('BEGIN') || sql.startsWith('COMMIT') || sql.startsWith('ROLLBACK')) return {};
+    if (sql.includes('pg_advisory_xact_lock')) return { rows: [] };
+    if (sql.includes("AS dia")) return { rows: [{ dia: '261017' }] };
+    if (sql.includes('AS siguiente')) return { rows: [{ siguiente: SIGUIENTE_DEL_DIA }] };
     if (sql.includes('INSERT INTO orden')) return { rows: [{ id_orden: 100, numero_orden: params[0] }] };
     if (sql.includes('FROM examen')) {
       const idExamen = params[0];
@@ -114,6 +119,27 @@ describe('POST /api/ordenes (partición de equivalencia)', () => {
     expect(calledSql).toContain('COMMIT');
     expect(calledSql).not.toContain('ROLLBACK');
     expect(calledSql.some((sql: string) => sql.includes('fn_generar_codigo_consulta'))).toBe(true);
+  });
+
+  it('numera la orden como ORD-AAMMDD-NNN: día de Guatemala + correlativo del día, con candado contra duplicados', async () => {
+    const app = await buildApp();
+    SIGUIENTE_DEL_DIA = 7;
+    const dbModule: any = await import('../db');
+    dbModule.pool.connect.mockImplementation(async () => {
+      lastClient = { query: vi.fn(), release: vi.fn() };
+      programClient(lastClient);
+      return lastClient;
+    });
+    const res = await request(app).post('/api/ordenes').send({ idPaciente: 1, examenesIds: [1] });
+    SIGUIENTE_DEL_DIA = 1;
+    expect(res.status).toBe(201);
+    expect(res.body.numero_orden).toBe('ORD-261017-007');
+    const calledSql = lastClient!.query.mock.calls.map((c) => c[0] as string);
+    // El candado va ANTES de calcular el correlativo.
+    const iLock = calledSql.findIndex((q) => q.includes('pg_advisory_xact_lock'));
+    const iSig = calledSql.findIndex((q) => q.includes('AS siguiente'));
+    expect(iLock).toBeGreaterThanOrEqual(0);
+    expect(iLock).toBeLessThan(iSig);
   });
 
   it('rechaza con 400 cuando examenesIds está vacío (clase inválida)', async () => {

@@ -61,6 +61,10 @@ export const PrintReportModal: React.FC = () => {
   const numeroOrden = report.orderId ? orders.find((o) => o.id === report.orderId)?.orderNumber : undefined;
 
   // UN solo formato: si el informe está en el servidor, descargar e imprimir es siempre el PDF oficial.
+  // Un informe que todavía no está en el servidor no tiene PDF oficial: se avisa en lugar de imprimir la copia local sin decir nada.
+  const avisoCopiaLocal = () =>
+    showNotification('Este informe aún no está en el servidor: se usa la copia local, que no es el PDF oficial. Publícalo o sincroniza para obtener el oficial.', 'warning');
+
   const conPdfOficial = async (accion: () => Promise<void>) => {
     setIsExporting(true);
     try {
@@ -128,6 +132,7 @@ export const PrintReportModal: React.FC = () => {
       void conPdfOficial(() => abrirPdfOficial(report, numeroOrden));
       return;
     }
+    avisoCopiaLocal();
     // Inject dynamic print media stylesheet to guarantee exact print margins
     const styleId = 'vaclinic-official-print-margins-style';
     let styleEl = document.getElementById(styleId) as HTMLStyleElement;
@@ -205,6 +210,7 @@ export const PrintReportModal: React.FC = () => {
       await conPdfOficial(() => descargarPdfOficial(report, numeroOrden));
       return;
     }
+    avisoCopiaLocal();
     if (!printSheetRef.current) return;
     setIsExporting(true);
     try {

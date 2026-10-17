@@ -115,6 +115,10 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
   const numeroOrden = report.orderId ? orders.find((o) => o.id === report.orderId)?.orderNumber : undefined;
 
   // UN solo formato: si el informe está en el servidor, se imprime y se descarga el PDF oficial.
+  // Un informe que todavía no está en el servidor no tiene PDF oficial: se avisa en lugar de imprimir la copia local sin decir nada.
+  const avisoCopiaLocal = () =>
+    showNotification('Este informe aún no está en el servidor: se usa la copia local, que no es el PDF oficial. Publícalo o sincroniza para obtener el oficial.', 'warning');
+
   const conPdfOficial = async (accion: () => Promise<void>) => {
     setIsExportingPdf(true);
     try {
@@ -134,6 +138,7 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
       void conPdfOficial(() => abrirPdfOficial(report, numeroOrden));
       return;
     }
+    avisoCopiaLocal();
     window.print();
   };
 
@@ -143,6 +148,7 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
       await conPdfOficial(() => descargarPdfOficial(report, numeroOrden));
       return;
     }
+    avisoCopiaLocal();
     if (!printSheetRef.current) return;
     setIsExportingPdf(true);
     try {
