@@ -19,6 +19,8 @@ export interface WhatsAppMessageModalProps {
   patientPhone?: string;
   patientCode?: string;
   accessCode?: string;
+  /** N.º de orden: el único código visible (igual al del informe). */
+  orderNumber?: string;
   type: 'bienvenida_paciente' | 'comprobante_orden' | 'aviso_resultados';
   orderDetails?: {
     orderNumber: string;
@@ -35,8 +37,8 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
   onClose,
   patientName,
   patientPhone = '',
-  patientCode = '',
   accessCode = '',
+  orderNumber = '',
   type,
   orderDetails
 }) => {
@@ -64,47 +66,49 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
 
     let text = '';
 
+    const codigo = accessCode || 'solicítelo en recepción';
+    const contacto = labPhone ? `\n📞 Dudas: ${labPhone}` : '';
+
     if (type === 'bienvenida_paciente') {
-      text = `👋 ¡Hola, *${patientName.trim()}*!\n\n` +
-        `Bienvenido(a) a *${labName}* 🏥🧪\n` +
-        `_Precisión que diagnostica, confianza que cuida_\n\n` +
-        `Hemos registrado su expediente clínico exitosamente:\n` +
-        `${patientCode ? `📋 *Código de Paciente:* ${patientCode}\n` : ''}` +
-        `🔑 *Código de consulta de resultados:* *${accessCode || 'solicítelo en recepción'}*\n\n` +
-        `🌐 *Consulte sus resultados en línea desde su celular o computadora:*\n` +
-        `${portalUrl}\n\n` +
-        `${labAddress ? `📍 *Ubicación:* ${labAddress}\n` : ''}` +
-        `${labPhone ? `📞 *Teléfono / WhatsApp:* ${labPhone}\n` : ''}` +
-        `\n` +
-        `Le notificaremos en cuanto sus resultados estén listos y validados por nuestros profesionales.\n` +
-        `¡Muchas gracias por su confianza! ✨`;
+      text = `👋 Hola, *${patientName.trim()}*. Bienvenido(a) a *${labName}*.\n\n` +
+        `Su expediente quedó registrado.\n` +
+        `🔑 *Su código de consulta:* *${codigo}*\n\n` +
+        `*Para ver sus resultados:*\n` +
+        `1️⃣ Entre a ${portalUrl}\n` +
+        `2️⃣ Escriba su código de consulta\n` +
+        `3️⃣ Descargue su informe cuando esté listo\n\n` +
+        `Le avisaremos por este medio cuando sus resultados estén listos.` +
+        `${labAddress ? `\n📍 ${labAddress}` : ''}${contacto}`;
     } else if (type === 'comprobante_orden' && orderDetails) {
       const testsPreview = orderDetails.testsList.map(t => `  • ${t}`).join('\n');
-      text = `👋 ¡Hola, *${patientName.trim()}*!\n\n` +
-        `Le confirmamos el ingreso de su orden en *${labName}* 🧪🔬\n\n` +
-        `📄 *Orden No:* ${orderDetails.orderNumber}\n` +
-        `📅 *Fecha de Toma:* ${orderDetails.orderDate} (${orderDetails.orderTime})\n` +
-        `📋 *Estudios solicitados (${orderDetails.testsList.length}):*\n` +
-        `${testsPreview}\n\n` +
-        `💰 *Total Liquidado:* Q${orderDetails.total.toFixed(2)}\n` +
-        `${(orderDetails.pending && orderDetails.pending > 0) ? `⚠️ *Saldo Pendiente:* Q${orderDetails.pending.toFixed(2)}\n` : '✅ *Estado de Pago:* Totalmente Cancelado\n'}\n` +
-        `🔑 *Su código de consulta:* *${accessCode || 'solicítelo en recepción'}*\n` +
-        `🌐 *Consulte y descargue su informe oficial aquí:*\n` +
-        `${portalUrl}\n\n` +
-        `Recibirá un aviso cuando su informe esté validado y firmado electrónicamente.\n` +
-        `${labPhone ? `📞 *Dudas o consultas:* ${labPhone}\n` : ''}` +
-        `¡Gracias por cuidar su salud con nosotros!`;
+      const saldo = (orderDetails.pending && orderDetails.pending > 0)
+        ? `⚠️ *Saldo pendiente:* Q${orderDetails.pending.toFixed(2)}`
+        : '✅ *Pago:* completo';
+      text = `👋 Hola, *${patientName.trim()}*. Recibimos su orden en *${labName}*.\n\n` +
+        `📄 *N.º de orden:* *${orderDetails.orderNumber}*\n` +
+        `📅 *Toma de muestra:* ${orderDetails.orderDate} (${orderDetails.orderTime})\n` +
+        `🧪 *Estudios (${orderDetails.testsList.length}):*\n${testsPreview}\n\n` +
+        `💰 *Total:* Q${orderDetails.total.toFixed(2)}\n${saldo}\n\n` +
+        `🔑 *Su código de consulta:* *${codigo}*\n\n` +
+        `*Para ver sus resultados:*\n` +
+        `1️⃣ Entre a ${portalUrl}\n` +
+        `2️⃣ Escriba su código de consulta\n` +
+        `3️⃣ Descargue su informe cuando esté listo\n\n` +
+        `Le avisaremos por este medio cuando esté listo.${contacto}`;
     } else {
-      text = `👋 Estimado(a) *${patientName.trim()}*,\n\n` +
-        `Le informamos que sus resultados de *${labName}* se encuentran *LISTOS Y VALIDADOS* por nuestros profesionales de laboratorio 📄✅.\n\n` +
-        `🔑 *Código de consulta:* *${accessCode || 'solicítelo en recepción'}*\n` +
-        `🌐 *Ver y Descargar Reporte Oficial:* ${portalUrl}\n\n` +
-        `También puede pasar a recoger su informe físico en recepción.\n` +
-        `${labPhone ? `📞 *Teléfono:* ${labPhone}` : ''}`;
+      text = `👋 Hola, *${patientName.trim()}*.\n\n` +
+        `✅ Sus resultados de *${labName}* ya están *listos*.\n` +
+        `${orderNumber ? `📄 *N.º de orden:* *${orderNumber}*\n` : ''}` +
+        `🔑 *Su código de consulta:* *${codigo}*\n\n` +
+        `*Para descargar su informe:*\n` +
+        `1️⃣ Entre a ${portalUrl}\n` +
+        `2️⃣ Escriba su código de consulta\n` +
+        `3️⃣ Toque "Descargar informe"\n\n` +
+        `También puede recogerlo impreso en recepción.${contacto}`;
     }
 
     setMessage(text);
-  }, [type, patientName, patientCode, accessCode, orderDetails, labSettings]);
+  }, [type, patientName, accessCode, orderNumber, orderDetails, labSettings]);
 
   if (!isOpen) return null;
 

@@ -4,6 +4,8 @@ import { useClinic } from '../../context/ClinicContext';
 import { VaclinicOfficialReportSheet } from '../common/VaclinicOfficialReportSheet';
 import { OzelleCbcReportView } from '../laboratory/OzelleCbcReportView';
 import { PdfReportService } from '../../services/pdfReportService';
+import { tienePdfOficial, descargarPdfOficial, abrirPdfOficial } from '../../services/pdfOficial';
+import { InformesApiError } from '../../services/informesApiService';
 import {
   X,
   Printer,
@@ -52,7 +54,7 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
   doctorSpecialty,
   doctorLicense
 }) => {
-  const { labSettings } = useClinic();
+  const { labSettings, orders, showNotification } = useClinic();
   const printSheetRef = useRef<HTMLDivElement>(null);
 
   // Simulation controls state
@@ -110,12 +112,37 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
   const hasAnnex = Boolean(report.attachedAnalyzerReport && report.attachedAnalyzerReport.attachedToOfficialPdf !== false);
 
   // Trigger system print
+  const numeroOrden = report.orderId ? orders.find((o) => o.id === report.orderId)?.orderNumber : undefined;
+
+  // UN solo formato: si el informe está en el servidor, se imprime y se descarga el PDF oficial.
+  const conPdfOficial = async (accion: () => Promise<void>) => {
+    setIsExportingPdf(true);
+    try {
+      await accion();
+    } catch (err) {
+      showNotification(
+        err instanceof InformesApiError ? err.message : 'No se pudo obtener el PDF oficial. Revisa tu conexión e inténtalo de nuevo.',
+        'warning'
+      );
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const handlePrint = () => {
+    if (tienePdfOficial(report)) {
+      void conPdfOficial(() => abrirPdfOficial(report, numeroOrden));
+      return;
+    }
     window.print();
   };
 
   // Trigger PDF download
   const handleDownloadPdf = async () => {
+    if (tienePdfOficial(report)) {
+      await conPdfOficial(() => descargarPdfOficial(report, numeroOrden));
+      return;
+    }
     if (!printSheetRef.current) return;
     setIsExportingPdf(true);
     try {

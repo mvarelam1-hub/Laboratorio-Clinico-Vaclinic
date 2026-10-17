@@ -711,14 +711,21 @@ export const NewOrderRegistration: React.FC = () => {
       notes: `Orden liquidada y registrada. Fecha de muestra: ${orderDate} (${formattedTime}). Prioridad: ${priority.toUpperCase()}. Origen: ${origin}. Ayuno: ${fastingCondition}. Flebotomista: ${phlebotomistName}. Tubos: ${tubesDetailed.map(t => t.label).join(', ')}`
     });
 
+    // Un solo código visible: el N.º de orden real (el mismo del informe, del
+    // WhatsApp y del portal). Si la orden quedó sin sincronizar (sin conexión)
+    // el número provisional es '#n', y entonces se usa el del episodio.
+    const numeroOrdenVisible = savedOrder.orderNumber && !savedOrder.orderNumber.startsWith('#')
+      ? savedOrder.orderNumber
+      : createdEpisode.episodeNumber;
+
     playNotificationChime('success');
-    showNotification(`¡Orden ${createdEpisode.episodeNumber} liquidada y registrada exitosamente!`, 'success');
+    showNotification(`¡Orden ${numeroOrdenVisible} liquidada y registrada exitosamente!`, 'success');
 
     setIsReviewModalOpen(false);
 
     setCreatedOrderModal({
       patientId: patientObj.id,
-      orderNumber: createdEpisode.episodeNumber,
+      orderNumber: numeroOrdenVisible,
       orderDate: orderDate || getTodayStr(),
       orderTime: formattedTime,
       barcode: barcodeNumber,
