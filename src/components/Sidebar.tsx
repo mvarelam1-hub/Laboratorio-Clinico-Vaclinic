@@ -139,7 +139,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'principal', titulo: 'Inicio',
       items: [
         { tab: 'dashboard', etiqueta: 'Dashboard', icono: LayoutDashboard, domId: 'btn-nav-dashboard' },
-        { tab: 'estadisticas', etiqueta: 'Estadísticas', icono: BarChart3 }
+        { tab: 'estadisticas', etiqueta: 'Estadísticas', icono: BarChart3 },
+        { tab: 'chat_interno', etiqueta: 'Chat interno', icono: MessageSquare, contador: unreadChatCount, alerta: true }
       ]
     },
     {
@@ -179,6 +180,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { tab: 'usuarios', etiqueta: 'Usuarios y roles', icono: UserCog },
         { tab: 'auditoria', etiqueta: 'Auditoría', icono: ScrollText },
         { tab: 'ajustes', etiqueta: 'Ajustes', icono: SlidersHorizontal, contador: reagentsBelowMinThreshold.length, alerta: true, titulo: 'Ajustes del laboratorio (el contador son reactivos bajo el mínimo)' },
+        { tab: 'respaldos', etiqueta: 'Respaldos', icono: Database },
         // Solo en demostración: simuladores sin datos reales.
         ...(DEMO_MODE ? [
           { tab: 'asistente_ia' as StaffTabType, etiqueta: 'Asistente IA (demo)', icono: Sparkles },
