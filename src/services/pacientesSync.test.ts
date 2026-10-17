@@ -23,6 +23,13 @@ describe('combinarPacientesRemotos', () => {
     const r = combinarPacientesRemotosPrueba();
     expect(r.map((p) => p.id)).toEqual(['1', 'pat-offline']);
   });
+  it('el código VAC sale siempre del número real del registro, aunque el equipo guardara otro (no se repite)', () => {
+    // Un código local viejo (calculado contando pacientes) no debe pisar al real.
+    const l = [local('7', 'Uno', { patientCode: 'VAC-000003' } as Partial<Patient>)];
+    const r = combinarPacientesRemotos(l, [fila(3, 'Tres'), fila(7, 'Siete')]);
+    expect(r.map((p) => p.patientCode)).toEqual(['VAC-000003', 'VAC-000007']);
+    expect(new Set(r.map((p) => p.patientCode)).size).toBe(2);
+  });
 });
 
 function combinarPacientesRemotosPrueba() {
