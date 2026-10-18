@@ -38,12 +38,20 @@ import { BiometricSecuritySection } from './components/staff/BiometricSecuritySe
 import { GlobalShortcutsManager } from './components/staff/GlobalShortcutsManager';
 import { MicroscopicAtlasView } from './components/staff/MicroscopicAtlasView';
 import { BackupRestoreView } from './components/staff/BackupRestoreView';
-import { BackupRestoreModal } from './components/staff/BackupRestoreModal';
 
 import { CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { role, setRole, staffActiveTab, notification, isStaffAuthenticated, staffAuthMeta, isBackupModalOpen, setIsBackupModalOpen } = useClinic();
+  const { role, setRole, staffActiveTab, notification, isStaffAuthenticated, staffAuthMeta, isBackupModalOpen, setIsBackupModalOpen, setStaffActiveTab } = useClinic();
+
+  // Una sola pantalla de respaldos: los botones "Copia de respaldo" de Ajustes
+  // llevan a la sección Respaldos en vez de abrir una ventana duplicada.
+  useEffect(() => {
+    if (isBackupModalOpen) {
+      setStaffActiveTab('respaldos');
+      setIsBackupModalOpen(false);
+    }
+  }, [isBackupModalOpen, setIsBackupModalOpen, setStaffActiveTab]);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -167,12 +175,6 @@ const MainContent: React.FC = () => {
 
       {/* Official Print Modal */}
       <PrintReportModal />
-
-      {/* Backup and Recovery Full Modal */}
-      <BackupRestoreModal 
-        isOpen={isBackupModalOpen} 
-        onClose={() => setIsBackupModalOpen(false)} 
-      />
 
       {/* Interactive Push Notification Banner */}
       <PushNotificationToast />
