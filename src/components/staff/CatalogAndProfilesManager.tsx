@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useClinic } from '../../context/ClinicContext';
-import { LabCatalogItem, LabCatalogCategory, LabResultType, LabCustomProfile } from '../../types';
+import { LabCatalogItem, LabCatalogCategory, LabResultType, LabCustomProfile, ProfileTestItem } from '../../types';
 import { CATALOG_CATEGORIES_META } from '../../data/factoryCatalog';
 import { CatalogDatagrid } from './CatalogDatagrid';
 import { TestDetailModal } from './TestDetailModal';
@@ -183,8 +183,8 @@ export const CatalogAndProfilesManager: React.FC = () => {
         const foundExisting = existingTests.find(t => t.catalogTestId === testId || t.id === testId);
         if (foundExisting) return foundExisting;
         const cat = catalogTests.find(c => c.id === testId);
-        return cat ? buildProfileTestFromCatalog(cat) : { id: testId, name: testId };
-      });
+        return cat ? buildProfileTestFromCatalog(cat) : null;
+      }).filter((t): t is ProfileTestItem => t !== null);
 
       const updatedProfile: LabCustomProfile = {
         ...editingProfile,
@@ -208,8 +208,8 @@ export const CatalogAndProfilesManager: React.FC = () => {
     } else {
       const initialTests = profileBuilderForm.selectedTestIds.map(testId => {
         const cat = catalogTests.find(c => c.id === testId);
-        return cat ? buildProfileTestFromCatalog(cat) : { id: `ptest-${Date.now()}`, name: testId };
-      });
+        return cat ? buildProfileTestFromCatalog(cat) : null;
+      }).filter((t): t is ProfileTestItem => t !== null);
 
       const newProfile = await addCustomProfile({
         name: profileBuilderForm.name,

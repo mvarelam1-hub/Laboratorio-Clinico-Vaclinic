@@ -1044,7 +1044,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
           {/* Herramientas de apoyo (secundarias) */}
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <button type="button" id="btn-interpretacion-ia" onClick={() => setShowAiInterpretation(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg cursor-pointer" title="Explicación en lenguaje sencillo con IA (no diagnostica; tú la revisas antes de usarla)">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" /><span>Interpretación IA</span>
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" /><span>{incluirExplicacion && patientExplanation.trim() ? 'Interpretación IA agregada ✓' : 'Interpretación IA'}</span>
             </button>
             <button type="button" onClick={() => setShowTubeGuideModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Tipos de tubos de extracción y anticoagulantes">
               <FlaskConical className="w-3.5 h-3.5 text-amber-600" /><span>Guía de Tubos</span>
@@ -1055,8 +1055,8 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             <button type="button" onClick={() => setShowPdfExportModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Exportar PDF oficial">
               <Download className="w-3.5 h-3.5 text-teal-600" /><span>Exportar PDF</span>
             </button>
-            <button type="button" id="btn-physical-print-preview" onClick={() => setShowPhysicalPrintPreview(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Cómo se verá en papel">
-              <Eye className="w-3.5 h-3.5 text-sky-600" /><span>Vista de impresión</span>
+            <button type="button" id="btn-physical-print-preview" onClick={() => setShowPhysicalPrintPreview(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Ver cómo queda el informe en papel y desde ahí imprimirlo">
+              <Eye className="w-3.5 h-3.5 text-sky-600" /><span>Ver / imprimir informe</span>
             </button>
             <button type="button" id="btn-thermal-print-preview" onClick={() => setShowThermalPrintModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Formato ticket térmico">
               <Printer className="w-3.5 h-3.5 text-slate-600" /><span>Ticket térmico</span>
@@ -1438,7 +1438,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                       </span>
                     </div>
                     <p className="text-slate-600 text-[11px]">
-                      {attachedAnalyzerReport.diagnosticSummary || 'Reporte de citometría de flujo e impedancia con histogramas WBC, RBC, PLT preservados.'}
+                      Reporte de citometría de flujo e impedancia con histogramas WBC, RBC, PLT preservados.
                     </p>
                   </div>
                 </div>
@@ -1916,7 +1916,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
               {!soloOrden && (<button
                 type="button"
-                onClick={handleGenerateWithAI}
+                onClick={() => handleGenerateWithAI()}
                 disabled={isAiGenerating}
                 className="flex items-center gap-1.5 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
               >
@@ -2140,35 +2140,8 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
             {soloOrden && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2" data-testid="acciones-informe">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Acciones del informe</div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Entrega del informe</div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAiInterpretation(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl cursor-pointer"
-                    title="Genera una explicación sencilla con IA (no diagnostica) y la agrega al informe cuando tú la apruebas"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>{incluirExplicacion && patientExplanation.trim() ? 'Interpretación IA agregada ✓' : 'Agregar interpretación IA'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowPhysicalPrintPreview(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-300 rounded-xl cursor-pointer"
-                    title="Ver cómo queda el informe"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-sky-600" />
-                    <span>Ver informe</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowPhysicalPrintPreview(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl cursor-pointer"
-                    title="Abre la vista previa y desde ahí se imprime"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Imprimir</span>
-                  </button>
                   <button
                     type="button"
                     onClick={enviarAlPaciente}
@@ -2844,10 +2817,6 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
         parameters={parameters}
         onConfirmAndSave={handleConfirmAndSaveFromModal}
         targetStatus={pendingSaveTargetStatus}
-        patientName={currentPatient?.fullName}
-        patientAge={currentPatient?.age}
-        patientGender={currentPatient?.gender}
-        studyTitle={title}
       />
 
       {/* Hematology Analyzer Uploader Modal */}
@@ -2855,7 +2824,6 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
         isOpen={showHematologyAnalyzerModal}
         onClose={() => setShowHematologyAnalyzerModal(false)}
         onApplyToCurrentEditor={handleApplyAnalyzerData}
-        initialPatientId={patientId}
       />
 
       {/* Attached Analyzer Report Full Viewer Modal */}

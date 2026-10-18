@@ -36,8 +36,8 @@ export const NosotrosEditor: React.FC = () => {
     let vivo = true;
     obtenerNosotrosAdmin().then((r) => {
       if (!vivo) return;
-      if (r.ok) setDatos(rellenar(r.datos));
-      else setAviso({ tipo: 'error', texto: r.message });
+      if (r.ok === false) setAviso({ tipo: 'error', texto: r.message });
+      else setDatos(rellenar(r.datos));
       setCargando(false);
     });
     return () => { vivo = false; };
@@ -55,11 +55,11 @@ export const NosotrosEditor: React.FC = () => {
     setAviso(null);
     const r = await guardarNosotros(datos);
     setGuardando(false);
-    if (r.ok) {
+    if (r.ok === false) {
+      setAviso({ tipo: 'error', texto: r.message });
+    } else {
       setDatos(rellenar(r.datos));
       setAviso({ tipo: 'ok', texto: 'Listo: la página Nosotros ya muestra estos textos.' });
-    } else {
-      setAviso({ tipo: 'error', texto: r.message });
     }
   }
 

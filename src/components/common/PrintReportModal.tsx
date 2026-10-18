@@ -24,11 +24,12 @@ import {
   Copy,
   Check,
   Share2,
-  Droplet
+  Droplet,
+  ImageIcon
 } from 'lucide-react';
 
 export const PrintReportModal: React.FC = () => {
-  const { activeReportToPrint, setActiveReportToPrint, reports, labSettings, currentStaffUser, orders, showNotification } = useClinic();
+  const { activeReportToPrint, setActiveReportToPrint, reports, labSettings, currentStaffUser, orders, showNotification, setStaffActiveTab, setActiveSettingsSubTab } = useClinic();
   const printSheetRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -182,7 +183,7 @@ export const PrintReportModal: React.FC = () => {
         .report-sheet-container {
           display: flex !important;
           flex-direction: column !important;
-          min-height: 100% !important;
+          min-height: 0 !important;
         }
         .avoid-page-break, .report-signatures-footer, .signatures-block {
           break-inside: avoid !important;
@@ -190,7 +191,7 @@ export const PrintReportModal: React.FC = () => {
           -webkit-column-break-inside: avoid !important;
         }
         .report-signatures-footer, footer.report-footer {
-          margin-top: auto !important;
+          margin-top: 8px !important;
           break-inside: avoid !important;
           page-break-inside: avoid !important;
           break-before: auto !important;
@@ -319,6 +320,22 @@ export const PrintReportModal: React.FC = () => {
               <Download className={`w-4 h-4 ${isExporting ? 'animate-bounce' : ''}`} />
               <span>{isExporting ? 'Generando PDF...' : 'Descargar PDF'}</span>
             </button>
+
+            {currentStaffUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveSettingsSubTab('membrete');
+                  setStaffActiveTab('ajustes');
+                  setActiveReportToPrint(null);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all cursor-pointer"
+                title="Abrir Ajustes → Membrete para subir otro logo, cambiar su tamaño o su posición"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Cambiar logo</span>
+              </button>
+            )}
 
             {/* Close Modal */}
             <button

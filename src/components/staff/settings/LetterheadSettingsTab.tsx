@@ -4,6 +4,7 @@ import {
   HeaderMode, 
   LogoPosition, 
   WatermarkType, 
+  WatermarkPreset, 
   WatermarkPosition, 
   FooterMode 
 } from '../../../types/labSettings';
@@ -686,7 +687,7 @@ export const LetterheadSettingsTab: React.FC<LetterheadSettingsTabProps> = ({
                   <button
                     key={txt}
                     type="button"
-                    onClick={() => onChange({ watermarkPreset: txt })}
+                    onClick={() => onChange({ watermarkPreset: txt as WatermarkPreset })}
                     className={`py-2 px-2.5 rounded-lg border text-xs font-black uppercase transition-all cursor-pointer text-center ${
                       settings.watermarkPreset === txt
                         ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
@@ -852,9 +853,9 @@ export const LetterheadSettingsTab: React.FC<LetterheadSettingsTabProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <button
             type="button"
-            onClick={() => onChange({ footerMode: 'standard' })}
+            onClick={() => onChange({ footerMode: 'standard_info' })}
             className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
-              (settings.footerMode || 'standard') === 'standard'
+              (settings.footerMode || 'standard_info') === 'standard_info'
                 ? 'border-teal-500 bg-teal-50/50 shadow-xs ring-2 ring-teal-500/20'
                 : 'border-slate-200 bg-white hover:border-slate-300'
             }`}
@@ -862,7 +863,7 @@ export const LetterheadSettingsTab: React.FC<LetterheadSettingsTabProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="font-black text-xs text-slate-900">Columnas Corporativas</span>
-                {(settings.footerMode || 'standard') === 'standard' && (
+                {(settings.footerMode || 'standard_info') === 'standard_info' && (
                   <Check className="w-4 h-4 text-teal-600 font-bold" />
                 )}
               </div>
@@ -928,7 +929,7 @@ export const LetterheadSettingsTab: React.FC<LetterheadSettingsTabProps> = ({
               {settings.footerBannerUrl && (
                 <button
                   type="button"
-                  onClick={() => onChange({ footerBannerUrl: '', footerMode: 'standard' })}
+                  onClick={() => onChange({ footerBannerUrl: '', footerMode: 'standard_info' })}
                   className="text-[10px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
                 >
                   <Trash2 className="w-3 h-3" />

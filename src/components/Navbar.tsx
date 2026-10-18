@@ -3,7 +3,6 @@ import { useClinic } from '../context/ClinicContext';
 import { PatientNotificationCenter } from './patient/PatientNotificationCenter';
 import { 
   UserCheck, 
-  PlusCircle, 
   FlaskConical, 
   Lock, 
   LogOut, 
@@ -11,9 +10,7 @@ import {
   Menu,
   Sparkles,
   MapPin,
-  MessageSquare,
-  Keyboard,
-  Database
+  Keyboard
 } from 'lucide-react';
 import { DEMO_MODE } from '../config/demoMode';
 import { KeyboardShortcutsHelpModal } from './staff/KeyboardShortcutsHelpModal';
@@ -34,17 +31,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
     branches,
     isMultiBranchEnabled,
     currentStaffUser,
-    setActiveReportToEdit,
     logoutPatient,
     isStaffAuthenticated,
     setIsStaffAuthenticated,
-    logoutStaff,
     showNotification,
-    pushNotifications,
-    unreadChatCount,
-    isChatFloatingOpen,
-    setIsChatFloatingOpen,
-    setIsBackupModalOpen
+    pushNotifications
   } = useClinic();
   const nombreSedeActiva = branches.find((b) => b.id === currentBranch)?.name ?? currentBranch;
 
@@ -199,7 +190,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             )}
 
             {/* Notifications Bell Hub Button (el portal real no tiene avisos push simulados) */}
-            {(role === 'personal' || DEMO_MODE) && <button
+            {DEMO_MODE && <button
               onClick={() => setShowNotificationCenter(true)}
               className="relative p-2 rounded-xl text-slate-600 hover:text-cyan-700 hover:bg-cyan-50 border border-slate-200 transition-all cursor-pointer"
               title="Avisos y Notificaciones Push"
@@ -211,30 +202,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                 </span>
               )}
             </button>}
-
-            {/* Internal Staff Chat Button */}
-            {role === 'personal' && (
-              <button
-                id="btn-navbar-internal-chat"
-                onClick={() => setIsChatFloatingOpen(!isChatFloatingOpen)}
-                className={`relative flex items-center gap-1.5 px-2.5 py-2 rounded-xl border transition-all cursor-pointer ${
-                  isChatFloatingOpen
-                    ? 'bg-teal-50 text-teal-700 border-teal-300 font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-teal-700 hover:bg-teal-50 border-slate-200'
-                }`}
-                title="Chat Intercom (Escribir mensaje a Recepción, Analistas o Admón)"
-              >
-                <div className="relative">
-                  <MessageSquare className="w-4 h-4 text-teal-600" />
-                  {unreadChatCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[9px] font-black text-white animate-pulse">
-                      {unreadChatCount}
-                    </span>
-                  )}
-                </div>
-                <span className="hidden min-[2200px]:inline text-xs font-bold">Chat</span>
-              </button>
-            )}
 
             {/* Global Keyboard Shortcuts Help Button */}
             {role === 'personal' && (
@@ -252,47 +219,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
               </button>
             )}
 
-            {/* Quick Backup & Restore Hub Trigger */}
-            {role === 'personal' && (
-              <button
-                id="btn-navbar-backup-hub"
-                type="button"
-                onClick={() => setIsBackupModalOpen(true)}
-                className="flex items-center gap-1.5 text-slate-700 hover:text-teal-700 hover:bg-teal-50 px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                title="Copia de Seguridad y Respaldo de Datos (.json)"
-              >
-                <Database className="w-4 h-4 text-teal-600" />
-                <span className="hidden min-[2200px]:inline text-xs font-bold">Respaldo</span>
-              </button>
-            )}
-
             {role === 'personal' ? (
-              <div className="flex items-center gap-2">
-                <button
-                  id="btn-nueva-redaccion"
-                  onClick={() => {
-                    setActiveReportToEdit(null);
-                    setStaffActiveTab('redactor');
-                  }}
-                  className="flex items-center gap-1.5 bg-coral-pulse hover:bg-coral-hover active:scale-98 text-[#1a1a1a] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer"
-                  title="Abrir Editor de Informes Clínicos y Analizador Ozelle"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span className="hidden min-[2200px]:inline">Editor de Informes</span>
-                </button>
-
-                {/* Staff Lock / Logout Button */}
-                <button
-                  id="btn-lock-staff-terminal"
-                  type="button"
-                  onClick={logoutStaff}
-                  title={`Sesión activa: ${currentStaffUser?.fullName || 'Staff'}. Clic para bloquear terminal LIS`}
-                  className="flex items-center gap-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-200 text-xs font-semibold transition-all cursor-pointer"
-                >
-                  <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 hover:text-rose-600" />
-                  <span className="hidden min-[2200px]:inline">Bloquear Terminal</span>
-                </button>
-              </div>
+              null
             ) : (
               <div className="flex items-center gap-2">
                 {currentPatient ? (

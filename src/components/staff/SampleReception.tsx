@@ -26,6 +26,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
+import { useInstalarApp } from '../../utils/instalarApp';
 import { 
   inferTubeForTest, 
   LAB_TUBE_REGISTRY, 
@@ -187,6 +188,9 @@ export const SampleReception: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedTubeFilter, setSelectedTubeFilter] = useState<string>('all');
   const [showNewSampleModal, setShowNewSampleModal] = useState(false);
+  // Aviso visible al registrar o recibir una muestra (con la opción de instalar la app).
+  const [avisoMuestra, setAvisoMuestra] = useState<string | null>(null);
+  const { puedeInstalar, instalar } = useInstalarApp();
   const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false);
   const [activeBarcodeLabel, setActiveBarcodeLabel] = useState<LabSample | null>(null);
   const [lastValidatedSample, setLastValidatedSample] = useState<LabSample | null>(null);
@@ -255,6 +259,7 @@ export const SampleReception: React.FC = () => {
         setShowNewSampleModal(false);
         setNewOrderId('');
         setActiveBarcodeLabel(nueva);
+        setAvisoMuestra(`${def.containerType === 'recipiente' ? 'Recipiente' : 'Tubo'} ${nueva.barcode} registrado en la orden ${nueva.orderNumber}.`);
         showNotification(`${def.containerType === 'recipiente' ? 'Recipiente' : 'Tubo'} rotulado con código ${nueva.barcode} y guardado en la orden ${nueva.orderNumber}.`, 'success');
       } catch (err) {
         showNotification(`No se pudo guardar la muestra: ${err instanceof Error ? err.message : 'error desconocido'}`, 'error');
@@ -320,6 +325,7 @@ export const SampleReception: React.FC = () => {
         const escaneada = desdeApi(fila);
         setSamples(prev => prev.some(s => s.id === escaneada.id) ? prev.map(s => s.id === escaneada.id ? escaneada : s) : [escaneada, ...prev]);
         setLastValidatedSample(escaneada);
+        setAvisoMuestra(`${escaneada.containerCategory === 'recipiente' ? 'Recipiente' : 'Tubo'} ${escaneada.barcode} recibido (paciente: ${escaneada.patientName}).`);
         showNotification(`¡Muestra validada por escáner! ${escaneada.containerCategory === 'recipiente' ? 'Recipiente' : 'Tubo'} ${escaneada.barcode} - Paciente: ${escaneada.patientName}`, 'success');
       } catch (err) {
         showNotification(err instanceof Error ? err.message : `No se pudo validar el código ${clean}.`, 'error');
@@ -411,7 +417,32 @@ export const SampleReception: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      
+
+      {avisoMuestra && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <span className="font-semibold">{avisoMuestra}</span>
+          <span className="flex items-center gap-2">
+            {puedeInstalar && (
+              <button
+                type="button"
+                onClick={() => { void instalar(); }}
+                className="rounded-xl bg-teal-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-teal-700 cursor-pointer"
+                title="Instala VACLINIC como aplicación en este dispositivo"
+              >
+                Instalar aplicación
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setAvisoMuestra(null)}
+              className="rounded-xl px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer"
+            >
+              Cerrar
+            </button>
+          </span>
+        </div>
+      )}
+
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 text-white p-6 rounded-3xl border border-teal-500/20 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

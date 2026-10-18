@@ -25,7 +25,8 @@ import {
   Info,
   Palette,
   LayoutTemplate,
-  Bookmark
+  Bookmark,
+  ImageIcon
 } from 'lucide-react';
 
 export interface PhysicalPrintPreviewModalProps {
@@ -54,16 +55,22 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
   doctorSpecialty,
   doctorLicense
 }) => {
-  const { labSettings, orders, showNotification } = useClinic();
+  const { labSettings, orders, showNotification, setStaffActiveTab, setActiveSettingsSubTab } = useClinic();
+
+  const irACambiarLogo = () => {
+    setActiveSettingsSubTab('membrete');
+    setStaffActiveTab('ajustes');
+    onClose();
+  };
   const printSheetRef = useRef<HTMLDivElement>(null);
 
   // Simulation controls state
   const [paperFilter, setPaperFilter] = useState<PaperFilterType>('bond_laser');
   const [paperSize, setPaperSize] = useState<PaperSizeType>('letter');
   const [zoomLevel, setZoomLevel] = useState<number>(85); // 85% default fits nicely on desktop
-  const [showPrintMargins, setShowPrintMargins] = useState<boolean>(true);
+  const [showPrintMargins, setShowPrintMargins] = useState<boolean>(false);
   const [showPageBreaks, setShowPageBreaks] = useState<boolean>(true);
-  const [pinFooterToBottom, setPinFooterToBottom] = useState<boolean>(true);
+  const [pinFooterToBottom, setPinFooterToBottom] = useState<boolean>(false);
   const [showPaperClips, setShowPaperClips] = useState<boolean>(true);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [separateAnnexSheet, setSeparateAnnexSheet] = useState<boolean>(true);
@@ -325,6 +332,16 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
           >
             <Printer className="w-3.5 h-3.5 text-slate-950" />
             <span>Imprimir Ahora</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={irACambiarLogo}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all cursor-pointer"
+            title="Abrir Ajustes → Membrete para subir otro logo, cambiar su tamaño o su posición"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Cambiar logo</span>
           </button>
 
           <button

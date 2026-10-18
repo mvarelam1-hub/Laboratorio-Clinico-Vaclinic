@@ -106,6 +106,9 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
   const { labSettings: contextLabSettings, orders } = useClinic();
   const labSettings = customSettings || contextLabSettings;
   const accent = labSettings.primaryColor || '#0f766e';
+  // Logo del encabezado: respeta el tamaño (40–130 px) y la posición elegidos en Ajustes → Membrete.
+  const alturaLogo = Math.min(130, Math.max(40, Number(labSettings.logoWidthPx) || 64));
+  const posicionLogo = labSettings.logoPosition || 'left';
 
   const [qrUrl, setQrUrl] = useState<string>('');
 
@@ -188,7 +191,7 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
   return (
     <div
       id={id}
-      className={`report-sheet-container bg-white w-full max-w-[850px] relative font-sans select-text overflow-hidden print:overflow-visible print:p-0 print:w-full print:max-w-none print:min-h-0 print:flex print:flex-col print:justify-between ${
+      className={`report-sheet-container bg-white w-full max-w-[850px] relative font-sans select-text overflow-hidden print:overflow-visible print:p-0 print:w-full print:max-w-none print:min-h-0 print:flex print:flex-col ${
         isCompactSinglePage ? 'text-[11px]' : 'text-xs'
       } ${pinFooterToBottom ? 'h-full flex flex-col justify-between' : ''}`}
       style={{
@@ -217,11 +220,20 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
       {/* ENCABEZADO */}
       <header className="relative z-10 mb-2">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={`flex gap-3 min-w-0 ${
+              posicionLogo === 'center' ? 'flex-col items-center text-center' : posicionLogo === 'right' ? 'flex-row-reverse items-center' : 'items-center'
+            }`}
+          >
             {labSettings.logoUrl ? (
-              <img src={labSettings.logoUrl} alt="Logo" className="h-16 w-auto object-contain flex-shrink-0 rounded-xl" />
+              <img
+                src={labSettings.logoUrl}
+                alt="Logo"
+                className="w-auto object-contain flex-shrink-0 rounded-xl"
+                style={{ height: `${alturaLogo}px`, maxWidth: '40%' }}
+              />
             ) : (
-              <svg viewBox="0 0 100 100" className="w-16 h-16 flex-shrink-0" aria-hidden="true">
+              <svg viewBox="0 0 100 100" className="flex-shrink-0" style={{ width: `${alturaLogo}px`, height: `${alturaLogo}px` }} aria-hidden="true">
                 <circle cx="50" cy="50" r="46" fill="none" stroke={accent} strokeWidth="5" />
                 <rect x="45" y="22" width="10" height="56" rx="2" fill={accent} />
                 <rect x="22" y="45" width="56" height="10" rx="2" fill={accent} />
@@ -356,8 +368,8 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
             const subtitulo = [section.sampleType, section.methodology].filter(Boolean).join(' · ');
             const n = section.parameters.length;
             return (
-              <div key={section.id} className="avoid-page-break rounded-xl overflow-hidden" style={{ border: `1px solid ${RULE}`, background: '#ffffff' }}>
-                <div className="flex items-center justify-between gap-3 px-3 py-2">
+              <div key={section.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${RULE}`, background: '#ffffff' }}>
+                <div className="avoid-page-break-after flex items-center justify-between gap-3 px-3 py-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <Icono color={accent} bg={tint(0x26)} size={22}><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3" /></Icono>
                     <div className="min-w-0">
@@ -370,7 +382,7 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
                   </span>
                 </div>
                 <table className="w-full text-left border-collapse">
-                  <thead>
+                  <thead style={{ display: 'table-header-group' }}>
                     <tr className="text-[8px] uppercase tracking-wider" style={{ color: MUTED, background: '#f8fafc', borderTop: `1px solid ${RULE}`, borderBottom: `1px solid ${RULE}` }}>
                       <th className="py-1 pl-3 pr-2 font-bold">Examen / parámetro</th>
                       <th className="py-1 px-2 font-bold w-[22%]">Resultado obtenido</th>
@@ -389,7 +401,7 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
                       const rowPad = isCompactSinglePage ? 'py-[3px]' : 'py-1';
                       const colorValor = !fuera ? INK : esBajo ? BAJO_TXT : ALTO_TXT;
                       return (
-                        <tr key={param.id || `${section.id}-${pIdx}`} style={pIdx > 0 ? { borderTop: `1px solid ${RULE}` } : undefined}>
+                        <tr key={param.id || `${section.id}-${pIdx}`} style={{ breakInside: 'avoid', pageBreakInside: 'avoid', ...(pIdx > 0 ? { borderTop: `1px solid ${RULE}` } : {}) }}>
                           <td className={`${rowPad} pl-3 pr-2 text-[10.5px] ${fuera ? 'font-bold' : 'font-semibold'}`}>
                             <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style={{ background: accent }} />
                             {param.name}
@@ -436,7 +448,7 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
 
       {/* CIERRE, NOTAS Y FIRMAS */}
       <div
-        className={`avoid-page-break report-signatures-footer relative z-10 space-y-2 print:mt-auto print:pt-1 ${
+        className={`avoid-page-break report-signatures-footer relative z-10 space-y-2 ${
           pinFooterToBottom ? 'mt-auto pt-2' : 'mt-2'
         }`}
       >
