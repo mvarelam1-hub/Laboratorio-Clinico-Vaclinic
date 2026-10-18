@@ -14,9 +14,11 @@ export type TableHeaderStyle = 'tinted' | 'solid_dark' | 'minimal_border' | 'acc
 
 export type ReportFontFamily = 'inter' | 'sans' | 'serif' | 'arial' | 'jakarta' | 'mono';
 
-export type WatermarkPreset = 'none' | 'OFICIAL VALIDADO' | 'CONFIDENCIAL' | 'COPIA CERTIFICADA' | 'URGENTE / STAT' | 'MUESTRA DUPLICADA' | 'PERSONALIZADA';
+export type WatermarkPreset = 'none' | 'OFICIAL VALIDADO' | 'CONFIDENCIAL' | 'COPIA CERTIFICADA' | 'URGENTE / STAT' | 'MUESTRA DUPLICADA' | 'PERSONALIZADA'
+  // Textos cortos del selector de la pantalla de membrete
+  | 'ORIGINAL' | 'COPIA' | 'VALIDADO' | 'MUESTRA';
 
-export type WatermarkType = 'preset_text' | 'custom_text' | 'custom_image';
+export type WatermarkType = 'none' | 'preset_text' | 'custom_text' | 'custom_image';
 
 export type WatermarkPosition = 'center' | 'diagonal_center' | 'top' | 'bottom' | 'repeat';
 
