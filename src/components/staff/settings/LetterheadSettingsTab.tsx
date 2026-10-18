@@ -6,31 +6,23 @@ import {
   WatermarkType, 
   WatermarkPreset, 
   WatermarkPosition, 
-  FooterMode 
+  FooterMode,
+  LabSignerConfig
 } from '../../../types/labSettings';
 import { 
   Building2, 
   Image as ImageIcon, 
   Upload, 
   Trash2, 
-  FileText, 
   Check, 
   Info, 
   Sparkles, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Globe, 
-  Award, 
   Layers,
-  Stamp,
   PenTool,
   Sliders,
   Eye,
   Move,
-  FileCheck,
-  ShieldCheck,
-  Percent
+  ShieldCheck
 } from 'lucide-react';
 
 interface LetterheadSettingsTabProps {
@@ -46,8 +38,7 @@ export const LetterheadSettingsTab: React.FC<LetterheadSettingsTabProps> = ({
   const bannerFileInputRef = useRef<HTMLInputElement>(null);
   const watermarkFileInputRef = useRef<HTMLInputElement>(null);
   const footerBannerFileInputRef = useRef<HTMLInputElement>(null);
-  const signatureFileInputRef = useRef<HTMLInputElement>(null);
-  const stampFileInputRef = useRef<HTMLInputElement>(null);
+  const firmaFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -113,35 +104,38 @@ export const LetterheadSettingsTab: React.FC<LetterheadSettingsTabProps> = ({
     }
   };
 
-  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          onChange({
-            officialSignatureUrl: event.target.result as string
-          });
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+  /** Las tres firmas del informe (mismo orden que en la hoja): cada una lleva una sola imagen con firma y sello. */
+  const RANURAS_FIRMA: { id: string; etiqueta: string; ayuda: string }[] = [
+    { id: 'signer_1_prep', etiqueta: 'Elaborado por', ayuda: 'Quien realiza los análisis' },
+    { id: 'signer_2_qb', etiqueta: 'Visto bueno', ayuda: 'Químico biólogo que revisa' },
+    { id: 'signer_3_tech', etiqueta: 'Autorizado por', ayuda: 'Quien autoriza y entrega el informe' }
+  ];
+  const [errorFirma, setErrorFirma] = React.useState<string | null>(null);
+
+  const actualizarFirmante = (id: string, cambios: Partial<LabSignerConfig>) => {
+    onChange({ signers: settings.signers.map((s) => (s.id === id ? { ...s, ...cambios } : s)) });
   };
 
-  const handleStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const subirImagenFirma = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          onChange({
-            officialStampUrl: event.target.result as string,
-            showOfficialStamp: true
-          });
-        }
-      };
-      reader.readAsDataURL(file);
+    e.target.value = '';
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+      setErrorFirma('La imagen debe ser PNG, JPG o WEBP.');
+      return;
     }
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorFirma('La imagen pesa más de 2 MB. Usa una más liviana.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setErrorFirma(null);
+        actualizarFirmante(id, { signatureImageUrl: event.target.result as string, signatureType: 'image' });
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -987,228 +981,117 @@ export const LetterheadSettingsTab: React.FC<LetterheadSettingsTabProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. FIRMA DIGITALIZADA Y SELLO OFICIAL                                      */}
+      {/* FIRMAS Y SELLOS DEL INFORME: tres imágenes (Elaborado por / Visto bueno / Autorizado por) */}
       {/* ========================================================================= */}
       <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
         <div>
           <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
             <PenTool className="w-4 h-4 text-teal-600" />
-            Firma Digitalizada y Sello Oficial del Laboratorio
+            Firmas y Sellos del Informe
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Sube el trazo manuscrito escaneado del profesional responsable y el sello institucional para impresión automática.
+            Sube una imagen por cada firma (firma y sello juntos, PNG con fondo transparente o blanco). Se imprimen al pie del informe, en este orden: Elaborado por, Visto bueno y Autorizado por.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          {/* Card 1: Handwritten Signature */}
-          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
-                <PenTool className="w-3.5 h-3.5 text-teal-600" />
-                Firma Digitalizada del Bioanalista
-              </label>
-              {settings.officialSignatureUrl && (
-                <button
-                  type="button"
-                  onClick={() => onChange({ officialSignatureUrl: '' })}
-                  className="text-[10px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Quitar firma</span>
-                </button>
-              )}
-            </div>
+        {errorFirma && (
+          <p role="alert" className="text-xs font-bold text-rose-600">{errorFirma}</p>
+        )}
 
-            <input
-              type="file"
-              ref={signatureFileInputRef}
-              onChange={handleSignatureUpload}
-              accept="image/png, image/jpeg, image/webp"
-              className="hidden"
-            />
-
-            {/* Signature Preview or Upload Box */}
-            <div className="border border-slate-300 rounded-xl p-3 bg-white min-h-[90px] flex flex-col items-center justify-center relative">
-              {settings.officialSignatureUrl ? (
-                <div className="w-full flex flex-col items-center">
-                  <img 
-                    src={settings.officialSignatureUrl} 
-                    alt="Firma Digitalizada" 
-                    className="h-16 max-w-full object-contain filter contrast-125"
-                  />
-                  <div className="w-36 h-[1px] bg-slate-900 mt-1"></div>
-                  <span className="text-[9px] font-mono font-bold text-teal-700 mt-1">Firma Manuscrita Registrada</span>
-                </div>
-              ) : (
-                <div 
-                  onClick={() => signatureFileInputRef.current?.click()}
-                  className="text-center cursor-pointer p-2 w-full hover:bg-slate-50 rounded-lg transition-colors"
-                >
-                  <Upload className="w-5 h-5 text-slate-400 mx-auto mb-1" />
-                  <span className="text-xs font-bold text-slate-700 block">Subir Trazo de Firma (PNG)</span>
-                  <span className="text-[10px] text-slate-400 block">Fondo transparente para nitidez sobre papel</span>
-                </div>
-              )}
-            </div>
-
-            {/* Signer Bioanalyst Details */}
-            <div className="space-y-2.5 pt-1">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Nombre Completo del Responsable</label>
-                <input
-                  type="text"
-                  value={settings.officialSignerName || ''}
-                  onChange={(e) => onChange({ officialSignerName: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold bg-white focus:ring-2 focus:ring-teal-500/20 outline-hidden"
-                  placeholder="Licda. Claudia Barrientos"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Cargo Profesional</label>
-                  <input
-                    type="text"
-                    value={settings.officialSignerRole || ''}
-                    onChange={(e) => onChange({ officialSignerRole: e.target.value })}
-                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-teal-500/20 outline-hidden"
-                    placeholder="Química Bióloga"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Colegiado / Licencia</label>
-                  <input
-                    type="text"
-                    value={settings.officialSignerLicense || ''}
-                    onChange={(e) => onChange({ officialSignerLicense: e.target.value })}
-                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-teal-500/20 outline-hidden font-mono"
-                    placeholder="Col. #3884 - MSPAS"
-                  />
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Card 2: Official Stamp */}
-          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
-                <Stamp className="w-3.5 h-3.5 text-teal-600" />
-                Sello Oficial de Laboratorio
-              </label>
-              {settings.officialStampUrl && (
-                <button
-                  type="button"
-                  onClick={() => onChange({ officialStampUrl: '', showOfficialStamp: false })}
-                  className="text-[10px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Quitar sello</span>
-                </button>
-              )}
-            </div>
-
-            <input
-              type="file"
-              ref={stampFileInputRef}
-              onChange={handleStampUpload}
-              accept="image/png, image/jpeg, image/webp"
-              className="hidden"
-            />
-
-            {/* Stamp Preview or Upload Box */}
-            <div className="border border-slate-300 rounded-xl p-3 bg-white min-h-[90px] flex items-center justify-center relative overflow-hidden">
-              {settings.officialStampUrl ? (
-                <div className="flex items-center gap-4 w-full">
-                  <div 
-                    className="rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center p-1 relative flex-shrink-0"
-                    style={{ 
-                      width: `${settings.officialStampSizePx || 80}px`, 
-                      height: `${settings.officialStampSizePx || 80}px`,
-                      opacity: settings.officialStampOpacity ?? 0.88
-                    }}
-                  >
-                    <img 
-                      src={settings.officialStampUrl} 
-                      alt="Sello Oficial" 
-                      className="w-full h-full object-contain filter contrast-125 rotate-6"
-                    />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {RANURAS_FIRMA.map((ranura) => {
+            const firmante = settings.signers.find((x) => x.id === ranura.id);
+            if (!firmante) return null;
+            return (
+              <div key={ranura.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <label className="text-xs font-bold text-slate-800 uppercase block">{ranura.etiqueta}</label>
+                    <span className="text-[10px] text-slate-500">{ranura.ayuda}</span>
                   </div>
-                  <div className="flex-1 space-y-1">
-                    <span className="text-xs font-bold text-slate-800 block">Sello Oficial Cargado</span>
-                    <label className="flex items-center gap-2 cursor-pointer pt-1">
-                      <input
-                        type="checkbox"
-                        checked={settings.showOfficialStamp ?? true}
-                        onChange={(e) => onChange({ showOfficialStamp: e.target.checked })}
-                        className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 w-4 h-4 cursor-pointer"
-                      />
-                      <span className="text-xs font-semibold text-slate-700">Imprimir sello en informes</span>
-                    </label>
+                  {firmante.signatureImageUrl && (
                     <button
                       type="button"
-                      onClick={() => stampFileInputRef.current?.click()}
-                      className="text-xs font-bold text-teal-700 hover:text-teal-800 underline block cursor-pointer"
+                      onClick={() => actualizarFirmante(ranura.id, { signatureImageUrl: '', signatureType: 'crypto_generated' })}
+                      className="text-[10px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer shrink-0"
                     >
-                      Reemplazar sello...
+                      <Trash2 className="w-3 h-3" />
+                      <span>Quitar</span>
                     </button>
-                  </div>
+                  )}
                 </div>
-              ) : (
-                <div 
-                  onClick={() => stampFileInputRef.current?.click()}
-                  className="text-center cursor-pointer p-2 w-full hover:bg-slate-50 rounded-lg transition-colors"
+
+                <input
+                  type="file"
+                  ref={(el) => { firmaFileInputRefs.current[ranura.id] = el; }}
+                  onChange={(e) => subirImagenFirma(ranura.id, e)}
+                  accept="image/png, image/jpeg, image/webp"
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => firmaFileInputRefs.current[ranura.id]?.click()}
+                  className="w-full h-28 rounded-xl border-2 border-dashed border-slate-300 bg-white hover:bg-slate-50 flex items-center justify-center p-2 overflow-hidden cursor-pointer transition-colors"
+                  title={firmante.signatureImageUrl ? 'Cambiar la imagen' : 'Subir la imagen'}
                 >
-                  <Upload className="w-5 h-5 text-slate-400 mx-auto mb-1" />
-                  <span className="text-xs font-bold text-slate-700 block">Subir Sello de Hule / Circular (PNG)</span>
-                  <span className="text-[10px] text-slate-400 block">Sello digital con tinta azul/negra sin fondo</span>
-                </div>
-              )}
-            </div>
-
-            {/* Stamp Adjustments */}
-            {settings.officialStampUrl && (
-              <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] font-bold text-slate-600 uppercase">Tamaño:</label>
-                    <span className="text-[10px] font-mono font-bold text-teal-700">{settings.officialStampSizePx || 80}px</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={40}
-                    max={130}
-                    step={2}
-                    value={settings.officialStampSizePx || 80}
-                    onChange={(e) => onChange({ officialStampSizePx: Number(e.target.value) })}
-                    className="w-full accent-teal-600 cursor-pointer"
-                  />
-                </div>
+                  {firmante.signatureImageUrl ? (
+                    <img src={firmante.signatureImageUrl} alt={`Firma: ${ranura.etiqueta}`} className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <span className="text-center">
+                      <Upload className="w-5 h-5 text-slate-400 mx-auto mb-1" />
+                      <span className="text-xs font-bold text-slate-700 block">Subir imagen</span>
+                      <span className="text-[10px] text-slate-400 block">Firma y sello (PNG/JPG)</span>
+                    </span>
+                  )}
+                </button>
+                {firmante.signatureImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => firmaFileInputRefs.current[ranura.id]?.click()}
+                    className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Cambiar imagen</span>
+                  </button>
+                )}
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] font-bold text-slate-600 uppercase">Opacidad de Tinta:</label>
-                    <span className="text-[10px] font-mono font-bold text-teal-700">{Math.round((settings.officialStampOpacity ?? 0.88) * 100)}%</span>
-                  </div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Nombre</label>
                   <input
-                    type="range"
-                    min={30}
-                    max={100}
-                    step={5}
-                    value={Math.round((settings.officialStampOpacity ?? 0.88) * 100)}
-                    onChange={(e) => onChange({ officialStampOpacity: Number(e.target.value) / 100 })}
-                    className="w-full accent-teal-600 cursor-pointer"
+                    type="text"
+                    value={firmante.name}
+                    onChange={(e) => actualizarFirmante(ranura.id, { name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-teal-500/20 outline-hidden"
+                    placeholder="Nombre completo"
                   />
                 </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Cargo</label>
+                  <input
+                    type="text"
+                    value={firmante.roleTitle}
+                    onChange={(e) => actualizarFirmante(ranura.id, { roleTitle: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-teal-500/20 outline-hidden"
+                    placeholder="Ej. Químico Biólogo"
+                  />
+                </div>
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={firmante.enabled}
+                    onChange={(e) => actualizarFirmante(ranura.id, { enabled: e.target.checked })}
+                    className="w-4 h-4 text-teal-600 rounded cursor-pointer"
+                  />
+                  <span>Mostrar en los informes</span>
+                </label>
               </div>
-            )}
-
-          </div>
-
+            );
+          })}
         </div>
+        <p className="text-[10px] text-slate-400">
+          Para firmar con el mouse o el dedo en pantalla, usa la pestaña «Firmas». Recuerda pulsar «Guardar Ajustes» al terminar.
+        </p>
       </div>
       <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
