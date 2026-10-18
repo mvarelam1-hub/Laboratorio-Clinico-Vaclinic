@@ -831,7 +831,7 @@
     [id="vaclinic-official-pdf-sheet"] > div {
       display: flex !important;
       flex-direction: column !important;
-      min-height: 100% !important;
+      min-height: 0 !important;
       box-sizing: border-box !important;
     }
 
@@ -853,7 +853,7 @@
     .signatures-block,
     footer.report-footer,
     .report-sheet-container > footer {
-      margin-top: auto !important;
+      margin-top: 8px !important;
       break-inside: avoid !important;
       page-break-inside: avoid !important;
       break-before: auto !important;
