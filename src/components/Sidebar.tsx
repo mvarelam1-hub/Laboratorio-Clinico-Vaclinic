@@ -7,7 +7,6 @@ import {
   FlaskConical, 
   Shield, 
   Search, 
-  Bell, 
   FileText, 
   Plus, 
   Archive, 
@@ -257,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Search Bar + Ctrl K + Notification Bell */}
+        {/* Search Bar + Ctrl K */}
         {(!isCollapsed || isMobileOpen) && (
           <div className="px-3.5 pt-3 pb-2 flex-shrink-0">
             <div className="flex items-center gap-2">
@@ -274,20 +273,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   Ctrl K
                 </span>
               </div>
-
-              {/* Campana: abre las alertas reales (con contador solo si hay alertas) */}
-              <button
-                onClick={() => handleSelectTab('alertas')}
-                className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-canopy-claro transition-colors"
-                title={`Alertas (${totalAlertas})`}
-              >
-                <Bell className="w-4 h-4" />
-                {totalAlertas > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-[9px] font-black text-white">
-                    {totalAlertas}
-                  </span>
-                )}
-              </button>
             </div>
           </div>
         )}
