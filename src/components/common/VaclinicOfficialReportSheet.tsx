@@ -510,8 +510,8 @@ export const VaclinicOfficialReportSheet: React.FC<VaclinicOfficialReportSheetPr
                       <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>
                     )}
                   </Icono>
-                  <div className="w-full h-10 mt-1 flex items-end justify-center pb-0.5" style={{ borderBottom: `1px solid ${INK}` }}>
-                    {f.signatureImageUrl ? <img src={f.signatureImageUrl} alt="" className="max-h-10 object-contain" /> : null}
+                  <div className="w-full h-14 mt-1 flex items-end justify-center pb-0.5" style={{ borderBottom: `1px solid ${INK}` }}>
+                    {f.signatureImageUrl ? <img src={f.signatureImageUrl} alt="" className="max-h-14 max-w-full object-contain" /> : null}
                   </div>
                   {FIRMA_REPORTE[f.id] && (
                     <span className="text-[7.5px] font-bold uppercase tracking-wider mt-1" style={{ color: MUTED }}>{FIRMA_REPORTE[f.id].etiqueta}</span>
