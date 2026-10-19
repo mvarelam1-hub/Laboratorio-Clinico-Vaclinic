@@ -7,6 +7,7 @@ import {
   MessageSquare, 
   Phone, 
   ExternalLink,
+  Mail,
   ShieldCheck,
   Sparkles
 } from 'lucide-react';
@@ -17,11 +18,15 @@ export interface WhatsAppMessageModalProps {
   onClose: () => void;
   patientName: string;
   patientPhone?: string;
+  /** Correo del paciente: habilita el envío por correo. */
+  patientEmail?: string;
   patientCode?: string;
   accessCode?: string;
   /** N.º de orden: el único código visible (igual al del informe). */
   orderNumber?: string;
-  type: 'bienvenida_paciente' | 'comprobante_orden' | 'aviso_resultados';
+  type: 'bienvenida_paciente' | 'comprobante_orden' | 'aviso_resultados' | 'codigo_consulta';
+  /** Muestra un selector para cambiar entre enviar solo el código o el aviso de resultados listos. */
+  permitirElegirTipo?: boolean;
   orderDetails?: {
     orderNumber: string;
     orderDate: string;
@@ -37,16 +42,23 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
   onClose,
   patientName,
   patientPhone = '',
+  patientEmail = '',
   accessCode = '',
   orderNumber = '',
-  type,
+  type: tipoInicial,
+  permitirElegirTipo = false,
   orderDetails
 }) => {
   const { labSettings, showNotification } = useClinic();
 
+  const [type, setType] = useState(tipoInicial);
   const [phone, setPhone] = useState('');
+  const [correo, setCorreo] = useState(patientEmail);
   const [message, setMessage] = useState('');
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => setType(tipoInicial), [tipoInicial]);
+  useEffect(() => setCorreo(patientEmail), [patientEmail]);
 
   // Format default phone: sanitize and ensure +502 prefix if Guatemala 8-digit number
   useEffect(() => {
@@ -95,6 +107,15 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         `2️⃣ Escriba su código de consulta\n` +
         `3️⃣ Descargue su informe cuando esté listo\n\n` +
         `Le avisaremos por este medio cuando esté listo.${contacto}`;
+    } else if (type === 'codigo_consulta') {
+      text = `👋 Hola, *${patientName.trim()}*. Le escribimos de *${labName}*.\n\n` +
+        `${orderNumber ? `📄 *N.º de orden:* *${orderNumber}*\n` : ''}` +
+        `🔑 *Su código de consulta:* *${codigo}*\n\n` +
+        `*Con este código podrá ver y descargar sus resultados:*\n` +
+        `1️⃣ Entre a ${portalUrl}\n` +
+        `2️⃣ Escriba su código de consulta\n` +
+        `3️⃣ Descargue su informe cuando esté listo\n\n` +
+        `Le avisaremos cuando sus resultados estén listos.${contacto}`;
     } else {
       text = `👋 Hola, *${patientName.trim()}*.\n\n` +
         `✅ Sus resultados de *${labName}* ya están *listos*.\n` +
@@ -117,6 +138,20 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
     setCopied(true);
     showNotification('Mensaje copiado al portapapeles', 'success');
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleSendCorreo = () => {
+    const destino = correo.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destino)) {
+      showNotification('Escriba un correo válido para enviar por correo.', 'warning');
+      return;
+    }
+    const labName = labSettings.labName || 'Laboratorio Clínico VACLINIC';
+    const asunto = type === 'aviso_resultados' ? `${labName}: sus resultados están listos` : `${labName}: su código de consulta`;
+    // En el correo no sirven los asteriscos de negrita de WhatsApp.
+    const cuerpo = message.replace(/\*/g, '');
+    window.location.href = `mailto:${destino}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    showNotification('Abriendo su programa de correo…', 'success');
   };
 
   const handleSendWhatsApp = () => {
@@ -151,7 +186,8 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
               </h2>
               <p className="text-xs text-emerald-100 font-medium">
                 {type === 'bienvenida_paciente' ? 'Bienvenida y credenciales de portal' :
-                 type === 'comprobante_orden' ? 'Comprobante de muestra y PIN' : 'Aviso de resultados listos'}
+                 type === 'comprobante_orden' ? 'Comprobante de muestra y PIN' :
+                 type === 'codigo_consulta' ? 'Código de consulta para ver resultados' : 'Aviso de resultados listos'}
               </p>
             </div>
           </div>
@@ -168,6 +204,24 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         {/* Content Body */}
         <div className="p-5 space-y-4 overflow-y-auto flex-1 text-slate-800 dark:text-slate-200">
           
+          {permitirElegirTipo && (
+            <div role="group" aria-label="Qué enviar" className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800">
+              {([['codigo_consulta', 'Código de consulta'], ['aviso_resultados', 'Resultados listos']] as const).map(([valor, texto]) => (
+                <button
+                  key={valor}
+                  type="button"
+                  onClick={() => setType(valor)}
+                  aria-pressed={type === valor}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                    type === valor ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {texto}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Phone Number Input */}
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
@@ -189,6 +243,20 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
             <p className="text-[10px] text-slate-400 mt-1">
               Guatemala (+502): Ejemplo 50256125563 o 56125563. Se sanitiza automáticamente.
             </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Correo del paciente (opcional):</span>
+            </label>
+            <input
+              type="email"
+              value={correo}
+              onChange={(e) => setCorreo(e.target.value)}
+              placeholder="paciente@correo.com"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
           </div>
 
           {/* WhatsApp Chat Preview Bubble */}
@@ -244,6 +312,15 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
               className="px-3 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700 text-xs font-semibold cursor-pointer transition-colors"
             >
               Cerrar
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSendCorreo}
+              className="px-3 py-2 rounded-xl border border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <Mail className="w-4 h-4" />
+              <span>Enviar por correo</span>
             </button>
 
             <button
