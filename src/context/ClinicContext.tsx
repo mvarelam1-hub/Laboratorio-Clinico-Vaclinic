@@ -109,6 +109,7 @@ import {
 } from '../services/informesApiService';
 import {
   fetchConfigLab,
+  completarFirmantes,
   updateConfigLab,
   ConfigLabError
 } from '../services/configLabApiService';
@@ -3426,7 +3427,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (parsed.email && parsed.email.toLowerCase().includes('medilab')) {
           parsed.email = 'laboratoriovaclinic@gmail.com';
         }
-        return { ...INITIAL_LAB_SETTINGS, ...parsed };
+        return { ...INITIAL_LAB_SETTINGS, ...parsed, signers: completarFirmantes(parsed.signers) };
       }
     } catch (e) {
       console.error('Error loading lab settings from localStorage:', e);
