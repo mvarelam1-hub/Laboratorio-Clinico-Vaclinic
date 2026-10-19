@@ -13,7 +13,7 @@ async function buildApp() {
   return app;
 }
 
-beforeEach(() => { vi.resetModules(); queryMock.mockReset(); });
+beforeEach(() => { vi.resetModules(); queryMock.mockReset(); process.env.PORTAL_TOKEN_SECRET = 'secreto-de-prueba-largo-y-aleatorio'; });
 
 describe('GET /api/publico/laboratorio', () => {
   it('devuelve solo lo configurado y null en lo vacío', async () => {
@@ -34,7 +34,7 @@ describe('GET /api/publico/laboratorio', () => {
 });
 
 describe('GET /api/publico/catalogo', () => {
-  it('filtra activos y visibles, precio 0 = sin precio, e incluye ayuno/instrucciones del laboratorio', async () => {
+  const filasCatalogo = () => {
     queryMock
       .mockResolvedValueOnce({ rows: [
         { codigo_examen: 'QUI-27', nombre_examen: 'Glucosa', categoria: '03_quimica_sanguinea', categoria_nombre: null, tipo_muestra: 'Suero', precio: '35.00', tiempo_entrega_horas: 2, es_perfil: false,
@@ -42,17 +42,51 @@ describe('GET /api/publico/catalogo', () => {
         { codigo_examen: 'HEM-19', nombre_examen: 'VCM', categoria: '02_hematologia_grupo', categoria_nombre: null, tipo_muestra: 'Sangre', precio: '0.00', tiempo_entrega_horas: 24, es_perfil: false, datos_adicionales: {} },
       ] })
       .mockResolvedValueOnce({ rows: [{ codigo: 'PRF-1', nombre: 'Perfil', nombre_categoria: null, precio: '100', descripcion: null, nombres_examenes: ['A', 'B'] }] });
-    const res = await request(await buildApp()).get('/api/publico/catalogo');
+  };
+
+  it('con sesión del portal: filtra activos y visibles, precio 0 = sin precio, e incluye ayuno/instrucciones', async () => {
+    filasCatalogo();
+    const { signPortalToken } = await import('../token');
+    const token = signPortalToken({ idPaciente: 1, idOrden: 2 });
+    const res = await request(await buildApp()).get('/api/publico/catalogo').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(queryMock.mock.calls[0][0]).toMatch(/estado = 'Activo' AND visible_venta = TRUE/);
     expect(queryMock.mock.calls[1][0]).toMatch(/estado = 'Activo'/);
+    expect(res.body.preciosVisibles).toBe(true);
     const [glu, vcm] = res.body.examenes;
     expect(glu.precio).toBe(35);
     expect(glu.ayuno).toBe('8 horas de ayuno');
     expect(glu.instrucciones).toBe('Solo agua');
     expect(vcm.precio).toBeNull();
     expect(vcm.ayuno).toBeNull();
+    expect(res.body.perfiles[0].precio).toBe(100);
     expect(res.body.perfiles[0].examenes).toEqual(['A', 'B']);
+    expect(res.headers['cache-control']).toMatch(/private/);
+  });
+
+  it('sin sesión: ningún precio viaja en la respuesta (ni en pruebas ni en perfiles)', async () => {
+    filasCatalogo();
+    const res = await request(await buildApp()).get('/api/publico/catalogo');
+    expect(res.status).toBe(200);
+    expect(res.body.preciosVisibles).toBe(false);
+    expect(res.body.examenes.every((e: any) => e.precio === null)).toBe(true);
+    expect(res.body.perfiles.every((p: any) => p.precio === null)).toBe(true);
+    expect(JSON.stringify(res.body)).not.toMatch(/"precio":\d/);
+    expect(res.body.examenes[0].nombre).toBe('Glucosa');
+    expect(res.headers['vary']).toMatch(/Authorization/i);
+  });
+
+  it('con un token falso, vencido o de otro formato tampoco se ven los precios', async () => {
+    const { signPortalToken } = await import('../token');
+    const vencido = signPortalToken({ idPaciente: 1, idOrden: 2 }, -10);
+    for (const t of ['basura', 'a.b', vencido]) {
+      queryMock.mockReset();
+      filasCatalogo();
+      const res = await request(await buildApp()).get('/api/publico/catalogo').set('Authorization', `Bearer ${t}`);
+      expect(res.status).toBe(200);
+      expect(res.body.preciosVisibles).toBe(false);
+      expect(res.body.examenes[0].precio).toBeNull();
+    }
   });
 
   it('no expone campos internos (id, estado, datos_adicionales)', async () => {
