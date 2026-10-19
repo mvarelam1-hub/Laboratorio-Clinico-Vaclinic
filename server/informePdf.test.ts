@@ -95,4 +95,13 @@ describe('generarInformePdf', () => {
     const borrador = await generarInformePdf({ ...base, estado: 'borrador', firmas });
     expect(Buffer.from(borrador).toString('latin1')).not.toContain('/Subtype /Image');
   });
+  it('usa el logo configurado en Ajustes (imagen incrustada aun en borrador) y tolera un logo inválido', async () => {
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const conLogo = await generarInformePdf({ ...base, estado: 'borrador', laboratorio: { nombre: 'VACLINIC', logo: png } });
+    expect(Buffer.from(conLogo).subarray(0, 5).toString()).toBe('%PDF-');
+    expect(Buffer.from(conLogo).toString('latin1')).toContain('/Subtype /Image');
+    // Un logo roto no impide emitir el informe: se dibuja la cruz de VACLINIC.
+    const roto = await generarInformePdf({ ...base, estado: 'borrador', laboratorio: { nombre: 'VACLINIC', logo: 'data:image/png;base64,AAAA' } });
+    expect(Buffer.from(roto).subarray(0, 5).toString()).toBe('%PDF-');
+  });
 });

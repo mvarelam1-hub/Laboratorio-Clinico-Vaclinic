@@ -4,6 +4,7 @@ import { MedicalReport } from '../../types';
 import { useClinic } from '../../context/ClinicContext';
 import { PdfReportService } from '../../services/pdfReportService';
 import { VaclinicOfficialReportSheet } from '../common/VaclinicOfficialReportSheet';
+import { VistaPdfOficial } from '../common/VistaPdfOficial';
 import { buildVerificationUrl, formatVerificationCode } from '../../services/verificacionInforme';
 import { descargarInformePdfOficial, InformesApiError } from '../../services/informesApiService';
 import { tienePdfOficial, descargarPdfOficial, abrirPdfOficial } from '../../services/pdfOficial';
@@ -56,6 +57,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   // Export & customization settings
   const [templateStyle, setTemplateStyle] = useState<'vaclinic' | 'compact'>('vaclinic');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [falloPdfOficial, setFalloPdfOficial] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [drawerTab, setDrawerTab] = useState<'margins' | 'content'>('margins');
 
@@ -784,6 +786,13 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             id="vaclinic-official-pdf-sheet"
             className="w-full max-w-4xl flex justify-center print:w-full print:max-w-none"
           >
+            {tienePdfOficial(report) && !falloPdfOficial ? (
+              <VistaPdfOficial
+                key={report.remoteId}
+                idInforme={report.remoteId as number}
+                alFallar={() => setFalloPdfOficial(true)}
+              />
+            ) : (
             <VaclinicOfficialReportSheet 
               report={customizedReport}
               watermark={watermark}
@@ -794,6 +803,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
               templateStyle={templateStyle}
               customSettings={activeLabSettings}
             />
+            )}
           </div>
         </div>
 

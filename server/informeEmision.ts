@@ -119,7 +119,8 @@ export async function emitirPdfInforme(idInforme: number, opts: OpcionesEmision)
       registro_sanitario: i.registro_sanitario, acreditacion: i.acreditacion_iso, direccion: i.lab_direccion,
       telefono: i.lab_telefono, email: i.lab_email, color_primario: i.color_primario,
       color_critico: i.color_valor_critico, papel: i.lab_papel,
-      horario: typeof extra.businessHours === 'string' ? extra.businessHours : null
+      horario: typeof extra.businessHours === 'string' ? extra.businessHours : null,
+      logo: typeof extra.logoUrl === 'string' && extra.logoUrl.startsWith('data:image/') ? extra.logoUrl : null
     },
     firmas: {
       publicado_por: i.publicado_por_nombre, colegiado: i.publicado_por_colegiado,
