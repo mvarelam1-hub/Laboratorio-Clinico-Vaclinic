@@ -8,11 +8,15 @@
  */
 import { getStaffSessionToken } from './staffSessionToken';
 
-export type ClavePortada = 'logo' | 'fondo' | 'fondo_pagina' | 'escudo' | 'area_hematologia' | 'area_parasitos' | 'area_cristales' | 'area_quimica' | 'nosotros_vision' | 'nosotros_mision' | 'nosotros_servicios' | 'equipo_1' | 'equipo_2' | 'equipo_3' | 'equipo_4';
+type ClaveFija = 'logo' | 'fondo' | 'fondo_pagina' | 'escudo' | 'area_hematologia' | 'area_parasitos' | 'area_cristales' | 'area_quimica' | 'nosotros_vision' | 'nosotros_mision' | 'nosotros_servicios' | 'equipo_1' | 'equipo_2' | 'equipo_3' | 'equipo_4';
+/** Además de las posiciones fijas, cada elemento del Atlas Microscópico puede tener su imagen: `atlas_<id>`. */
+export type ClavePortada = ClaveFija | `atlas_${string}`;
+
+export const claveImagenAtlas = (idElemento: string): ClavePortada => `atlas_${idElemento}`;
 export type MapaPortada = Record<string, { version: number }>;
 
 export interface PosicionPortada {
-  clave: ClavePortada;
+  clave: ClaveFija;
   etiqueta: string;
   ayuda: string;
   /** Lado más largo (px) al que se reduce la imagen antes de subirla. */
