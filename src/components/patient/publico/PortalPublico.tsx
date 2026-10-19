@@ -7,6 +7,7 @@ import { ConsultaResultados } from '../PatientPortalReal';
 import { CatalogoPublico } from './CatalogoPublico';
 import { GuiaPreparacionPublica } from './GuiaPreparacionPublica';
 import { PanelesPublicos } from './PanelesPublicos';
+import { AvisoPrecios } from './AvisoPrecios';
 import { NoticiasPublicas, ListaContenido } from './NoticiasPublicas';
 import { NosotrosPublico } from './NosotrosPublico';
 import { FondoMargenes } from './FondoAnimado';
@@ -61,11 +62,17 @@ export const PortalPublico: React.FC = () => {
 
   const raiz = useRef<HTMLDivElement>(null);
   const lab = useCarga<LaboratorioPublico>(obtenerLaboratorioPublico);
-  const cat = useCarga<Catalogo>(obtenerCatalogoPublico);
+  // Sesión del portal (código de consulta): con ella el servidor incluye los precios del catálogo.
+  const [tokenPortal, setTokenPortal] = useState<string | null>(null);
+  const cargarCatalogo = useCallback(() => obtenerCatalogoPublico(tokenPortal), [tokenPortal]);
+  const cat = useCarga<Catalogo>(cargarCatalogo);
   const con = useCarga<ContenidoPublicoRespuesta>(obtenerContenidoPublico);
 
   const contacto = useMemo(() => contactoFinal(lab.datos), [lab.datos]);
   const nombreLab = contacto.nombre || 'Laboratorio Clínico';
+  const avisoPrecios = (
+    <AvisoPrecios whatsapp={contacto.whatsapp || contacto.telefono} nombreLab={nombreLab} alIngresarCodigo={() => ir('resultados')} />
+  );
 
   return (
     <div ref={raiz} className="tema-vaclinic max-w-6xl mx-auto">
@@ -96,10 +103,10 @@ export const PortalPublico: React.FC = () => {
             verCategoria={(c) => { setCategoria(c); ir('catalogo'); }} />
         )}
         {/* Siempre montado (oculto) para no perder la sesión del paciente al mirar otras secciones. */}
-        <div hidden={vista !== 'resultados'}><ConsultaResultados /></div>
+        <div hidden={vista !== 'resultados'}><ConsultaResultados alCambiarSesion={setTokenPortal} /></div>
         {vista === 'catalogo' && (
           <EstadoCarga cargando={cat.cargando} error={cat.error} onReintentar={cat.recargar}>
-            {cat.datos && <CatalogoPublico key={categoria ?? 'todas'} catalogo={cat.datos} categoriaInicial={categoria} />}
+            {cat.datos && <CatalogoPublico key={categoria ?? 'todas'} catalogo={cat.datos} categoriaInicial={categoria} avisoPrecios={avisoPrecios} />}
           </EstadoCarga>
         )}
         {vista === 'preparacion' && (
@@ -109,7 +116,7 @@ export const PortalPublico: React.FC = () => {
         )}
         {vista === 'paneles' && (
           <EstadoCarga cargando={cat.cargando} error={cat.error} onReintentar={cat.recargar}>
-            {cat.datos && <PanelesPublicos catalogo={cat.datos} />}
+            {cat.datos && <PanelesPublicos catalogo={cat.datos} avisoPrecios={avisoPrecios} />}
           </EstadoCarga>
         )}
         {vista === 'atlas' && <Suspense fallback={<p role="status" className="text-sm text-slate-500 py-8 text-center">Cargando…</p>}><AtlasPublico /></Suspense>}
@@ -157,7 +164,7 @@ const Inicio: React.FC<InicioProps> = ({ lab, catalogo, contenido, ir, verCatego
           {lab?.eslogan || 'Consulta tus resultados y conoce nuestros servicios'}
         </h1>
         <p className="text-lg text-mint-wash mt-4 max-w-2xl">
-          Aquí puedes ver tus resultados cuando estén listos, conocer las pruebas que ofrece {lab?.nombre || 'el laboratorio'}, sus precios y cómo prepararte para tu examen.
+          Aquí puedes ver tus resultados cuando estén listos, conocer las pruebas que ofrece {lab?.nombre || 'el laboratorio'} y cómo prepararte para tu examen.
         </p>
         <div className="flex flex-wrap gap-3 mt-6">
           <button onClick={() => ir('resultados')} className="bg-coral-pulse hover:bg-coral-hover text-[#1a1a1a] font-semibold rounded-full px-6 py-3 cursor-pointer transition-colors">Consultar mis Resultados</button>

@@ -2,13 +2,14 @@ import React, { useMemo, useState } from 'react';
 import type { CatalogoPublico } from '../../../services/publicoApiService';
 import { completarConFabrica, componentesDe, esPanel, formatoPrecio, nombreCategoria, textoAyuno, textoEntrega } from '../../../utils/catalogoPublico';
 import { TituloSeccion, AvisoGeneral } from './comunes';
+import { PrecioReservado } from './AvisoPrecios';
 
 /**
  * Paneles y perfiles: estudios que agrupan varias pruebas en una sola orden.
- * Solo se listan los que el laboratorio tiene activos y a la venta; el precio y
- * lo que incluye es lo que figura en su catálogo.
+ * Solo se listan los que el laboratorio tiene activos y a la venta; lo que
+ * incluye es lo que figura en su catálogo y el precio solo se ve con código de consulta.
  */
-export const PanelesPublicos: React.FC<{ catalogo: CatalogoPublico }> = ({ catalogo }) => {
+export const PanelesPublicos: React.FC<{ catalogo: CatalogoPublico; avisoPrecios?: React.ReactNode }> = ({ catalogo, avisoPrecios }) => {
   const [abierto, setAbierto] = useState<string | null>(null);
 
   const todos = useMemo(() => catalogo.examenes.map(completarConFabrica), [catalogo]);
@@ -30,6 +31,7 @@ export const PanelesPublicos: React.FC<{ catalogo: CatalogoPublico }> = ({ catal
   return (
     <section aria-labelledby="titulo-paneles">
       <div id="titulo-paneles"><TituloSeccion titulo="Paneles Preventivos" subtitulo="Perfiles y paneles que reúnen varios estudios en una sola orden. Pregunta a tu médico cuál te conviene." /></div>
+      {!catalogo.preciosVisibles && avisoPrecios}
       {paneles.length === 0 ? (
         <p className="text-sm text-slate-600 py-8 text-center">El laboratorio todavía no ha publicado paneles o perfiles.</p>
       ) : (
@@ -45,7 +47,9 @@ export const PanelesPublicos: React.FC<{ catalogo: CatalogoPublico }> = ({ catal
                   {[p.muestra && `Muestra: ${p.muestra}`, p.entrega && `Entrega: ${p.entrega}`, p.ayuno].filter(Boolean).join(' · ')}
                 </p>
                 <div className="flex items-end justify-between gap-2 mt-3 pt-3 border-t border-slate-100 mt-auto">
-                  <p className={`font-extrabold ${p.precio == null ? 'text-sm text-slate-400' : 'text-xl text-slate-900'}`}>{formatoPrecio(p.precio)}</p>
+                  {catalogo.preciosVisibles
+                    ? <p className={`font-extrabold ${p.precio == null ? 'text-sm text-slate-400' : 'text-xl text-slate-900'}`}>{formatoPrecio(p.precio)}</p>
+                    : <PrecioReservado />}
                   {p.componentes.length > 0 && (
                     <button onClick={() => setAbierto(esAbierto ? null : p.codigo)} aria-expanded={esAbierto}
                       className="text-xs font-bold text-teal-800 underline cursor-pointer">

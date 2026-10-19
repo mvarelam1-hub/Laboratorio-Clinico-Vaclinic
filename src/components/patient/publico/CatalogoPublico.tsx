@@ -4,11 +4,12 @@ import {
   completarConFabrica, categoriasConConteo, filtrarCatalogo, formatoPrecio, textoEntrega, textoAyuno, componentesDe
 } from '../../../utils/catalogoPublico';
 import { TituloSeccion, AvisoGeneral } from './comunes';
+import { PrecioReservado } from './AvisoPrecios';
 
-interface Props { catalogo: Catalogo; categoriaInicial?: string | null; }
+interface Props { catalogo: Catalogo; categoriaInicial?: string | null; /** Aviso que se muestra cuando los precios no están autorizados. */ avisoPrecios?: React.ReactNode; }
 
-/** Catálogo de pruebas REAL: solo lo activo y a la venta, con el precio vigente del laboratorio. */
-export const CatalogoPublico: React.FC<Props> = ({ catalogo, categoriaInicial = null }) => {
+/** Catálogo de pruebas REAL: solo lo activo y a la venta. El precio solo se ve con sesión del portal (código de consulta). */
+export const CatalogoPublico: React.FC<Props> = ({ catalogo, categoriaInicial = null, avisoPrecios }) => {
   const [texto, setTexto] = useState('');
   const [categoria, setCategoria] = useState<string | null>(categoriaInicial);
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -19,7 +20,8 @@ export const CatalogoPublico: React.FC<Props> = ({ catalogo, categoriaInicial = 
 
   return (
     <section aria-labelledby="titulo-catalogo">
-      <div id="titulo-catalogo"><TituloSeccion titulo="Catálogo de Pruebas" subtitulo="Estas son las pruebas que ofrece el laboratorio, con su precio actual." /></div>
+      <div id="titulo-catalogo"><TituloSeccion titulo="Catálogo de Pruebas" subtitulo={catalogo.preciosVisibles ? 'Estas son las pruebas que ofrece el laboratorio, con su precio actual.' : 'Estas son las pruebas que ofrece el laboratorio.'} /></div>
+      {!catalogo.preciosVisibles && avisoPrecios}
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <label className="sr-only" htmlFor="buscar-prueba">Buscar una prueba</label>
@@ -65,7 +67,9 @@ export const CatalogoPublico: React.FC<Props> = ({ catalogo, categoriaInicial = 
                     </p>
                     {ayuno && <span className="inline-block mt-1 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5">{ayuno}</span>}
                   </div>
-                  <p className={`text-lg font-extrabold shrink-0 ${e.precio == null ? 'text-slate-400 text-sm' : 'text-slate-900'}`}>{formatoPrecio(e.precio)}</p>
+                  {catalogo.preciosVisibles
+                    ? <p className={`text-lg font-extrabold shrink-0 ${e.precio == null ? 'text-slate-400 text-sm' : 'text-slate-900'}`}>{formatoPrecio(e.precio)}</p>
+                    : <PrecioReservado />}
                 </div>
                 {hayDetalle && (
                   <>
@@ -92,7 +96,7 @@ export const CatalogoPublico: React.FC<Props> = ({ catalogo, categoriaInicial = 
           })}
         </ul>
       )}
-      <AvisoGeneral>Los precios y tiempos pueden cambiar; confirma en recepción al registrar tu orden. Los resultados deben ser interpretados por tu médico.</AvisoGeneral>
+      <AvisoGeneral>{catalogo.preciosVisibles ? 'Los precios y tiempos pueden cambiar; confirma en recepción al registrar tu orden. ' : 'Los tiempos pueden cambiar; confirma en recepción al registrar tu orden. '}Los resultados deben ser interpretados por tu médico.</AvisoGeneral>
     </section>
   );
 };

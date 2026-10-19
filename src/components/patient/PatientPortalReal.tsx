@@ -15,7 +15,7 @@ import {
 const formatoFecha = (v: string | null) =>
   v ? new Date(v).toLocaleDateString('es-GT', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
 
-export const ConsultaResultados: React.FC = () => {
+export const ConsultaResultados: React.FC<{ alCambiarSesion?: (token: string | null) => void }> = ({ alCambiarSesion }) => {
   const [codigo, setCodigo] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [datos, setDatos] = useState<RespuestaInformesPortal | null>(null);
@@ -30,7 +30,8 @@ export const ConsultaResultados: React.FC = () => {
     setDatos(null);
     setCodigo('');
     setError(mensaje ?? null);
-  }, []);
+    alCambiarSesion?.(null);
+  }, [alCambiarSesion]);
 
   useEffect(() => () => window.clearTimeout(temporizador.current), []);
 
@@ -44,6 +45,7 @@ export const ConsultaResultados: React.FC = () => {
       const respuesta = await obtenerInformesPortal(sesion.token);
       setToken(sesion.token);
       setDatos(respuesta);
+      alCambiarSesion?.(sesion.token);
       // La sesión del servidor dura 15 min: se cierra sola un poco antes.
       temporizador.current = window.setTimeout(
         () => cerrarSesion('Por tu seguridad la sesión se cerró. Ingresa tu código otra vez para continuar.'),
