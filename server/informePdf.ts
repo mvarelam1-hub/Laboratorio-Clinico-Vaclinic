@@ -53,6 +53,8 @@ export interface DatosInformePdf {
     acreditacion?: string | null; direccion?: string | null; telefono?: string | null; email?: string | null;
     color_primario?: string | null; color_critico?: string | null; papel?: 'letter' | 'a4' | 'legal' | string | null;
     horario?: string | null;
+    /** Logo del membrete configurado en Ajustes (data URL PNG/JPEG/WEBP). Si falta, se dibuja la cruz de VACLINIC. */
+    logo?: string | null;
   };
   firmas: {
     publicado_por?: string | null; colegiado?: string | null; especialidad?: string | null;
@@ -207,14 +209,46 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
     doc.roundedRect(cx - r * 0.6, cy - r * 0.13, r * 1.2, r * 0.26, 0.4, 0.4, 'F');
   };
 
+  // Logo configurado en Ajustes: se imprime con su proporción original.
+  const imagenLogo = (() => {
+    const src = d.laboratorio.logo;
+    const m = src ? /^data:image\/(png|jpe?g|webp);base64,/i.exec(src) : null;
+    if (!src || !m) return null;
+    try {
+      const p = doc.getImageProperties(src);
+      if (!p.width || !p.height) return null;
+      const tipo = m[1].toLowerCase();
+      return { src, formato: tipo === 'png' ? 'PNG' : tipo === 'webp' ? 'WEBP' : 'JPEG', proporcion: p.width / p.height };
+    } catch {
+      return null;
+    }
+  })();
+
+  /** Dibuja el logo dentro de una caja de alto `alto` (mm) y devuelve el ancho usado, o 0 si no hay logo. */
+  const dibujarLogoImagen = (x: number, yTop: number, alto: number, anchoMax: number): number => {
+    if (!imagenLogo) return 0;
+    let h = alto;
+    let w = h * imagenLogo.proporcion;
+    if (w > anchoMax) { w = anchoMax; h = w / imagenLogo.proporcion; }
+    try {
+      doc.addImage(imagenLogo.src, imagenLogo.formato, x, yTop + (alto - h) / 2, w, h);
+      return w;
+    } catch {
+      return 0;
+    }
+  };
+
   const encabezadoCompleto = async () => {
     // Marca y títulos
-    logo(M + 8.5, M + 9, 8);
+    const anchoLogo = dibujarLogoImagen(M, M + 1, 16, 34);
+    let xTexto = M + 20;
+    if (anchoLogo > 0) xTexto = M + anchoLogo + 4;
+    else logo(M + 8.5, M + 9, 8);
     fuente('bold', 19, INK);
-    texto(d.laboratorio.nombre.toUpperCase(), M + 20, M + 9);
+    texto(d.laboratorio.nombre.toUpperCase(), xTexto, M + 9);
     fuente('bold', 6.5, INK);
-    texto('INFORME DE RESULTADOS DE LABORATORIO CLINICO', M + 20, M + 14);
-    if (d.laboratorio.nombre_legal) { fuente('normal', 6.5, MUTED); texto(d.laboratorio.nombre_legal, M + 20, M + 18); }
+    texto('INFORME DE RESULTADOS DE LABORATORIO CLINICO', xTexto, M + 14);
+    if (d.laboratorio.nombre_legal) { fuente('normal', 6.5, MUTED); texto(d.laboratorio.nombre_legal, xTexto, M + 18); }
 
     // Cuadro oscuro con el único código visible: el N.º de orden
     const bw = 64; const bh = 26; const bx = PW - M - bw;
@@ -274,9 +308,10 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
   };
 
   const encabezadoCorto = () => {
-    logo(M + 3.5, 11, 3.2);
+    const anchoLogoCorto = dibujarLogoImagen(M, 6.5, 9, 18);
+    if (anchoLogoCorto <= 0) logo(M + 3.5, 11, 3.2);
     fuente('bold', 10, INK);
-    texto(d.laboratorio.nombre.toUpperCase(), M + 9, 12.2);
+    texto(d.laboratorio.nombre.toUpperCase(), anchoLogoCorto > 0 ? M + anchoLogoCorto + 3 : M + 9, 12.2);
     fuente('normal', 7.5, MUTED);
     texto(`Orden ${codigoOrden} - ${limpiarTexto(d.paciente.nombre || '')}`, PW - M, 12.2, { align: 'right' });
     doc.setDrawColor(...acento); doc.setLineWidth(0.5); doc.line(M, 16, PW - M, 16);
