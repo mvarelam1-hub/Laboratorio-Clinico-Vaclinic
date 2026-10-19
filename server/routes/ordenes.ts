@@ -491,3 +491,129 @@ ordenesRouter.patch('/:id', requirePermission('admision_crear_ordenes'), asyncHa
 
   return res.json(rows[0]);
 }));
+
+/**
+ * Agrega exámenes a una orden que ya existe (corrección de recepción).
+ *
+ * - El número de orden y el código de consulta NO cambian.
+ * - Si los exámenes agregados tienen costo, el número de pago (boleta o recibo
+ *   de caja) es obligatorio: queda guardado en `orden_pago`, ligado a la orden,
+ *   y no se puede repetir en otra orden.
+ * - Un examen que la orden ya tiene no se puede agregar otra vez.
+ * - El total cobrado sube por el monto agregado; si la orden está "por cobrar",
+ *   también sube el saldo pendiente.
+ * - Si la orden estaba Lista o Entregada, vuelve a "En Proceso" porque ahora
+ *   tiene un examen sin resultado.
+ */
+const FORMATO_NUMERO_PAGO = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,39}$/;
+
+ordenesRouter.post('/:id/examenes', requirePermission('admision_crear_ordenes'), asyncHandler(async (req, res) => {
+  const idOrden = Number(req.params.id);
+  const { examenesIds, numeroPago } = req.body || {};
+  if (!Number.isInteger(idOrden) || idOrden <= 0) {
+    return res.status(404).json({ error: 'Orden no encontrada.' });
+  }
+  if (!Array.isArray(examenesIds) || examenesIds.length === 0 || examenesIds.length > 30
+      || !examenesIds.every((n: unknown) => Number.isInteger(n) && (n as number) > 0)) {
+    return res.status(400).json({ error: 'examenesIds debe ser un arreglo de 1 a 30 ids de examen válidos.' });
+  }
+  const ids: number[] = [...new Set<number>(examenesIds)];
+  const pago = typeof numeroPago === 'string' ? numeroPago.trim() : '';
+  if (pago && !FORMATO_NUMERO_PAGO.test(pago)) {
+    return res.status(400).json({ error: 'El número de pago solo puede llevar letras, números, punto, guion y diagonal (máximo 40 caracteres).' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: ordenRows } = await client.query(
+      'SELECT id_orden, numero_orden FROM orden WHERE id_orden = $1 AND eliminada = FALSE FOR UPDATE',
+      [idOrden]
+    );
+    if (ordenRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Orden no encontrada o eliminada.' });
+    }
+
+    const { rows: yaEnOrden } = await client.query('SELECT id_examen FROM detalle_orden WHERE id_orden = $1', [idOrden]);
+    const repetidos = ids.filter((id) => yaEnOrden.some((r: any) => Number(r.id_examen) === id));
+    if (repetidos.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'La orden ya incluye uno o más de esos exámenes.' });
+    }
+
+    const resueltos: Array<{ idExamen: number; precio: number }> = [];
+    for (const idExamen of ids) {
+      const { rows } = await client.query('SELECT precio FROM examen WHERE id_examen = $1', [idExamen]);
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Examen ${idExamen} no existe en el catálogo.` });
+      }
+      resueltos.push({ idExamen, precio: Number(rows[0].precio) || 0 });
+    }
+    const monto = resueltos.reduce((s, e) => s + e.precio, 0);
+    if (monto > 0 && !pago) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Para agregar exámenes con costo hay que escribir el número de pago.' });
+    }
+
+    for (const e of resueltos) {
+      await client.query(
+        'INSERT INTO detalle_orden (id_orden, id_examen, precio_unitario) VALUES ($1, $2, $3)',
+        [idOrden, e.idExamen, e.precio]
+      );
+    }
+    const { rows: totales } = await client.query(
+      `UPDATE orden
+          SET total_cobrado = COALESCE(total_cobrado, 0) + $2,
+              saldo_pendiente = CASE WHEN metodo_pago = 'por_cobrar' THEN saldo_pendiente + $2 ELSE saldo_pendiente END,
+              estado_flujo = CASE WHEN estado_flujo IN ('Listo', 'Entregado') THEN 'En Proceso' ELSE estado_flujo END
+        WHERE id_orden = $1
+        RETURNING total_cobrado, saldo_pendiente, estado_flujo`,
+      [idOrden, monto]
+    );
+    if (pago) {
+      await client.query(
+        'INSERT INTO orden_pago (id_orden, numero_pago, monto, id_usuario) VALUES ($1, $2, $3, $4)',
+        [idOrden, pago, monto, req.staffUser!.idUsuario]
+      );
+    }
+    const { rows: detalle } = await client.query(
+      `SELECT d.id_detalle, d.id_examen, e.codigo_examen
+         FROM detalle_orden d JOIN examen e ON e.id_examen = d.id_examen
+        WHERE d.id_orden = $1 ORDER BY d.id_detalle`,
+      [idOrden]
+    );
+    await client.query('COMMIT');
+
+    try {
+      await registrarBitacora({
+        idUsuario: req.staffUser!.idUsuario,
+        accion: 'Exámenes agregados a una orden',
+        modulo: 'seguridad',
+        severidad: 'info',
+        detalles: `Orden ${ordenRows[0].numero_orden}${pago ? ` · pago ${pago}` : ''}`,
+        valorNuevo: `examenes=${ids.join(',')}, monto=${monto.toFixed(2)}`
+      });
+    } catch (err) {
+      console.error('No se pudo registrar en la bitácora la adición de exámenes:', err);
+    }
+
+    return res.status(201).json({
+      numero_orden: ordenRows[0].numero_orden,
+      monto_agregado: monto,
+      total_cobrado: Number(totales[0].total_cobrado),
+      saldo_pendiente: Number(totales[0].saldo_pendiente),
+      estado_flujo: totales[0].estado_flujo,
+      detalle: detalle.map((d: any) => ({ idDetalle: d.id_detalle, idExamen: d.id_examen, codigoExamen: d.codigo_examen ?? null }))
+    });
+  } catch (err: any) {
+    try { await client.query('ROLLBACK'); } catch { /* ya revertido */ }
+    if (err?.code === '23505') {
+      return res.status(409).json({ error: 'Ese número de pago ya se usó en otra orden. Revisa el número del comprobante.' });
+    }
+    return res.status(400).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+}));
