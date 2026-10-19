@@ -6,6 +6,7 @@ import { PdfReportService } from '../../services/pdfReportService';
 import { tienePdfOficial, descargarPdfOficial, abrirPdfOficial } from '../../services/pdfOficial';
 import { InformesApiError } from '../../services/informesApiService';
 import { VaclinicOfficialReportSheet } from './VaclinicOfficialReportSheet';
+import { VistaPdfOficial } from './VistaPdfOficial';
 import { buildVerificationUrl } from '../../services/verificacionInforme';
 import { AiSummaryModeModal } from './AiSummaryModeModal';
 import { 
@@ -35,6 +36,7 @@ export const PrintReportModal: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showAiSummaryModal, setShowAiSummaryModal] = useState(false);
+  const [falloPdfOficial, setFalloPdfOficial] = useState(false);
 
   // Customization State (initialized with labSettings defaults)
   const [templateStyle, setTemplateStyle] = useState<'vaclinic' | 'compact'>('vaclinic');
@@ -524,6 +526,13 @@ export const PrintReportModal: React.FC = () => {
             id="vaclinic-official-pdf-sheet"
             className="w-full max-w-4xl flex justify-center print:w-full print:max-w-none"
           >
+            {tienePdfOficial(report) && !falloPdfOficial ? (
+              <VistaPdfOficial
+                key={report.remoteId}
+                idInforme={report.remoteId as number}
+                alFallar={() => setFalloPdfOficial(true)}
+              />
+            ) : (
             <VaclinicOfficialReportSheet 
               report={report}
               watermark={watermark}
@@ -535,6 +544,7 @@ export const PrintReportModal: React.FC = () => {
               customSettings={labSettings}
               fitToSinglePage={fitToSinglePage}
             />
+            )}
           </div>
         </div>
 
