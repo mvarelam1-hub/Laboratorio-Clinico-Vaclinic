@@ -44,6 +44,7 @@ import {
   Droplet,
   FlaskConical,
   Edit3,
+  Pencil,
   User,
   Phone,
   CreditCard,
@@ -59,6 +60,7 @@ import {
   ShieldCheck,
   Send
 } from 'lucide-react';
+import { EditarOrdenModal } from './EditarOrdenModal';
 import { BiometricAuthModal } from './BiometricAuthModal';
 import { BiometricAuthResult } from '../../services/biometricService';
 import { construirBorradorDeOrden } from '../../utils/borradorInforme';
@@ -227,6 +229,9 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
     labSettings,
     currentStaffUser
   } = useClinic();
+
+  // Editor de la orden (corregir datos y agregar exámenes)
+  const [ordenAEditar, setOrdenAEditar] = useState<string | null>(null);
 
   // View state: 'list' (table) or 'folders' (grid)
   const [viewMode, setViewMode] = useState<'list' | 'folders'>('list');
@@ -1302,6 +1307,17 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                               <Eye className="w-3.5 h-3.5" />
                             </button>
 
+                            {mode !== 'trash' && (
+                              <button
+                                onClick={() => setOrdenAEditar(ord.id)}
+                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-sky-50 text-sky-700 cursor-pointer"
+                                title="Corregir datos de la orden o agregar exámenes"
+                                aria-label="Corregir datos de la orden"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
                             <button
                               onClick={() => setOrdenSeguimiento(ord)}
                               className="p-1.5 rounded-lg border border-slate-200 hover:bg-violet-50 text-violet-600 cursor-pointer"
@@ -1406,6 +1422,10 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
             </table>
           </div>
         </div>
+      )}
+
+      {ordenAEditar && (
+        <EditarOrdenModal ordenId={ordenAEditar} onClose={() => setOrdenAEditar(null)} />
       )}
 
       {/* ========================================================
