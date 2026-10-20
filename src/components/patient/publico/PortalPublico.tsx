@@ -106,7 +106,7 @@ export const PortalPublico: React.FC = () => {
         <div hidden={vista !== 'resultados'}><ConsultaResultados alCambiarSesion={setTokenPortal} /></div>
         {vista === 'catalogo' && (
           <EstadoCarga cargando={cat.cargando} error={cat.error} onReintentar={cat.recargar}>
-            {cat.datos && <CatalogoPublico key={categoria ?? 'todas'} catalogo={cat.datos} categoriaInicial={categoria} avisoPrecios={avisoPrecios} />}
+            {cat.datos && <CatalogoPublico key={categoria ?? 'todas'} catalogo={cat.datos} categoriaInicial={categoria} avisoPrecios={avisoPrecios} whatsapp={contacto.whatsapp || contacto.telefono} nombreLab={nombreLab} />}
           </EstadoCarga>
         )}
         {vista === 'preparacion' && (
