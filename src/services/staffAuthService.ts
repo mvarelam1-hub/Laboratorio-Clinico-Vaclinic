@@ -67,7 +67,7 @@ export async function verifyStaffSession(sessionToken: string): Promise<StaffVer
     }
 
     if (res.status === 401) {
-      return { ok: false, reason: 'unauthorized', message: 'El token de sesión no fue válido para el servidor.' };
+      return { ok: false, reason: 'unauthorized', message: 'Tu sesión venció. Inicia sesión nuevamente.' };
     }
     if (res.status === 403) {
       const message = await mensajeDeError(res, 'Esta cuenta no está registrada como personal de VACLINIC, o está inactiva.');

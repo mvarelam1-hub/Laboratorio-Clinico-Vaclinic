@@ -34,6 +34,25 @@ describe('createSession / verifySessionToken', () => {
     expect(pool.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO sesion_personal'), expect.any(Array));
   });
 
+  it('al crear una sesión cierra las anteriores del mismo usuario (una sola sesión activa)', async () => {
+    const pool = fakePool(() => ({ rows: [] }));
+    await createSession(pool, 42);
+
+    const [sqlCierre, paramsCierre] = pool.query.mock.calls[0];
+    expect(sqlCierre).toContain('UPDATE sesion_personal');
+    expect(sqlCierre).toContain('revocado_en IS NULL');
+    expect(paramsCierre).toEqual([42, 'nuevo_inicio']);
+    // El cierre va ANTES de insertar la sesión nueva, para no revocar la recién creada.
+    expect(pool.query.mock.calls[1][0]).toContain('INSERT INTO sesion_personal');
+  });
+
+  it('conservarOtras evita cerrar las sesiones anteriores', async () => {
+    const pool = fakePool(() => ({ rows: [] }));
+    await createSession(pool, 42, { conservarOtras: true });
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query.mock.calls[0][0]).toContain('INSERT INTO sesion_personal');
+  });
+
   it('verifySessionToken decodifica idUsuario/sessionId/exp de un token recién creado', async () => {
     const pool = fakePool(() => ({ rows: [] }));
     const { token, sessionId } = await createSession(pool, 7, { mustChangePassword: true });
