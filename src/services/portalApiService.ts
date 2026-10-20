@@ -35,6 +35,8 @@ export interface InformePortal {
   codigoVerificacion: string | null;
   parametros: ParametroPortal[];
   conclusion: string | null;
+  /** Interpretación con IA revisada por el laboratorio; null si no se incluyó en el informe. */
+  interpretacion?: string | null;
   recomendaciones: string[];
 }
 

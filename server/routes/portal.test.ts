@@ -186,6 +186,36 @@ describe('GET /api/portal/informes', () => {
   });
 });
 
+describe('GET /api/portal/informes: interpretación con IA', () => {
+  async function pedir(fila: any) {
+    const { signPortalToken } = await import('../token');
+    const token = signPortalToken({ idPaciente: 1, idOrden: 10 });
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ numero_orden: 'ORD-10', nombre_completo: 'Paciente Real' }] })
+      .mockResolvedValueOnce({ rows: [{ id_informe: 5, numero_informe: 'INF-5', titulo: 'X', recomendaciones: [], ...fila }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const app = await buildApp();
+    return request(app).get('/api/portal/informes').set('Authorization', `Bearer ${token}`);
+  }
+
+  it('muestra la interpretación cuando el personal la incluyó en el informe', async () => {
+    const res = await pedir({ explicacion_paciente: ' Mide el colesterol. ', datos_json: { includeAiExplanationInReport: true } });
+    expect(res.body.informes[0].interpretacion).toBe('Mide el colesterol.');
+  });
+
+  it('no la muestra si no se marcó «incluir en el informe»', async () => {
+    const res = await pedir({ explicacion_paciente: 'Texto', datos_json: { includeAiExplanationInReport: false } });
+    expect(res.body.informes[0].interpretacion).toBeNull();
+    const res2 = await pedir({ explicacion_paciente: 'Texto', datos_json: {} });
+    expect(res2.body.informes[0].interpretacion).toBeNull();
+  });
+
+  it('no la muestra si está vacía', async () => {
+    const res = await pedir({ explicacion_paciente: '   ', datos_json: { includeAiExplanationInReport: true } });
+    expect(res.body.informes[0].interpretacion).toBeNull();
+  });
+});
+
 describe('GET /api/portal/informes/:id/pdf', () => {
   it('rechaza sin token (401)', async () => {
     const app = await buildApp();
