@@ -110,30 +110,79 @@ export function fraseEspecialista(lista: EspecialistaSugerido[]): string {
   if (lista.length === 0) return '';
   const nombres = lista.map((x) => `${x.profesional} (${x.area})`);
   const unidos = nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(', ')} o ${nombres[nombres.length - 1]}`;
-  return `Su médico tratante podrá referirlo con un ${unidos} para su valoración.`;
+  return `Valoración orientativa: ${unidos}.`;
+}
+
+const NUM = String.raw`-?\d+(?:[.,]\d+)?`;
+const aNumero = (t: string): number => Number(t.replace(',', '.'));
+const redondear = (n: number): string => String(Number(n.toFixed(1)));
+
+/** Límites numéricos de un rango de referencia: "70-100", "< 200", "≥ 40", "hasta 5,2". null si no se entiende. */
+export function parsearRango(rango?: string | null): { min?: number; max?: number } | null {
+  const r = String(rango ?? '').trim();
+  if (!r) return null;
+  // Si el texto menciona varios niveles ("< 200 deseable; 200-239 limítrofe"), vale el primero.
+  const candidatos: { pos: number; rango: { min?: number; max?: number } }[] = [];
+  const par = new RegExp(`(${NUM})\\s*(?:-|–|—|a)\\s*(${NUM})`).exec(r);
+  if (par) {
+    const [a, b] = [aNumero(par[1]), aNumero(par[2])];
+    if (Number.isFinite(a) && Number.isFinite(b) && a <= b) candidatos.push({ pos: par.index, rango: { min: a, max: b } });
+  }
+  const tope = new RegExp(`(?:<=?|≤|hasta|menor(?:es)?\\s+(?:de|que|a))\\s*(${NUM})`, 'i').exec(r);
+  if (tope) candidatos.push({ pos: tope.index, rango: { max: aNumero(tope[1]) } });
+  const piso = new RegExp(`(?:>=?|≥|desde|mayor(?:es)?\\s+(?:de|que|a))\\s*(${NUM})`, 'i').exec(r);
+  if (piso) candidatos.push({ pos: piso.index, rango: { min: aNumero(piso[1]) } });
+  candidatos.sort((x, y) => x.pos - y.pos);
+  if (candidatos.length) return candidatos[0].rango;
+  return null;
+}
+
+/**
+ * Cuánto se aleja un resultado numérico del rango de referencia, calculado aquí
+ * (no por la IA) para que la cifra sea exacta. null si no se puede calcular.
+ */
+export function describirDesviacion(p: ParametroIA): string | null {
+  if (!/^-?\d+(?:[.,]\d+)?$/.test(p.value.trim())) return null;
+  const rango = parsearRango(p.referenceRange);
+  if (!rango) return null;
+  const v = aNumero(p.value);
+  const u = p.unit ? ` ${p.unit}` : '';
+  if (rango.max !== undefined && v > rango.max) {
+    const dif = v - rango.max;
+    const pct = rango.max !== 0 ? `, ${redondear((dif / Math.abs(rango.max)) * 100)} % sobre el límite` : '';
+    return `${redondear(dif)}${u} por encima del límite superior (${redondear(rango.max)})${pct}`;
+  }
+  if (rango.min !== undefined && v < rango.min) {
+    const dif = rango.min - v;
+    const pct = rango.min !== 0 ? `, ${redondear((dif / Math.abs(rango.min)) * 100)} % bajo el límite` : '';
+    return `${redondear(dif)}${u} por debajo del límite inferior (${redondear(rango.min)})${pct}`;
+  }
+  return 'dentro del intervalo de referencia';
 }
 
 export function construirPrompt(e: EntradaIA): string {
   const filas = e.parametros
-    .map((p) => `- ${p.name}: ${p.value} ${p.unit || ''} (referencia: ${p.referenceRange || 'no indicada'}; marcado por el laboratorio: ${ESTADO_ES[p.status || 'normal']})`)
+    .map((p) => {
+      const desv = describirDesviacion(p);
+      return `- ${p.name}: ${p.value} ${p.unit || ''} (referencia: ${p.referenceRange || 'no indicada'}; marcado por el laboratorio: ${ESTADO_ES[p.status || 'normal']}${desv ? `; desviación calculada: ${desv}` : ''})`;
+    })
     .join('\n');
   const hayCriticos = e.parametros.some((p) => p.status === 'critical');
   const especialistas = especialistasSugeridos(e);
   const hayFuera = hayCriticos || e.parametros.some((p) => p.status === 'high' || p.status === 'low');
   const instruccionConclusion = hayCriticos
-    ? 'IMPORTANTE: hay valores críticos. La conclusión DEBE decir con claridad y sin alarmar que es importante que consulte a su médico tratante lo antes posible, y que su médico podrá referirlo con el especialista si lo considera necesario.'
+    ? 'IMPORTANTE: hay valores críticos. La conclusión debe nombrar la(s) prueba(s) crítica(s) con su valor y decir, sin alarmar, que debe consultar a su médico tratante a la brevedad.'
     : hayFuera
-      ? 'La conclusión debe decir que comente los valores fuera de rango con su médico tratante, quien podrá referirlo con el especialista si lo considera necesario.'
+      ? 'La conclusión debe nombrar las pruebas fuera de rango con su valor y sentido (elevado o disminuido) y recomendar valoración clínica por su médico tratante.'
       : 'La conclusión debe decir que todos los valores están dentro del rango de referencia.';
-  return `Eres un Químico Biólogo clínico (profesional de laboratorio clínico) que redacta una explicación breve para el paciente. Tu única tarea es EXPLICAR en lenguaje sencillo, en español, qué mide cada prueba y cómo se ve el resultado frente a su rango de referencia. El personal del laboratorio revisará tu texto antes de entregarlo.
+  return `Eres un Químico Biólogo clínico que redacta la interpretación de resultados de un informe de laboratorio. Registro profesional, objetivo, preciso y CONCISO; sin relleno ni frases genéricas. Tu única tarea es EXPLICAR qué mide cada prueba y dónde cae el resultado frente a su rango de referencia. El personal del laboratorio revisará tu texto antes de entregarlo.
 
 REGLAS ESTRICTAS (si no puedes cumplirlas, responde con resumen vacío):
 - NO diagnostiques ni menciones enfermedades probables o posibles. NO concluyas nada sobre la salud de la persona.
 - NO recomiendes medicamentos, dietas, suplementos ni tratamientos.
-- Para cualquier valor fuera de rango o crítico, di únicamente que debe comentarlo con su médico tratante (quien decide si lo refiere con un especialista). No inventes especialidades: solo menciona la que se indica abajo, si hay una.
-- Usa un tono sereno y claro, sin causar alarma. No repitas datos personales.
-- Basa todo SOLO en los datos de abajo; no inventes valores ni rangos.
-- Sé breve: cada prueba lleva MÁXIMO 2 líneas (unas 25 palabras en total). Sin rodeos ni repeticiones.
+- Para cualquier valor fuera de rango o crítico, indica solo que corresponde valoración clínica por su médico tratante (quien decide si lo refiere). No inventes especialidades: menciona solo la indicada abajo, si hay una.
+- Basa todo SOLO en los datos de abajo. Cita el valor y su unidad, y usa la "desviación calculada" tal cual cuando exista; NO inventes cifras ni rangos ni porcentajes.
+- Una sola oración por prueba, de MÁXIMO 30 palabras: qué mide (en pocas palabras) y cómo se ubica el resultado (dentro del rango, o cuánto por encima o por debajo del límite). No repitas el nombre de la prueba dentro de la oración. Sin adjetivos de relleno ni tono alarmista. No repitas datos personales.
 
 DATOS (sin identificación personal):
 - Estudio: ${e.titulo || 'Estudio de laboratorio'}
@@ -144,9 +193,9 @@ ${filas}
 
 Devuelve ÚNICAMENTE un JSON con este formato:
 {
-  "valores": [ { "nombre": "nombre de la prueba", "significado": "MÁXIMO 2 líneas: qué mide y cómo se ve este valor frente a la referencia (dentro, por encima o por debajo)." } ],
-  "resumen": "Conclusión final de 1 o 2 oraciones: cuántos valores están dentro y cuántos fuera del rango de referencia. ${instruccionConclusion} ${especialistas.length ? 'Incluye que su médico tratante podrá referirlo con el especialista indicado (' + especialistas.map((x) => x.profesional).join(', ') + ').' : ''} No diagnostiques ni nombres enfermedades.",
-  "recordatorio": "Una oración corta: este texto es solo informativo y su médico debe interpretar los resultados."
+  "valores": [ { "nombre": "nombre de la prueba", "significado": "UNA oración, máximo 30 palabras: qué mide y dónde se ubica el valor (ej.: «Mide el colesterol circulante en sangre; 245 mg/dL, 45 mg/dL por encima del límite superior (200)»)." } ],
+  "resumen": "Máximo 2 oraciones: cuántos resultados están dentro y cuáles fuera del rango de referencia. ${instruccionConclusion} ${especialistas.length ? 'Menciona de forma breve la valoración orientativa por ' + especialistas.map((x) => x.profesional).join(', ') + '.' : ''} No diagnostiques ni nombres enfermedades.",
+  "recordatorio": "Una oración corta: texto informativo; la interpretación clínica corresponde a su médico tratante."
 }`;
 }
 
