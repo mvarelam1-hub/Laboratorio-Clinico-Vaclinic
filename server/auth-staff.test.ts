@@ -87,15 +87,29 @@ describe('requireStaffAuth', () => {
   it('con una sesión REVOCADA responde 403', async () => {
     const { token } = await createSession(poolDeFabricacion, 1);
     queryMock.mockResolvedValueOnce({ rows: [{ revocado_en: new Date().toISOString() }] });
+    queryMock.mockResolvedValueOnce({ rows: [{ revocado_motivo: null }] }); // motivo de la revocación
 
     const app = await buildApp();
     const res = await request(app).get('/protegido').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
+    expect(res.body.error).toContain('La sesión fue cerrada');
+  });
+
+  it('con una sesión cerrada porque el mismo usuario inició sesión en otro lugar, lo explica', async () => {
+    const { token } = await createSession(poolDeFabricacion, 1);
+    queryMock.mockResolvedValueOnce({ rows: [{ revocado_en: new Date().toISOString() }] });
+    queryMock.mockResolvedValueOnce({ rows: [{ revocado_motivo: 'nuevo_inicio' }] });
+
+    const app = await buildApp();
+    const res = await request(app).get('/protegido').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toContain('inició sesión en otro lugar');
   });
 
   it('con una sesión que ya no existe en sesion_personal responde 403', async () => {
     const { token } = await createSession(poolDeFabricacion, 1);
     queryMock.mockResolvedValueOnce({ rows: [] }); // sesion_personal: sin filas
+    queryMock.mockResolvedValueOnce({ rows: [] }); // motivo: tampoco existe
 
     const app = await buildApp();
     const res = await request(app).get('/protegido').set('Authorization', `Bearer ${token}`);
