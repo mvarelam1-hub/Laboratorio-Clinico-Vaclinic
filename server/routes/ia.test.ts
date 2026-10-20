@@ -110,27 +110,28 @@ describe('POST /api/ia/interpretacion', () => {
     expect(generateMock.mock.calls.length).toBeGreaterThan(1);
   });
 
-  it('no repite la mención del especialista si la IA ya la hizo (cardiología / cardiólogo)', async () => {
-    generateMock.mockResolvedValueOnce({ text: JSON.stringify({
-      ...buena,
-      resumen: '1 de 1 resultados fuera del rango (colesterol total elevado). Valoración clínica por su médico tratante; orientativa: cardiología.'
-    }) });
-    const res = await request(await buildApp()).post('/api/ia/interpretacion').send({
-      ...cuerpo,
-      parametros: [{ name: 'Colesterol Total', value: '245', unit: 'mg/dL', referenceRange: '< 200', status: 'high' }]
-    });
+  const colesterol = {
+    ...cuerpo,
+    parametros: [{ name: 'Colesterol Total (TC)', value: '325', unit: 'mg/dL', referenceRange: '< 200', status: 'high' }]
+  };
+  const iaColesterol = { valores: [{ nombre: 'Colesterol Total (TC)', significado: 'Mide la cantidad total de colesterol en la sangre.' }] };
+
+  it('no repite datos: el valor aparece una sola vez y la conclusión no lo vuelve a decir', async () => {
+    generateMock.mockResolvedValueOnce({ text: JSON.stringify(iaColesterol) });
+    const res = await request(await buildApp()).post('/api/ia/interpretacion').send(colesterol);
     expect(res.status).toBe(200);
-    expect(res.body.resumen).not.toContain('Valoración orientativa:');
+    expect(res.body.texto.match(/325/g)).toHaveLength(1);
+    expect(res.body.texto.match(/m[eé]dico tratante/g)).toHaveLength(1);
+    expect(res.body.texto).toContain('Mide la cantidad total de colesterol en la sangre. Resultado: 325 mg/dL, elevado');
+    expect(res.body.resumen).toMatch(/cardiólogo/);
   });
 
-  it('agrega el especialista orientativo si la IA lo omitió', async () => {
-    generateMock.mockResolvedValueOnce({ text: JSON.stringify({ ...buena, resumen: '1 de 1 resultados fuera del rango de referencia.' }) });
-    const res = await request(await buildApp()).post('/api/ia/interpretacion').send({
-      ...cuerpo,
-      parametros: [{ name: 'Colesterol Total', value: '245', unit: 'mg/dL', referenceRange: '< 200', status: 'high' }]
-    });
+  it('ignora el resumen y las cifras que la IA agregue por su cuenta', async () => {
+    generateMock.mockResolvedValueOnce({ text: JSON.stringify({ ...iaColesterol, resumen: 'Colesterol de 325 muy alto.', recordatorio: 'Consulte a su médico.' }) });
+    const res = await request(await buildApp()).post('/api/ia/interpretacion').send(colesterol);
     expect(res.status).toBe(200);
-    expect(res.body.resumen).toContain('Valoración orientativa: cardiólogo');
+    expect(res.body.resumen).not.toContain('muy alto');
+    expect(res.body.recordatorio).toBe('Texto informativo; no sustituye la valoración médica.');
   });
 
   it('502 si la IA falla', async () => {
