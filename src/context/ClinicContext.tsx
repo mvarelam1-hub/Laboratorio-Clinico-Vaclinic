@@ -3183,6 +3183,35 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showNotification('Sesión de personal bloqueada', 'info');
   };
 
+  // Una sola sesión por usuario: si este mismo usuario inicia sesión en otro
+  // navegador o equipo, el servidor cierra esta. Se comprueba cada 30 s y al
+  // volver a la pestaña, para avisar al momento y no recién al guardar algo.
+  useEffect(() => {
+    if (!isStaffAuthenticated) return;
+    let cancelado = false;
+    const comprobar = async () => {
+      let token: string | null = null;
+      try { token = localStorage.getItem(STAFF_SESSION_TOKEN_STORAGE_KEY); } catch { /* ignore */ }
+      if (!token) return;
+      const r = await verifyStaffSession(token);
+      if (cancelado || r.ok === true) return;
+      if (r.reason === 'network' || r.reason === 'unknown') return;
+      try { localStorage.removeItem(STAFF_SESSION_TOKEN_STORAGE_KEY); } catch { /* ignore */ }
+      setIsStaffAuthenticated(false);
+      setStaffAuthMeta(null);
+      showNotification(r.message, 'warning');
+    };
+    const cadaTanto = window.setInterval(comprobar, 30_000);
+    const alVolver = () => { if (document.visibilityState === 'visible') void comprobar(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      cancelado = true;
+      window.clearInterval(cadaTanto);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStaffAuthenticated]);
+
   const hasPermission = (user: LabStaffUser, permissionId: string): boolean => {
     // Etapa 3: misma función que usa el backend (src/shared/permissions.ts),
     // para que ocultar un botón aquí y rechazar la petición en el servidor
