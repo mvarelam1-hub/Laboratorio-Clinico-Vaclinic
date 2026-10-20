@@ -10,12 +10,11 @@ import { requireStaffAuth } from '../auth-staff';
 import { requirePermission } from '../permissions-middleware';
 import { asyncHandler } from '../asyncHandler';
 import { registrarBitacora } from '../bitacora';
+import { modelosCandidatos, esErrorDeModelo } from '../geminiModelos';
 import { sanearEntrada, construirPrompt, validarSalida, textoParaInforme, especialistasSugeridos, fraseEspecialista } from '../iaInterpretacion';
 
 export const iaRouter = Router();
 iaRouter.use(requireStaffAuth);
-
-const MODELO = () => process.env.GEMINI_MODEL || 'gemini-3.7-flash';
 
 iaRouter.post('/interpretacion', requirePermission('validacion_redaccion'), asyncHandler(async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -30,16 +29,31 @@ iaRouter.post('/interpretacion', requirePermission('validacion_redaccion'), asyn
   if (!saneado.ok) return res.status(400).json({ error: saneado.error });
 
   const entrada = saneado.entrada!;
-  const modelo = MODELO();
+  let modelo = '';
   let crudo: unknown;
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const respuesta = await ai.models.generateContent({
-      model: modelo,
-      contents: construirPrompt(entrada),
-      config: { responseMimeType: 'application/json', temperature: 0.2 }
-    });
-    crudo = JSON.parse(respuesta.text || '{}');
+    const prompt = construirPrompt(entrada);
+    let ultimoError: unknown = null;
+    for (const candidato of modelosCandidatos(process.env.GEMINI_MODEL)) {
+      try {
+        const respuesta = await ai.models.generateContent({
+          model: candidato,
+          contents: prompt,
+          config: { responseMimeType: 'application/json', temperature: 0.2 }
+        });
+        crudo = JSON.parse(respuesta.text || '{}');
+        modelo = candidato;
+        ultimoError = null;
+        break;
+      } catch (err) {
+        ultimoError = err;
+        // Solo se pasa al siguiente modelo si este no existe o fue retirado.
+        if (!esErrorDeModelo(err)) break;
+        console.warn(`Gemini: el modelo ${candidato} no está disponible, se prueba el siguiente.`, (err as Error)?.message);
+      }
+    }
+    if (ultimoError) throw ultimoError;
   } catch (err: any) {
     console.warn('Gemini interpretacion error:', err?.message);
     return res.status(502).json({ code: 'IA_NO_DISPONIBLE', error: 'No se pudo obtener respuesta de la IA en este momento. Intenta de nuevo en unos minutos.' });
