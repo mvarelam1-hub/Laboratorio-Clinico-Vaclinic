@@ -12,6 +12,8 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
+import { pasosAcceso } from '../../utils/pasosAcceso';
+import { mensajeMuestraRecibida, mensajeResultadosListos } from '../../utils/avisosPaciente';
 
 export interface WhatsAppMessageModalProps {
   isOpen: boolean;
@@ -24,8 +26,8 @@ export interface WhatsAppMessageModalProps {
   accessCode?: string;
   /** N.º de orden: el único código visible (igual al del informe). */
   orderNumber?: string;
-  type: 'bienvenida_paciente' | 'comprobante_orden' | 'aviso_resultados' | 'codigo_consulta';
-  /** Muestra un selector para cambiar entre enviar solo el código o el aviso de resultados listos. */
+  type: 'bienvenida_paciente' | 'comprobante_orden' | 'aviso_resultados' | 'codigo_consulta' | 'muestra_recibida';
+  /** Muestra un selector para cambiar entre enviar el código, el aviso de muestra recibida o el de resultados listos. */
   permitirElegirTipo?: boolean;
   orderDetails?: {
     orderNumber: string;
@@ -86,9 +88,7 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         `Su expediente quedó registrado.\n` +
         `🔑 *Su código de consulta:* *${codigo}*\n\n` +
         `*Para ver sus resultados:*\n` +
-        `1️⃣ Entre a ${portalUrl}\n` +
-        `2️⃣ Escriba su código de consulta\n` +
-        `3️⃣ Descargue su informe cuando esté listo\n\n` +
+        `${pasosAcceso(portalUrl, 'Descargue su informe cuando esté listo')}\n\n` +
         `Le avisaremos por este medio cuando sus resultados estén listos.` +
         `${labAddress ? `\n📍 ${labAddress}` : ''}${contacto}`;
     } else if (type === 'comprobante_orden' && orderDetails) {
@@ -103,29 +103,19 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         `💰 *Total:* Q${orderDetails.total.toFixed(2)}\n${saldo}\n\n` +
         `🔑 *Su código de consulta:* *${codigo}*\n\n` +
         `*Para ver sus resultados:*\n` +
-        `1️⃣ Entre a ${portalUrl}\n` +
-        `2️⃣ Escriba su código de consulta\n` +
-        `3️⃣ Descargue su informe cuando esté listo\n\n` +
+        `${pasosAcceso(portalUrl, 'Descargue su informe cuando esté listo')}\n\n` +
         `Le avisaremos por este medio cuando esté listo.${contacto}`;
+    } else if (type === 'muestra_recibida') {
+      text = mensajeMuestraRecibida({ nombre: patientName, laboratorio: labName, numeroOrden: orderNumber, codigoConsulta: codigo, url: portalUrl, contacto });
     } else if (type === 'codigo_consulta') {
       text = `👋 Hola, *${patientName.trim()}*. Le escribimos de *${labName}*.\n\n` +
         `${orderNumber ? `📄 *N.º de orden:* *${orderNumber}*\n` : ''}` +
         `🔑 *Su código de consulta:* *${codigo}*\n\n` +
         `*Con este código podrá ver y descargar sus resultados:*\n` +
-        `1️⃣ Entre a ${portalUrl}\n` +
-        `2️⃣ Escriba su código de consulta\n` +
-        `3️⃣ Descargue su informe cuando esté listo\n\n` +
+        `${pasosAcceso(portalUrl, 'Descargue su informe cuando esté listo')}\n\n` +
         `Le avisaremos cuando sus resultados estén listos.${contacto}`;
     } else {
-      text = `👋 Hola, *${patientName.trim()}*.\n\n` +
-        `✅ Sus resultados de *${labName}* ya están *listos*.\n` +
-        `${orderNumber ? `📄 *N.º de orden:* *${orderNumber}*\n` : ''}` +
-        `🔑 *Su código de consulta:* *${codigo}*\n\n` +
-        `*Para descargar su informe:*\n` +
-        `1️⃣ Entre a ${portalUrl}\n` +
-        `2️⃣ Escriba su código de consulta\n` +
-        `3️⃣ Toque "Descargar informe"\n\n` +
-        `También puede recogerlo impreso en recepción.${contacto}`;
+      text = mensajeResultadosListos({ nombre: patientName, laboratorio: labName, numeroOrden: orderNumber, codigoConsulta: codigo, url: portalUrl, contacto });
     }
 
     setMessage(text);
@@ -147,7 +137,9 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
       return;
     }
     const labName = labSettings.labName || 'Laboratorio Clínico VACLINIC';
-    const asunto = type === 'aviso_resultados' ? `${labName}: sus resultados están listos` : `${labName}: su código de consulta`;
+    const asunto = type === 'aviso_resultados' ? `${labName}: sus resultados están listos`
+      : type === 'muestra_recibida' ? `${labName}: recibimos su muestra`
+      : `${labName}: su código de consulta`;
     // En el correo no sirven los asteriscos de negrita de WhatsApp.
     const cuerpo = message.replace(/\*/g, '');
     window.location.href = `mailto:${destino}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
@@ -187,7 +179,8 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
               <p className="text-xs text-emerald-100 font-medium">
                 {type === 'bienvenida_paciente' ? 'Bienvenida y credenciales de portal' :
                  type === 'comprobante_orden' ? 'Comprobante de muestra y PIN' :
-                 type === 'codigo_consulta' ? 'Código de consulta para ver resultados' : 'Aviso de resultados listos'}
+                 type === 'codigo_consulta' ? 'Código de consulta para ver resultados' :
+                 type === 'muestra_recibida' ? 'Aviso de muestra recibida y seguimiento' : 'Aviso de resultados listos'}
               </p>
             </div>
           </div>
@@ -205,8 +198,8 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         <div className="p-5 space-y-4 overflow-y-auto flex-1 text-slate-800 dark:text-slate-200">
           
           {permitirElegirTipo && (
-            <div role="group" aria-label="Qué enviar" className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800">
-              {([['codigo_consulta', 'Código de consulta'], ['aviso_resultados', 'Resultados listos']] as const).map(([valor, texto]) => (
+            <div role="group" aria-label="Qué enviar" className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800">
+              {([['codigo_consulta', 'Código de consulta'], ['muestra_recibida', 'Muestra recibida'], ['aviso_resultados', 'Resultados listos']] as const).map(([valor, texto]) => (
                 <button
                   key={valor}
                   type="button"
