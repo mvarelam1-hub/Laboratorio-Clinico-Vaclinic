@@ -74,6 +74,42 @@ describe('POST /api/ia/interpretacion', () => {
     expect(res.body.code).toBe('IA_SALIDA_RECHAZADA');
   });
 
+  it('usa por defecto un modelo vigente (no el retirado gemini-3.7-flash)', async () => {
+    delete process.env.GEMINI_MODEL;
+    generateMock.mockResolvedValueOnce({ text: JSON.stringify(buena) });
+    const res = await request(await buildApp()).post('/api/ia/interpretacion').send(cuerpo);
+    expect(res.status).toBe(200);
+    expect(generateMock.mock.calls[0][0].model).toBe('gemini-3.8-flash');
+    expect(res.body.modelo).toBe('gemini-3.8-flash');
+  });
+
+  it('si el modelo configurado ya no existe, prueba el siguiente y responde con ese', async () => {
+    process.env.GEMINI_MODEL = 'gemini-3.7-flash';
+    generateMock
+      .mockRejectedValueOnce(new Error('models/gemini-3.7-flash is not found for API version v1beta'))
+      .mockResolvedValueOnce({ text: JSON.stringify(buena) });
+    const res = await request(await buildApp()).post('/api/ia/interpretacion').send(cuerpo);
+    delete process.env.GEMINI_MODEL;
+    expect(res.status).toBe(200);
+    expect(generateMock).toHaveBeenCalledTimes(2);
+    expect(generateMock.mock.calls[0][0].model).toBe('gemini-3.7-flash');
+    expect(generateMock.mock.calls[1][0].model).toBe('gemini-3.8-flash');
+  });
+
+  it('un fallo que no es de modelo (red, cuota) no se reintenta con otros modelos', async () => {
+    generateMock.mockRejectedValueOnce(new Error('fetch failed'));
+    const res = await request(await buildApp()).post('/api/ia/interpretacion').send(cuerpo);
+    expect(res.status).toBe(502);
+    expect(generateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('502 si todos los modelos fallan por no existir', async () => {
+    generateMock.mockRejectedValue(new Error('model not found'));
+    const res = await request(await buildApp()).post('/api/ia/interpretacion').send(cuerpo);
+    expect(res.status).toBe(502);
+    expect(generateMock.mock.calls.length).toBeGreaterThan(1);
+  });
+
   it('502 si la IA falla', async () => {
     generateMock.mockRejectedValueOnce(new Error('boom'));
     const res = await request(await buildApp()).post('/api/ia/interpretacion').send(cuerpo);
