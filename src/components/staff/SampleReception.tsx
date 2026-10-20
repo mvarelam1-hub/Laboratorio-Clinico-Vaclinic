@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 import { useInstalarApp } from '../../utils/instalarApp';
+import { WhatsAppMessageModal } from './WhatsAppMessageModal';
 import { 
   inferTubeForTest, 
   LAB_TUBE_REGISTRY, 
@@ -191,6 +192,9 @@ export const SampleReception: React.FC = () => {
   // Aviso visible al registrar o recibir una muestra (con la opción de instalar la app).
   const [avisoMuestra, setAvisoMuestra] = useState<string | null>(null);
   const { puedeInstalar, instalar } = useInstalarApp();
+  // Muestra recién recibida: permite enviar al paciente el aviso con el enlace de seguimiento.
+  const [muestraAAvisar, setMuestraAAvisar] = useState<LabSample | null>(null);
+  const [avisoAbierto, setAvisoAbierto] = useState(false);
   const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false);
   const [activeBarcodeLabel, setActiveBarcodeLabel] = useState<LabSample | null>(null);
   const [lastValidatedSample, setLastValidatedSample] = useState<LabSample | null>(null);
@@ -304,6 +308,12 @@ export const SampleReception: React.FC = () => {
         const fila = await actualizarMuestraRemota(muestra.remoteId, { estado: newStatus });
         setSamples(prev => prev.map(s => s.id === id ? desdeApi(fila) : s));
         showNotification(`Estado de muestra actualizado a: ${newStatus.toUpperCase()}`, 'info');
+        if (newStatus === 'en_proceso' && muestra.status === 'recolectada') {
+          // Pasó a "recibida": se ofrece avisar al paciente.
+          const recibida = desdeApi(fila);
+          setAvisoMuestra(`${recibida.containerCategory === 'recipiente' ? 'Recipiente' : 'Tubo'} ${recibida.barcode} recibido (paciente: ${recibida.patientName}).`);
+          setMuestraAAvisar(recibida);
+        }
       } catch (err) {
         showNotification(`No se pudo cambiar el estado: ${err instanceof Error ? err.message : 'error desconocido'}`, 'error');
         await cargarMuestras();
@@ -326,6 +336,7 @@ export const SampleReception: React.FC = () => {
         setSamples(prev => prev.some(s => s.id === escaneada.id) ? prev.map(s => s.id === escaneada.id ? escaneada : s) : [escaneada, ...prev]);
         setLastValidatedSample(escaneada);
         setAvisoMuestra(`${escaneada.containerCategory === 'recipiente' ? 'Recipiente' : 'Tubo'} ${escaneada.barcode} recibido (paciente: ${escaneada.patientName}).`);
+        setMuestraAAvisar(escaneada);
         showNotification(`¡Muestra validada por escáner! ${escaneada.containerCategory === 'recipiente' ? 'Recipiente' : 'Tubo'} ${escaneada.barcode} - Paciente: ${escaneada.patientName}`, 'success');
       } catch (err) {
         showNotification(err instanceof Error ? err.message : `No se pudo validar el código ${clean}.`, 'error');
@@ -432,9 +443,19 @@ export const SampleReception: React.FC = () => {
                 Instalar aplicación
               </button>
             )}
+            {muestraAAvisar && (
+              <button
+                type="button"
+                onClick={() => setAvisoAbierto(true)}
+                className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 cursor-pointer"
+                title="Enviar al paciente el aviso de muestra recibida, con el enlace para seguir su orden (WhatsApp o correo)"
+              >
+                Avisar al paciente
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setAvisoMuestra(null)}
+              onClick={() => { setAvisoMuestra(null); setMuestraAAvisar(null); }}
               className="rounded-xl px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer"
             >
               Cerrar
@@ -442,6 +463,25 @@ export const SampleReception: React.FC = () => {
           </span>
         </div>
       )}
+
+      {avisoAbierto && muestraAAvisar && (() => {
+        const orden = orders.find((o) => typeof o.remoteId === 'number' && o.remoteId === muestraAAvisar.orderId);
+        const pac = patients.find((p) => (orden?.patientId && p.id === orden.patientId)
+          || (muestraAAvisar.nationalId && p.nationalId === muestraAAvisar.nationalId));
+        return (
+          <WhatsAppMessageModal
+            isOpen
+            onClose={() => setAvisoAbierto(false)}
+            patientName={muestraAAvisar.patientName}
+            patientPhone={orden?.phone || pac?.phone || ''}
+            patientEmail={orden?.email || pac?.email || ''}
+            accessCode={orden?.codigoConsulta || ''}
+            orderNumber={orden?.orderNumber || muestraAAvisar.orderNumber || ''}
+            type="muestra_recibida"
+            permitirElegirTipo
+          />
+        );
+      })()}
 
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 text-white p-6 rounded-3xl border border-teal-500/20 shadow-md">
