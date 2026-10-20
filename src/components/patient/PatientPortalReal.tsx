@@ -234,6 +234,13 @@ export const ConsultaResultados: React.FC<{ alCambiarSesion?: (token: string | n
                 <p className="text-sm text-slate-900 mt-1 whitespace-pre-line">{inf.conclusion}</p>
               </div>
             )}
+            {inf.interpretacion && inf.interpretacion.trim() && (
+              <div className="px-4 py-3 border-t border-slate-300">
+                <h3 className="text-xs uppercase tracking-wide font-semibold text-slate-600">Interpretación de sus resultados</h3>
+                <p className="text-sm text-slate-900 mt-1 whitespace-pre-line">{inf.interpretacion}</p>
+                <p className="text-xs text-slate-500 mt-2">Redactada con apoyo de inteligencia artificial y revisada por el laboratorio. Es informativa y no es un diagnóstico.</p>
+              </div>
+            )}
             {inf.recomendaciones.length > 0 && (
               <div className="px-4 py-3 border-t border-slate-300">
                 <h3 className="text-xs uppercase tracking-wide font-semibold text-slate-600">Recomendaciones</h3>
