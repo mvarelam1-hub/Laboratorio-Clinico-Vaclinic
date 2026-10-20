@@ -76,7 +76,10 @@ iaRouter.post('/interpretacion', requirePermission('validacion_redaccion'), asyn
   const salida = validada.salida!;
   // Garantiza que el especialista orientativo aparezca aunque la IA lo omita.
   const especialistas = especialistasSugeridos(entrada);
-  if (especialistas.length && !especialistas.some((x) => salida.resumen.toLowerCase().includes(x.profesional))) {
+  // Se compara sin acentos y por la raíz ("cardiólogo" / "cardiología"), para no repetir la mención.
+  const raiz = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().slice(0, 6);
+  const resumenPlano = salida.resumen.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (especialistas.length && !especialistas.some((x) => resumenPlano.includes(raiz(x.profesional)))) {
     salida.resumen = `${salida.resumen} ${fraseEspecialista(especialistas)}`.trim();
   }
   return res.json({ modelo, ...salida, texto: textoParaInforme(salida) });
