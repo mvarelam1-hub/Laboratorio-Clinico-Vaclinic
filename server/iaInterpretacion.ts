@@ -105,14 +105,6 @@ export function especialistasSugeridos(e: EntradaIA): EspecialistaSugerido[] {
   return [...vistos.values()];
 }
 
-/** Frase fija para la conclusión; no diagnostica, solo orienta hacia quién puede valorar. */
-export function fraseEspecialista(lista: EspecialistaSugerido[]): string {
-  if (lista.length === 0) return '';
-  const nombres = lista.map((x) => `${x.profesional} (${x.area})`);
-  const unidos = nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(', ')} o ${nombres[nombres.length - 1]}`;
-  return `Valoración orientativa: ${unidos}.`;
-}
-
 const NUM = String.raw`-?\d+(?:[.,]\d+)?`;
 const aNumero = (t: string): number => Number(t.replace(',', '.'));
 const redondear = (n: number): string => String(Number(n.toFixed(1)));
@@ -161,42 +153,23 @@ export function describirDesviacion(p: ParametroIA): string | null {
 }
 
 export function construirPrompt(e: EntradaIA): string {
-  const filas = e.parametros
-    .map((p) => {
-      const desv = describirDesviacion(p);
-      return `- ${p.name}: ${p.value} ${p.unit || ''} (referencia: ${p.referenceRange || 'no indicada'}; marcado por el laboratorio: ${ESTADO_ES[p.status || 'normal']}${desv ? `; desviación calculada: ${desv}` : ''})`;
-    })
-    .join('\n');
-  const hayCriticos = e.parametros.some((p) => p.status === 'critical');
-  const especialistas = especialistasSugeridos(e);
-  const hayFuera = hayCriticos || e.parametros.some((p) => p.status === 'high' || p.status === 'low');
-  const instruccionConclusion = hayCriticos
-    ? 'IMPORTANTE: hay valores críticos. La conclusión debe nombrar la(s) prueba(s) crítica(s) con su valor y decir, sin alarmar, que debe consultar a su médico tratante a la brevedad.'
-    : hayFuera
-      ? 'La conclusión debe nombrar las pruebas fuera de rango con su valor y sentido (elevado o disminuido) y recomendar valoración clínica por su médico tratante.'
-      : 'La conclusión debe decir que todos los valores están dentro del rango de referencia.';
-  return `Eres un Químico Biólogo clínico que redacta la interpretación de resultados de un informe de laboratorio. Registro profesional, objetivo, preciso y CONCISO; sin relleno ni frases genéricas. Tu única tarea es EXPLICAR qué mide cada prueba y dónde cae el resultado frente a su rango de referencia. El personal del laboratorio revisará tu texto antes de entregarlo.
+  // La IA solo define qué mide cada prueba. El resultado, su sentido y la conclusión los arma
+  // el sistema con los datos reales (ver componerSalida), para que nada se repita ni se invente.
+  const filas = e.parametros.map((p) => `- ${p.name}${p.unit ? ` (${p.unit})` : ''}`).join('\n');
+  return `Eres un Químico Biólogo clínico. Para cada prueba de la lista escribe una definición breve y técnica de QUÉ MIDE, en registro profesional. Eso es todo: el sistema agrega por separado el resultado y la conclusión.
 
-REGLAS ESTRICTAS (si no puedes cumplirlas, responde con resumen vacío):
-- NO diagnostiques ni menciones enfermedades probables o posibles. NO concluyas nada sobre la salud de la persona.
-- NO recomiendes medicamentos, dietas, suplementos ni tratamientos.
-- Para cualquier valor fuera de rango o crítico, indica solo que corresponde valoración clínica por su médico tratante (quien decide si lo refiere). No inventes especialidades: menciona solo la indicada abajo, si hay una.
-- Basa todo SOLO en los datos de abajo. Cita el valor y su unidad, y usa la "desviación calculada" tal cual cuando exista; NO inventes cifras ni rangos ni porcentajes.
-- Una sola oración por prueba, de MÁXIMO 30 palabras: qué mide (en pocas palabras) y cómo se ubica el resultado (dentro del rango, o cuánto por encima o por debajo del límite). No repitas el nombre de la prueba dentro de la oración. Sin adjetivos de relleno ni tono alarmista. No repitas datos personales.
+REGLAS ESTRICTAS:
+- Una sola frase por prueba, de MÁXIMO 12 palabras, que empiece con un verbo en tercera persona (ej.: «Mide la cantidad total de colesterol en la sangre»).
+- NO incluyas cifras, rangos, unidades ni si el valor está alto, bajo o normal.
+- NO diagnostiques ni menciones enfermedades. NO recomiendes medicamentos, dietas, suplementos ni tratamientos.
+- Sin adjetivos de relleno. Usa el nombre exacto de la prueba tal como aparece en la lista.
 
-DATOS (sin identificación personal):
-- Estudio: ${e.titulo || 'Estudio de laboratorio'}
-- Edad: ${e.edad ?? 'no indicada'} | Sexo: ${e.genero || 'no indicado'}
-- Resultados:
+ESTUDIO: ${e.titulo || 'Estudio de laboratorio'}
+PRUEBAS:
 ${filas}
-- Especialista orientativo para los valores fuera de rango: ${especialistas.length ? especialistas.map((x) => `${x.profesional} (${x.area})`).join(', ') : 'ninguno'}
 
 Devuelve ÚNICAMENTE un JSON con este formato:
-{
-  "valores": [ { "nombre": "nombre de la prueba", "significado": "UNA oración, máximo 30 palabras: qué mide y dónde se ubica el valor (ej.: «Mide el colesterol circulante en sangre; 245 mg/dL, 45 mg/dL por encima del límite superior (200)»)." } ],
-  "resumen": "Máximo 2 oraciones: cuántos resultados están dentro y cuáles fuera del rango de referencia. ${instruccionConclusion} ${especialistas.length ? 'Menciona de forma breve la valoración orientativa por ' + especialistas.map((x) => x.profesional).join(', ') + '.' : ''} No diagnostiques ni nombres enfermedades.",
-  "recordatorio": "Una oración corta: texto informativo; la interpretación clínica corresponde a su médico tratante."
-}`;
+{ "valores": [ { "nombre": "nombre exacto de la prueba", "significado": "Mide ..." } ] }`;
 }
 
 // Frases propias de un diagnóstico/conclusión/indicación: si aparecen, se descarta la salida.
@@ -219,9 +192,9 @@ export function validarSalida(crudo: unknown): { ok: boolean; salida?: SalidaIA;
   const resumen = limpiar(o?.resumen, 400);
   const recordatorio = limpiar(o?.recordatorio, 300);
   const valores = Array.isArray(o?.valores)
-    ? o.valores.slice(0, MAX_PARAMETROS).map((v: any) => ({ nombre: limpiar(v?.nombre, 100), significado: limpiar(v?.significado, 220) })).filter((v: any) => v.nombre && v.significado)
+    ? o.valores.slice(0, MAX_PARAMETROS).map((v: any) => ({ nombre: limpiar(v?.nombre, 100), significado: limpiar(v?.significado, 160) })).filter((v: any) => v.nombre && v.significado)
     : [];
-  if (!resumen || valores.length === 0) {
+  if (valores.length === 0) {
     return { ok: false, motivo: 'La IA no devolvió una explicación utilizable. Intenta de nuevo.' };
   }
   const todo = [resumen, recordatorio, ...valores.map((v: any) => v.significado)].join(' ');
@@ -233,9 +206,66 @@ export function validarSalida(crudo: unknown): { ok: boolean; salida?: SalidaIA;
     salida: {
       resumen,
       valores,
-      recordatorio: recordatorio || 'Este texto es informativo; su médico debe interpretar los resultados.'
+      recordatorio
     }
   };
+}
+
+const sinAcentos = (t: string): string => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const ETIQUETA: Record<string, string> = { normal: 'dentro del rango', high: 'elevado', low: 'disminuido', critical: 'crítico' };
+
+/** "325 mg/dL, elevado (62.5 % sobre el límite superior; referencia: < 200)". Cifras calculadas aquí, no por la IA. */
+export function describirResultado(p: ParametroIA): string {
+  const estado = p.status || 'normal';
+  const valor = `${p.value}${p.unit ? ` ${p.unit}` : ''}`;
+  const detalle: string[] = [];
+  const rango = parsearRango(p.referenceRange);
+  if (estado !== 'normal' && rango && /^-?\d+(?:[.,]\d+)?$/.test(p.value.trim())) {
+    const v = aNumero(p.value);
+    if (rango.max !== undefined && v > rango.max && rango.max !== 0) detalle.push(`${redondear(((v - rango.max) / Math.abs(rango.max)) * 100)} % sobre el límite superior`);
+    else if (rango.min !== undefined && v < rango.min && rango.min !== 0) detalle.push(`${redondear(((rango.min - v) / Math.abs(rango.min)) * 100)} % bajo el límite inferior`);
+  }
+  if (p.referenceRange) detalle.push(`referencia: ${p.referenceRange}`);
+  return `${valor}, ${ETIQUETA[estado] || ETIQUETA.normal}${detalle.length ? ` (${detalle.join('; ')})` : ''}`;
+}
+
+/**
+ * Arma el texto final sin datos repetidos: la IA solo aporta "qué mide" cada prueba; el resultado,
+ * el sentido y la conclusión salen de los datos reales. Cada dato aparece una sola vez.
+ */
+export function componerSalida(e: EntradaIA, ia: SalidaIA): SalidaIA {
+  const definiciones = ia.valores.map((v) => ({ clave: sinAcentos(v.nombre), texto: v.significado.replace(/[.\s]+$/, '') }));
+  const usadas = new Set<number>();
+  const valores = e.parametros.map((p, i) => {
+    const clave = sinAcentos(p.name);
+    let idx = definiciones.findIndex((d, j) => !usadas.has(j) && d.clave === clave);
+    if (idx < 0) idx = definiciones.findIndex((d, j) => !usadas.has(j) && d.clave && (d.clave.includes(clave) || clave.includes(d.clave)));
+    if (idx < 0 && definiciones.length === e.parametros.length && !usadas.has(i)) idx = i;
+    if (idx >= 0) usadas.add(idx);
+    const mide = idx >= 0 ? `${definiciones[idx].texto}. ` : '';
+    return { nombre: p.name, significado: `${mide}Resultado: ${describirResultado(p)}.` };
+  });
+
+  const fuera = e.parametros.filter((p) => p.status && p.status !== 'normal');
+  const criticos = e.parametros.some((p) => p.status === 'critical');
+  const total = e.parametros.length;
+  let resumen: string;
+  if (fuera.length === 0) {
+    resumen = total === 1 ? 'El resultado se encuentra dentro del rango de referencia.' : 'Todos los resultados se encuentran dentro del rango de referencia.';
+  } else {
+    const cuantos = total === 1
+      ? 'El resultado se encuentra fuera del rango de referencia.'
+      : fuera.length === total
+        ? `Los ${total} resultados se encuentran fuera del rango de referencia.`
+        : `${fuera.length} de ${total} resultados se encuentran fuera del rango de referencia: ${fuera.map((p) => p.name).join(', ')}.`;
+    const nombres = especialistasSugeridos(e).map((x) => `un ${x.profesional}`);
+    const unidos = nombres.length <= 1 ? nombres.join('') : `${nombres.slice(0, -1).join(', ')} o ${nombres[nombres.length - 1]}`;
+    const accion = criticos
+      ? 'Hay valores críticos: se recomienda consultar a su médico tratante a la brevedad.'
+      : `Se recomienda valoración por su médico tratante${unidos ? `, quien determinará si es necesario referirlo con ${unidos}` : ''}.`;
+    resumen = `${cuantos} ${accion}`;
+  }
+  return { resumen, valores, recordatorio: 'Texto informativo; no sustituye la valoración médica.' };
 }
 
 /** Texto plano listo para el campo "Explicación para el paciente" del informe. */
