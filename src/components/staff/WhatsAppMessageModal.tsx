@@ -12,6 +12,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
+import { pasosAcceso } from '../../utils/pasosAcceso';
 
 export interface WhatsAppMessageModalProps {
   isOpen: boolean;
@@ -86,9 +87,7 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         `Su expediente quedó registrado.\n` +
         `🔑 *Su código de consulta:* *${codigo}*\n\n` +
         `*Para ver sus resultados:*\n` +
-        `1️⃣ Entre a ${portalUrl}\n` +
-        `2️⃣ Escriba su código de consulta\n` +
-        `3️⃣ Descargue su informe cuando esté listo\n\n` +
+        `${pasosAcceso(portalUrl, 'Descargue su informe cuando esté listo')}\n\n` +
         `Le avisaremos por este medio cuando sus resultados estén listos.` +
         `${labAddress ? `\n📍 ${labAddress}` : ''}${contacto}`;
     } else if (type === 'comprobante_orden' && orderDetails) {
@@ -103,18 +102,14 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         `💰 *Total:* Q${orderDetails.total.toFixed(2)}\n${saldo}\n\n` +
         `🔑 *Su código de consulta:* *${codigo}*\n\n` +
         `*Para ver sus resultados:*\n` +
-        `1️⃣ Entre a ${portalUrl}\n` +
-        `2️⃣ Escriba su código de consulta\n` +
-        `3️⃣ Descargue su informe cuando esté listo\n\n` +
+        `${pasosAcceso(portalUrl, 'Descargue su informe cuando esté listo')}\n\n` +
         `Le avisaremos por este medio cuando esté listo.${contacto}`;
     } else if (type === 'codigo_consulta') {
       text = `👋 Hola, *${patientName.trim()}*. Le escribimos de *${labName}*.\n\n` +
         `${orderNumber ? `📄 *N.º de orden:* *${orderNumber}*\n` : ''}` +
         `🔑 *Su código de consulta:* *${codigo}*\n\n` +
         `*Con este código podrá ver y descargar sus resultados:*\n` +
-        `1️⃣ Entre a ${portalUrl}\n` +
-        `2️⃣ Escriba su código de consulta\n` +
-        `3️⃣ Descargue su informe cuando esté listo\n\n` +
+        `${pasosAcceso(portalUrl, 'Descargue su informe cuando esté listo')}\n\n` +
         `Le avisaremos cuando sus resultados estén listos.${contacto}`;
     } else {
       text = `👋 Hola, *${patientName.trim()}*.\n\n` +
@@ -122,9 +117,7 @@ export const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
         `${orderNumber ? `📄 *N.º de orden:* *${orderNumber}*\n` : ''}` +
         `🔑 *Su código de consulta:* *${codigo}*\n\n` +
         `*Para descargar su informe:*\n` +
-        `1️⃣ Entre a ${portalUrl}\n` +
-        `2️⃣ Escriba su código de consulta\n` +
-        `3️⃣ Toque "Descargar informe"\n\n` +
+        `${pasosAcceso(portalUrl, 'Toque "Descargar informe"')}\n\n` +
         `También puede recogerlo impreso en recepción.${contacto}`;
     }
 
