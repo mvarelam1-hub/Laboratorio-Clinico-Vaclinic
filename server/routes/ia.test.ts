@@ -110,6 +110,29 @@ describe('POST /api/ia/interpretacion', () => {
     expect(generateMock.mock.calls.length).toBeGreaterThan(1);
   });
 
+  it('no repite la mención del especialista si la IA ya la hizo (cardiología / cardiólogo)', async () => {
+    generateMock.mockResolvedValueOnce({ text: JSON.stringify({
+      ...buena,
+      resumen: '1 de 1 resultados fuera del rango (colesterol total elevado). Valoración clínica por su médico tratante; orientativa: cardiología.'
+    }) });
+    const res = await request(await buildApp()).post('/api/ia/interpretacion').send({
+      ...cuerpo,
+      parametros: [{ name: 'Colesterol Total', value: '245', unit: 'mg/dL', referenceRange: '< 200', status: 'high' }]
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.resumen).not.toContain('Valoración orientativa:');
+  });
+
+  it('agrega el especialista orientativo si la IA lo omitió', async () => {
+    generateMock.mockResolvedValueOnce({ text: JSON.stringify({ ...buena, resumen: '1 de 1 resultados fuera del rango de referencia.' }) });
+    const res = await request(await buildApp()).post('/api/ia/interpretacion').send({
+      ...cuerpo,
+      parametros: [{ name: 'Colesterol Total', value: '245', unit: 'mg/dL', referenceRange: '< 200', status: 'high' }]
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.resumen).toContain('Valoración orientativa: cardiólogo');
+  });
+
   it('502 si la IA falla', async () => {
     generateMock.mockRejectedValueOnce(new Error('boom'));
     const res = await request(await buildApp()).post('/api/ia/interpretacion').send(cuerpo);
