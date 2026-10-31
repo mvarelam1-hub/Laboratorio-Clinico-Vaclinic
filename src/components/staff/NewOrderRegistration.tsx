@@ -1619,8 +1619,8 @@ export const NewOrderRegistration: React.FC = () => {
           </section>
 
           {/* ===== BARRA INFERIOR ===== */}
-          <div className="sticky bottom-3 z-20">
-            <div className="bg-slate-900 rounded-xl shadow-xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="sticky bottom-2 z-20">
+            <div className="bg-slate-900 rounded-xl shadow-xl px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span>{selectedTestIds.length} {selectedTestIds.length === 1 ? 'examen' : 'exámenes'}</span>
                 <span>{getDateLabel(orderDate)} {orderTime}</span>
@@ -1635,7 +1635,7 @@ export const NewOrderRegistration: React.FC = () => {
                 id="btn-submit-order"
                 type="submit"
                 title="Revisar y liquidar (Ctrl+S)"
-                className="w-full sm:w-auto bg-coral-pulse hover:bg-coral-hover text-[#1a1a1a] font-semibold text-sm px-6 py-2.5 rounded-full transition-colors cursor-pointer flex items-center justify-center gap-2"
+                className="w-full sm:w-auto bg-coral-pulse hover:bg-coral-hover text-[#1a1a1a] font-semibold text-sm px-6 py-2 rounded-full transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <Receipt className="w-4 h-4" />
                 <span>Revisar y liquidar</span>
