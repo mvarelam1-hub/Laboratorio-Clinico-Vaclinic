@@ -147,6 +147,8 @@ export const ReportEditor: React.FC = () => {
   const [patientExplanation, setPatientExplanation] = useState<string>(activeReportToEdit?.patientExplanation || '');
   const [incluirExplicacion, setIncluirExplicacion] = useState<boolean>(activeReportToEdit?.includeAiExplanationInReport ?? false);
   const [showAiInterpretation, setShowAiInterpretation] = useState<boolean>(false);
+  const [menuHerramientas, setMenuHerramientas] = useState<boolean>(false);
+  const [menuRangos, setMenuRangos] = useState<boolean>(false);
   const [recommendations, setRecommendations] = useState<string[]>(
     activeReportToEdit?.recommendations || []
   );
@@ -733,6 +735,8 @@ export const ReportEditor: React.FC = () => {
       recommendations: cleanRecommendations,
       includeConclusionsInReport,
       includeRecommendationsInReport,
+      // Sin esto el servidor guardaba la casilla apagada y la interpretación IA nunca salía en el PDF.
+      includeAiExplanationInReport: incluirExplicacion,
       urgentAlert: urgentAlert || hasCritical,
       attachedAnalyzerReport,
       signature: {
@@ -1041,16 +1045,10 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             </div>
           </div>
 
-          {/* Herramientas de apoyo (secundarias) */}
+          {/* Herramientas de apoyo: lo principal a la vista y lo demás en un menú */}
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <button type="button" id="btn-interpretacion-ia" onClick={() => setShowAiInterpretation(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg cursor-pointer" title="Explicación en lenguaje sencillo con IA (no diagnostica; tú la revisas antes de usarla)">
               <Sparkles className="w-3.5 h-3.5 text-emerald-600" /><span>{incluirExplicacion && patientExplanation.trim() ? 'Interpretación IA agregada ✓' : 'Interpretación IA'}</span>
-            </button>
-            <button type="button" onClick={() => setShowTubeGuideModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Tipos de tubos de extracción y anticoagulantes">
-              <FlaskConical className="w-3.5 h-3.5 text-amber-600" /><span>Guía de Tubos</span>
-            </button>
-            <button type="button" onClick={() => setShowAtlasModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Atlas microscópico de parásitos, cristales y sedimento">
-              <BookOpen className="w-3.5 h-3.5 text-cyan-600" /><span>Atlas Microscópico</span>
             </button>
             <button type="button" onClick={() => setShowPdfExportModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Exportar PDF oficial">
               <Download className="w-3.5 h-3.5 text-teal-600" /><span>Exportar PDF</span>
@@ -1058,9 +1056,25 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             <button type="button" id="btn-physical-print-preview" onClick={() => setShowPhysicalPrintPreview(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Ver cómo queda el informe en papel y desde ahí imprimirlo">
               <Eye className="w-3.5 h-3.5 text-sky-600" /><span>Ver / imprimir informe</span>
             </button>
-            <button type="button" id="btn-thermal-print-preview" onClick={() => setShowThermalPrintModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Formato ticket térmico">
-              <Printer className="w-3.5 h-3.5 text-slate-600" /><span>Ticket térmico</span>
-            </button>
+            <div className="relative">
+              <button type="button" id="btn-mas-herramientas" onClick={() => setMenuHerramientas((v) => !v)} aria-expanded={menuHerramientas} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer">
+                <span>Más herramientas</span><ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+              </button>
+              {menuHerramientas && (<>
+                <div className="fixed inset-0 z-30" onClick={() => setMenuHerramientas(false)} />
+                <div className="absolute left-0 top-full mt-1 z-40 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-1">
+                  <button type="button" onClick={() => { setMenuHerramientas(false); setShowTubeGuideModal(true); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left" title="Tipos de tubos de extracción y anticoagulantes">
+                    <FlaskConical className="w-3.5 h-3.5 text-amber-600" /><span>Guía de Tubos</span>
+                  </button>
+                  <button type="button" onClick={() => { setMenuHerramientas(false); setShowAtlasModal(true); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left" title="Atlas microscópico de parásitos, cristales y sedimento">
+                    <BookOpen className="w-3.5 h-3.5 text-cyan-600" /><span>Atlas Microscópico</span>
+                  </button>
+                  <button type="button" id="btn-thermal-print-preview" onClick={() => { setMenuHerramientas(false); setShowThermalPrintModal(true); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left" title="Imprimir el resultado en ticket térmico">
+                    <Printer className="w-3.5 h-3.5 text-slate-600" /><span>Ticket térmico</span>
+                  </button>
+                </div>
+              </>)}
+            </div>
             <button
               type="button"
               onClick={() => { setActiveReportToEdit(null); }}
@@ -1069,6 +1083,11 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               Cerrar orden
             </button>
           </div>
+          {incluirExplicacion && patientExplanation.trim() && (
+            <p className="mt-2 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+              La interpretación IA ya está en el borrador. Saldrá en el informe y en el PDF cuando pulses «Validar y publicar» (o «Guardar Borrador» para conservarla).
+            </p>
+          )}
         </div>
       )}
       {!soloOrden && (<>
@@ -1359,28 +1378,43 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                   title="Analiza automáticamente los valores numéricos contra los rangos de referencia para asignar Normal / Elevado / Bajo"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  <span>⚡ Auto-Evaluar Rangos</span>
+                  <span>Auto-evaluar rangos</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleResetAllToCatalog}
-                  className="flex items-center gap-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                  title="Restaura los rangos de referencia oficiales de fábrica para todas las pruebas que coincidan con el catálogo"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-                  <span>🔄 Sincronizar Rangos Oficiales</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleOrganizeByClinicalAreas}
-                  className="flex items-center gap-1 text-xs font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                  title="Organiza y agrupa los parámetros por área clínica de laboratorio (Hematología, Bioquímica, Inmunología, etc.)"
-                >
-                  <Layers className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Ordenar por Áreas</span>
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMenuRangos((v) => !v)}
+                    aria-expanded={menuRangos}
+                    className="flex items-center gap-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <span>Más opciones</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                  </button>
+                  {menuRangos && (<>
+                    <div className="fixed inset-0 z-30" onClick={() => setMenuRangos(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-40 w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-1">
+                      <button
+                        type="button"
+                        onClick={() => { setMenuRangos(false); handleOrganizeByClinicalAreas(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left"
+                        title="Organiza y agrupa los parámetros por área clínica de laboratorio (Hematología, Bioquímica, Inmunología, etc.)"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Ordenar por áreas</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setMenuRangos(false); handleResetAllToCatalog(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left"
+                        title="Restaura los rangos de referencia oficiales de fábrica para todas las pruebas que coincidan con el catálogo"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Sincronizar rangos oficiales</span>
+                      </button>
+                    </div>
+                  </>)}
+                </div>
 
                 {!soloOrden && (<button
                   type="button"
