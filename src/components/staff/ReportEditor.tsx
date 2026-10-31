@@ -77,9 +77,9 @@ import {
 } from 'lucide-react';
 
 /** En modo real, el contenido opcional va plegado para no quitar espacio a los resultados. */
-const Plegable: React.FC<{ activo: boolean; titulo: string; children: React.ReactNode }> = ({ activo, titulo, children }) =>
+const Plegable: React.FC<{ activo: boolean; titulo: string; abierto?: boolean; children: React.ReactNode }> = ({ activo, titulo, abierto, children }) =>
   activo ? (
-    <details className="group bg-white rounded-2xl border border-slate-200 shadow-xs">
+    <details open={abierto} className="group bg-white rounded-2xl border border-slate-200 shadow-xs">
       <summary className="cursor-pointer select-none list-none px-5 py-3 text-sm font-bold text-slate-700 flex items-center justify-between">
         <span>{titulo}</span>
         <span className="text-xs font-semibold text-slate-400 group-open:hidden">Mostrar</span>
@@ -1939,10 +1939,10 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             )}
           </div>
 
-          <Plegable activo={soloOrden} titulo="Observaciones del profesional (opcional)">
+          <Plegable activo={soloOrden} abierto={incluirExplicacion && patientExplanation.trim().length > 0} titulo="Observaciones del profesional (opcional)">
           {/* Clinical Findings and Doctor Conclusions Section */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className={`flex items-center justify-between border-b border-slate-100 pb-2 ${soloOrden ? 'hidden' : ''}`}>
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-teal-600" />
                 <span>{soloOrden ? 'Observaciones del profesional' : '3. Redacción Diagnóstica y Resumen del Médico'}</span>
@@ -2131,8 +2131,48 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
           </Plegable>
 
+          {soloOrden && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 space-y-2" data-testid="acciones-informe">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Entrega del informe</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={enviarAlPaciente}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-green-800 bg-green-50 hover:bg-green-100 border border-green-300 rounded-xl cursor-pointer"
+                  title="Enviar el aviso de resultados al paciente por WhatsApp (el informe debe estar publicado)"
+                >
+                  <Send className="w-3.5 h-3.5 text-green-600" />
+                  <span>Enviar al paciente</span>
+                </button>
+                {ordenDelInforme && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmarDevolver(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-rose-700 bg-white hover:bg-rose-50 border border-rose-300 rounded-xl cursor-pointer"
+                    title="Si falta algún examen, regresa la orden a pendiente"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Devolver orden (falta examen)</span>
+                  </button>
+                )}
+              </div>
+              {confirmarDevolver && ordenDelInforme && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs px-3 py-2 flex flex-wrap items-center justify-between gap-2" data-testid="confirmar-devolver">
+                  <span>
+                    Se devolverá la orden <strong>{ordenDelInforme.orderNumber}</strong> a pendiente
+                    {sinResultado > 0 ? <> porque falta: <strong>{parameters.filter((p) => !String(p.value ?? '').trim()).map((p) => p.name).join(', ')}</strong></> : null}.
+                    Lo que ya capturaste se guarda como borrador.
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <button type="button" onClick={devolverOrden} className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">Devolver</button>
+                    <button type="button" onClick={() => setConfirmarDevolver(false)} className="px-3 py-1 rounded-lg bg-white border border-amber-300 font-semibold cursor-pointer">Cancelar</button>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           {/* Bottom Save & Clinical Validation Action Bar */}
-          <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 ${soloOrden ? 'sticky bottom-0 z-30 shadow-lg !p-3' : ''}`}>
+          <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 ${soloOrden ? 'sticky bottom-0 z-30 shadow-lg !p-2 !rounded-xl' : ''}`}>
             <div className="flex items-center gap-3">
               {!soloOrden && (<div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                 outOfRangeParameters.length > 0 
@@ -2172,46 +2212,6 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               </div>
             </div>
 
-            {soloOrden && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2" data-testid="acciones-informe">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Entrega del informe</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={enviarAlPaciente}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-green-800 bg-green-50 hover:bg-green-100 border border-green-300 rounded-xl cursor-pointer"
-                    title="Enviar el aviso de resultados al paciente por WhatsApp (el informe debe estar publicado)"
-                  >
-                    <Send className="w-3.5 h-3.5 text-green-600" />
-                    <span>Enviar al paciente</span>
-                  </button>
-                  {ordenDelInforme && (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmarDevolver(true)}
-                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-rose-700 bg-white hover:bg-rose-50 border border-rose-300 rounded-xl cursor-pointer"
-                      title="Si falta algún examen, regresa la orden a pendiente"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-                      <span>Devolver orden (falta examen)</span>
-                    </button>
-                  )}
-                </div>
-                {confirmarDevolver && ordenDelInforme && (
-                  <div className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs px-3 py-2 flex flex-wrap items-center justify-between gap-2" data-testid="confirmar-devolver">
-                    <span>
-                      Se devolverá la orden <strong>{ordenDelInforme.orderNumber}</strong> a pendiente
-                      {sinResultado > 0 ? <> porque falta: <strong>{parameters.filter((p) => !String(p.value ?? '').trim()).map((p) => p.name).join(', ')}</strong></> : null}.
-                      Lo que ya capturaste se guarda como borrador.
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <button type="button" onClick={devolverOrden} className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">Devolver</button>
-                      <button type="button" onClick={() => setConfirmarDevolver(false)} className="px-3 py-1 rounded-lg bg-white border border-amber-300 font-semibold cursor-pointer">Cancelar</button>
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="flex flex-wrap items-center gap-2">
               {outOfRangeParameters.length > 0 && (
