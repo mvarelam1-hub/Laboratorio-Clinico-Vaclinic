@@ -53,7 +53,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
       {/* Offline Alert Persistent Banner */}
       <OfflineWarningBanner />
 
-      {/* Top VACLINIC Institutional Bar */}
+      {/* Franja institucional: solo en el portal público. En el panel del personal los datos del laboratorio ya salen en el pie de página. */}
+      {role !== 'personal' && (
       <div className="bg-canopy text-mint-wash text-xs px-4 py-1.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-leaf font-black tracking-wide">
@@ -80,6 +81,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
           </span>
         </div>
       </div>
+      )}
 
       {/* Main Header Container */}
       <div className="w-full px-4 sm:px-6">
