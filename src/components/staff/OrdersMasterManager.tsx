@@ -45,6 +45,7 @@ import {
   FlaskConical,
   Edit3,
   Pencil,
+  FileEdit,
   User,
   Phone,
   CreditCard,
@@ -1319,6 +1320,18 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                                 aria-label="Corregir datos de la orden"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {mode !== 'trash' && (
+                              <button
+                                onClick={() => handleEditResultsInEditor(ord)}
+                                className="p-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 cursor-pointer"
+                                title="Abrir en el editor de resultados"
+                                aria-label="Editor de resultados"
+                                data-testid="btn-editor-resultados"
+                              >
+                                <FileEdit className="w-3.5 h-3.5" />
                               </button>
                             )}
 
