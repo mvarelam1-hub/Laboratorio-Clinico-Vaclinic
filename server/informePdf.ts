@@ -502,7 +502,9 @@ export async function generarInformePdf(d: DatosInformePdf): Promise<Uint8Array>
 
   // ---------------- Firmas y verificación ----------------
   // Alto del bloque de firmas + QR + texto de verificación (debe caber sobre la banda del pie).
-  const ALTO_BLOQUE = oficial ? 76 : 46;
+  // Medido con 3 firmantes de nombre largo: ocupa ~54 mm; se reservan 62 para dar margen sin
+  // mandar a una segunda hoja un informe corto que sí cabe en la primera.
+  const ALTO_BLOQUE = oficial ? 62 : 46;
   asegurar(ALTO_BLOQUE);
   y += 2;
   tituloSeccion(oficial ? 'Firmas y verificacion' : 'Firmas');
