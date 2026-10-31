@@ -29,7 +29,8 @@ jobs:
       restore_db:
         image: postgres:18
         env:
-          POSTGRES_PASSWORD: restore
+          # Base desechable dentro del runner: sin contrasena escrita en el codigo (Sonar S6698).
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: restore_check
         ports: ['5432:5432']
         options: >-
@@ -73,9 +74,8 @@ jobs:
       - name: Probar la restauración en una base desechable
         env:
           BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
-          RESTORE_DATABASE_URL: postgres://postgres:restore@localhost:5432/restore_check
+          RESTORE_DATABASE_URL: postgres://postgres@localhost:5432/restore_check
           PGSSLMODE: disable
-          PGPASSWORD: restore
         run: node scripts/restore-verify.mjs --dir backups
 
       - name: Guardar el respaldo cifrado (30 días)
