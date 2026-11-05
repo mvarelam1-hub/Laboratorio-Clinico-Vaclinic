@@ -35,3 +35,7 @@ despliega).
 - Settings > Branches (o Rules) muestra las reglas de `qa` y `main`.
 - Un PR de prueba con el pipeline en rojo muestra el boton *Merge* deshabilitado: capturar pantalla.
 - La pestana *Pull requests > Closed* muestra >= 3 PRs, cada uno con revision de otra persona (y sus comentarios).
+
+
+## 6. Estado actual (verificado en GitHub)
+Paso 1: los otros dos integrantes ya aparecen como colaboradores del repositorio y pueden revisar Pull Requests. Paso 2: las ramas dev, qa y main existen. Paso 3: qa y main tienen proteccion activa; dev queda pendiente de la misma regla.
