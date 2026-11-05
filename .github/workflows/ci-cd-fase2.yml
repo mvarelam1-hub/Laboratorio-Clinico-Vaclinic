@@ -73,6 +73,7 @@ jobs:
   analisis-estatico:
     name: 3. Analisis estatico + Quality Gate (E12)
     needs: pruebas-unitarias
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
     runs-on: ubuntu-24.04
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -101,7 +102,8 @@ jobs:
   # ---------------------------------------------------------------- 4
   pruebas-api:
     name: 4. Pruebas de API con Newman (E11)
-    needs: analisis-estatico
+    needs: [pruebas-unitarias, analisis-estatico]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
     services:
       postgres:
