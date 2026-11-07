@@ -24,4 +24,4 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          args: -Dsonar.projectKey=mvarelam1-hub_Laboratorio-Clinico-Vaclinic -Dsonar.organization=mvarelam1-hub
+          args: -Dsonar.projectKey=Laboratorio_Clinico_Vaclinic -Dsonar.organization=jnavasn-tech
