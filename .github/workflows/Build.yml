@@ -23,5 +23,5 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8.4.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: -Dsonar.projectKey=mvarelam1-hub_Laboratorio-Clinico-Vaclinic -Dsonar.organization=mvarelam1-hub
+  
+ 
