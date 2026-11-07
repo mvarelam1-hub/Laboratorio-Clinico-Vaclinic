@@ -1,6 +1,6 @@
 /**
  * Cliente de la información PÚBLICA del laboratorio (server/routes/publico.ts):
- * contacto, catálogo de pruebas con precio, perfiles y las noticias/promociones
+ * contacto, catálogo de pruebas (con precio solo si hay sesión del portal), perfiles y las noticias/promociones
  * que el laboratorio publicó. No requiere sesión.
  */
 
@@ -22,7 +22,8 @@ export interface PerfilPublico {
   descripcion: string | null; examenes: string[];
 }
 
-export interface CatalogoPublico { examenes: ExamenPublico[]; perfiles: PerfilPublico[]; }
+/** `preciosVisibles` es false cuando no hay sesión del portal: en ese caso todos los precios vienen null. */
+export interface CatalogoPublico { examenes: ExamenPublico[]; perfiles: PerfilPublico[]; preciosVisibles: boolean; }
 
 export interface ContenidoPublico {
   id: number; titulo: string; resumen: string; cuerpo: string; etiqueta: string | null;
@@ -30,12 +31,13 @@ export interface ContenidoPublico {
 }
 export interface ContenidoPublicoRespuesta { noticias: ContenidoPublico[]; promociones: ContenidoPublico[]; }
 
-async function pedir<T>(ruta: string): Promise<T> {
-  const r = await fetch(`/api/publico/${ruta}`);
+async function pedir<T>(ruta: string, token?: string | null): Promise<T> {
+  const r = await fetch(`/api/publico/${ruta}`, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
   if (!r.ok) throw new Error('No se pudo cargar la información. Inténtalo de nuevo en un momento.');
   return r.json() as Promise<T>;
 }
 
 export const obtenerLaboratorioPublico = () => pedir<LaboratorioPublico>('laboratorio');
-export const obtenerCatalogoPublico = () => pedir<CatalogoPublico>('catalogo');
+/** Con el token de la sesión del portal (código de consulta) el servidor incluye los precios. */
+export const obtenerCatalogoPublico = (token?: string | null) => pedir<CatalogoPublico>('catalogo', token);
 export const obtenerContenidoPublico = () => pedir<ContenidoPublicoRespuesta>('contenido');

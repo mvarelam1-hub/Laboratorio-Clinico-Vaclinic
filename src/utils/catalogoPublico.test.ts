@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   completarConFabrica, componentesDe, categoriasConConteo, filtrarCatalogo, formatoPrecio,
-  textoEntrega, textoAyuno, esPanel, nombreCategoria
+  textoEntrega, textoAyuno, esPanel, nombreCategoria, enlaceSolicitudPrecios
 } from './catalogoPublico';
 import type { ExamenPublico } from '../services/publicoApiService';
 
@@ -67,5 +67,21 @@ describe('contacto del portal', () => {
     expect(r.nombre).toBe('Otro Lab');
     expect(r.telefono).toBe('2222-3333');
     expect(r.direccion).toBe(CONTACTO_PREDETERMINADO.direccion);
+  });
+});
+
+describe('enlaceSolicitudPrecios', () => {
+  it('arma el enlace de WhatsApp con +502 si el número tiene 8 dígitos', () => {
+    const url = enlaceSolicitudPrecios('5612-5563', 'VACLINIC')!;
+    expect(url.startsWith('https://wa.me/50256125563?text=')).toBe(true);
+    expect(decodeURIComponent(url.split('text=')[1])).toContain('autorización para conocer los precios');
+    expect(decodeURIComponent(url.split('text=')[1])).toContain('VACLINIC');
+  });
+  it('respeta un número que ya trae código de país', () => {
+    expect(enlaceSolicitudPrecios('+502 5612 5563', 'Lab')!.startsWith('https://wa.me/50256125563?')).toBe(true);
+  });
+  it('sin número válido devuelve null', () => {
+    expect(enlaceSolicitudPrecios(null, 'Lab')).toBeNull();
+    expect(enlaceSolicitudPrecios('12', 'Lab')).toBeNull();
   });
 });

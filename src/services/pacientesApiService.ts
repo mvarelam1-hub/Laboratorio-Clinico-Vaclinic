@@ -95,7 +95,9 @@ export function mapPacienteApiToPatient(row: PacienteApiRow, existing?: Partial<
   const id = String(row.id_paciente);
   return {
     id,
-    patientCode: existing?.patientCode || `VAC-${String(row.id_paciente).padStart(6, '0')}`,
+    // El código sale SIEMPRE del número real del registro en la base: así nunca se repite
+    // (antes se conservaba el código local, calculado contando pacientes, y salían duplicados).
+    patientCode: `VAC-${String(row.id_paciente).padStart(6, '0')}`,
     nationalId: row.dni || '',
     accessCode: existing?.accessCode || `MED-${id.slice(-4).padStart(4, '0')}`,
     pinCode: existing?.pinCode || id.slice(-4).padStart(4, '0'),

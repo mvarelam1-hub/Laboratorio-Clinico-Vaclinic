@@ -59,6 +59,31 @@ del curso ACS (Fase 2, E10-E14), no antes. Cualquier prueba automatizada que
 aparezca en el historial de commits a partir de esa fecha es trabajo propio
 del equipo para ese curso.
 
+## Pruebas automatizadas (ACS, Fase 2)
+
+```bash
+npm test                 # pruebas unitarias con Vitest (server/**/*.test.ts y src/**/*.test.ts)
+npm run test:coverage    # mismas pruebas + cobertura de los modulos criticos de E2 (coverage/, incluye lcov.info)
+```
+
+Pruebas de API (Postman/Newman) contra el servidor real y una base PostgreSQL con datos ficticios:
+ver [postman/README.md](postman/README.md). Prueba de carga (k6) contra el ambiente desplegado:
+ver [load-test/README.md](load-test/README.md).
+
+## Pipeline CI/CD
+
+El workflow `.github/workflows/ci-cd-fase2.yml` corre en cada push y Pull Request hacia `dev`, `qa` y `main`,
+en este orden: 1) compilacion, 2) pruebas unitarias con cobertura, 3) analisis estatico en SonarCloud con
+verificacion del Quality Gate, 4) pruebas de API con Newman y 5) despliegue a Render (solo en `main`).
+Cada etapa depende de la anterior, asi que un fallo detiene las siguientes.
+
+- Ejecutarlo a mano: pestana **Actions** > *CI/CD Fase 2 (E13)* > **Run workflow** (elegir la rama).
+- Secretos necesarios (Settings > Secrets and variables > Actions): `SONAR_TOKEN`, `RENDER_DEPLOY_HOOK_URL`
+  y, para la prueba de carga, `CODIGO_CARGA`.
+- Estrategia de ramas y reglas de proteccion: [docs/ESTRATEGIA_RAMAS.md](docs/ESTRATEGIA_RAMAS.md) y
+  [docs/PROTECCION_RAMAS.md](docs/PROTECCION_RAMAS.md). SonarCloud: [docs/SONARCLOUD_SETUP.md](docs/SONARCLOUD_SETUP.md).
+- Prueba de carga: Actions > *Carga k6 (E14)* > **Run workflow**.
+
 ## Estructura
 
 - `src/` — frontend React (componentes por dominio: `staff/`, `patient/`, `laboratory/`, `news/`, `chat/`)

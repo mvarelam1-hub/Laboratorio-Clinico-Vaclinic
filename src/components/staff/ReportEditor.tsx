@@ -77,9 +77,9 @@ import {
 } from 'lucide-react';
 
 /** En modo real, el contenido opcional va plegado para no quitar espacio a los resultados. */
-const Plegable: React.FC<{ activo: boolean; titulo: string; children: React.ReactNode }> = ({ activo, titulo, children }) =>
+const Plegable: React.FC<{ activo: boolean; titulo: string; abierto?: boolean; children: React.ReactNode }> = ({ activo, titulo, abierto, children }) =>
   activo ? (
-    <details className="group bg-white rounded-2xl border border-slate-200 shadow-xs">
+    <details open={abierto} className="group bg-white rounded-2xl border border-slate-200 shadow-xs">
       <summary className="cursor-pointer select-none list-none px-5 py-3 text-sm font-bold text-slate-700 flex items-center justify-between">
         <span>{titulo}</span>
         <span className="text-xs font-semibold text-slate-400 group-open:hidden">Mostrar</span>
@@ -147,6 +147,8 @@ export const ReportEditor: React.FC = () => {
   const [patientExplanation, setPatientExplanation] = useState<string>(activeReportToEdit?.patientExplanation || '');
   const [incluirExplicacion, setIncluirExplicacion] = useState<boolean>(activeReportToEdit?.includeAiExplanationInReport ?? false);
   const [showAiInterpretation, setShowAiInterpretation] = useState<boolean>(false);
+  const [menuHerramientas, setMenuHerramientas] = useState<boolean>(false);
+  const [menuRangos, setMenuRangos] = useState<boolean>(false);
   const [recommendations, setRecommendations] = useState<string[]>(
     activeReportToEdit?.recommendations || []
   );
@@ -206,7 +208,7 @@ export const ReportEditor: React.FC = () => {
   const [showPhysicalPrintPreview, setShowPhysicalPrintPreview] = useState<boolean>(false);
   const [showThermalPrintModal, setShowThermalPrintModal] = useState<boolean>(false);
   // Datos para ofrecer el aviso por WhatsApp apenas el informe queda firmado y publicado.
-  const [avisoPublicado, setAvisoPublicado] = useState<{ nombre: string; telefono: string; codigoPaciente: string; codigoConsulta: string } | null>(null);
+  const [avisoPublicado, setAvisoPublicado] = useState<{ nombre: string; telefono: string; codigoPaciente: string; codigoConsulta: string; numeroOrden: string } | null>(null);
   // Acciones del informe en el ingreso de resultados: enviar el aviso y devolver la orden.
   const [enviarAviso, setEnviarAviso] = useState<boolean>(false);
   const [confirmarDevolver, setConfirmarDevolver] = useState<boolean>(false);
@@ -733,6 +735,8 @@ export const ReportEditor: React.FC = () => {
       recommendations: cleanRecommendations,
       includeConclusionsInReport,
       includeRecommendationsInReport,
+      // Sin esto el servidor guardaba la casilla apagada y la interpretación IA nunca salía en el PDF.
+      includeAiExplanationInReport: incluirExplicacion,
       urgentAlert: urgentAlert || hasCritical,
       attachedAnalyzerReport,
       signature: {
@@ -780,7 +784,8 @@ export const ReportEditor: React.FC = () => {
           nombre: currentPatient?.fullName || reportData.patientName,
           telefono: currentPatient?.phone || '',
           codigoPaciente: currentPatient?.patientCode || '',
-          codigoConsulta: ordenDelInforme?.codigoConsulta || ''
+          codigoConsulta: ordenDelInforme?.codigoConsulta || '',
+          numeroOrden: ordenDelInforme?.orderNumber || ''
         });
         return;
       }
@@ -1040,26 +1045,36 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             </div>
           </div>
 
-          {/* Herramientas de apoyo (secundarias) */}
+          {/* Herramientas de apoyo: lo principal a la vista y lo demás en un menú */}
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <button type="button" id="btn-interpretacion-ia" onClick={() => setShowAiInterpretation(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg cursor-pointer" title="Explicación en lenguaje sencillo con IA (no diagnostica; tú la revisas antes de usarla)">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" /><span>Interpretación IA</span>
-            </button>
-            <button type="button" onClick={() => setShowTubeGuideModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Tipos de tubos de extracción y anticoagulantes">
-              <FlaskConical className="w-3.5 h-3.5 text-amber-600" /><span>Guía de Tubos</span>
-            </button>
-            <button type="button" onClick={() => setShowAtlasModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Atlas microscópico de parásitos, cristales y sedimento">
-              <BookOpen className="w-3.5 h-3.5 text-cyan-600" /><span>Atlas Microscópico</span>
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" /><span>{incluirExplicacion && patientExplanation.trim() ? 'Interpretación IA agregada ✓' : 'Interpretación IA'}</span>
             </button>
             <button type="button" onClick={() => setShowPdfExportModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Exportar PDF oficial">
               <Download className="w-3.5 h-3.5 text-teal-600" /><span>Exportar PDF</span>
             </button>
-            <button type="button" id="btn-physical-print-preview" onClick={() => setShowPhysicalPrintPreview(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Cómo se verá en papel">
-              <Eye className="w-3.5 h-3.5 text-sky-600" /><span>Vista de impresión</span>
+            <button type="button" id="btn-physical-print-preview" onClick={() => setShowPhysicalPrintPreview(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Ver cómo queda el informe en papel y desde ahí imprimirlo">
+              <Eye className="w-3.5 h-3.5 text-sky-600" /><span>Ver / imprimir informe</span>
             </button>
-            <button type="button" id="btn-thermal-print-preview" onClick={() => setShowThermalPrintModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer" title="Formato ticket térmico">
-              <Printer className="w-3.5 h-3.5 text-slate-600" /><span>Ticket térmico</span>
-            </button>
+            <div className="relative">
+              <button type="button" id="btn-mas-herramientas" onClick={() => setMenuHerramientas((v) => !v)} aria-expanded={menuHerramientas} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer">
+                <span>Más herramientas</span><ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+              </button>
+              {menuHerramientas && (<>
+                <div className="fixed inset-0 z-30" onClick={() => setMenuHerramientas(false)} />
+                <div className="absolute left-0 top-full mt-1 z-40 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-1">
+                  <button type="button" onClick={() => { setMenuHerramientas(false); setShowTubeGuideModal(true); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left" title="Tipos de tubos de extracción y anticoagulantes">
+                    <FlaskConical className="w-3.5 h-3.5 text-amber-600" /><span>Guía de Tubos</span>
+                  </button>
+                  <button type="button" onClick={() => { setMenuHerramientas(false); setShowAtlasModal(true); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left" title="Atlas microscópico de parásitos, cristales y sedimento">
+                    <BookOpen className="w-3.5 h-3.5 text-cyan-600" /><span>Atlas Microscópico</span>
+                  </button>
+                  <button type="button" id="btn-thermal-print-preview" onClick={() => { setMenuHerramientas(false); setShowThermalPrintModal(true); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left" title="Imprimir el resultado en ticket térmico">
+                    <Printer className="w-3.5 h-3.5 text-slate-600" /><span>Ticket térmico</span>
+                  </button>
+                </div>
+              </>)}
+            </div>
             <button
               type="button"
               onClick={() => { setActiveReportToEdit(null); }}
@@ -1068,6 +1083,11 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               Cerrar orden
             </button>
           </div>
+          {incluirExplicacion && patientExplanation.trim() && (
+            <p className="mt-2 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+              La interpretación IA ya está en el borrador. Saldrá en el informe y en el PDF cuando pulses «Validar y publicar» (o «Guardar Borrador» para conservarla).
+            </p>
+          )}
         </div>
       )}
       {!soloOrden && (<>
@@ -1358,28 +1378,43 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                   title="Analiza automáticamente los valores numéricos contra los rangos de referencia para asignar Normal / Elevado / Bajo"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  <span>⚡ Auto-Evaluar Rangos</span>
+                  <span>Auto-evaluar rangos</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleResetAllToCatalog}
-                  className="flex items-center gap-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                  title="Restaura los rangos de referencia oficiales de fábrica para todas las pruebas que coincidan con el catálogo"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-                  <span>🔄 Sincronizar Rangos Oficiales</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleOrganizeByClinicalAreas}
-                  className="flex items-center gap-1 text-xs font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                  title="Organiza y agrupa los parámetros por área clínica de laboratorio (Hematología, Bioquímica, Inmunología, etc.)"
-                >
-                  <Layers className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Ordenar por Áreas</span>
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMenuRangos((v) => !v)}
+                    aria-expanded={menuRangos}
+                    className="flex items-center gap-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <span>Más opciones</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                  </button>
+                  {menuRangos && (<>
+                    <div className="fixed inset-0 z-30" onClick={() => setMenuRangos(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-40 w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-1">
+                      <button
+                        type="button"
+                        onClick={() => { setMenuRangos(false); handleOrganizeByClinicalAreas(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left"
+                        title="Organiza y agrupa los parámetros por área clínica de laboratorio (Hematología, Bioquímica, Inmunología, etc.)"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Ordenar por áreas</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setMenuRangos(false); handleResetAllToCatalog(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer text-left"
+                        title="Restaura los rangos de referencia oficiales de fábrica para todas las pruebas que coincidan con el catálogo"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Sincronizar rangos oficiales</span>
+                      </button>
+                    </div>
+                  </>)}
+                </div>
 
                 {!soloOrden && (<button
                   type="button"
@@ -1437,7 +1472,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
                       </span>
                     </div>
                     <p className="text-slate-600 text-[11px]">
-                      {attachedAnalyzerReport.diagnosticSummary || 'Reporte de citometría de flujo e impedancia con histogramas WBC, RBC, PLT preservados.'}
+                      Reporte de citometría de flujo e impedancia con histogramas WBC, RBC, PLT preservados.
                     </p>
                   </div>
                 </div>
@@ -1904,10 +1939,10 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
             )}
           </div>
 
-          <Plegable activo={soloOrden} titulo="Observaciones del profesional (opcional)">
+          <Plegable activo={soloOrden} abierto={incluirExplicacion && patientExplanation.trim().length > 0} titulo="Observaciones del profesional (opcional)">
           {/* Clinical Findings and Doctor Conclusions Section */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className={`flex items-center justify-between border-b border-slate-100 pb-2 ${soloOrden ? 'hidden' : ''}`}>
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-teal-600" />
                 <span>{soloOrden ? 'Observaciones del profesional' : '3. Redacción Diagnóstica y Resumen del Médico'}</span>
@@ -1915,7 +1950,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
               {!soloOrden && (<button
                 type="button"
-                onClick={handleGenerateWithAI}
+                onClick={() => handleGenerateWithAI()}
                 disabled={isAiGenerating}
                 className="flex items-center gap-1.5 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
               >
@@ -2096,8 +2131,48 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
 
           </Plegable>
 
+          {soloOrden && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 space-y-2" data-testid="acciones-informe">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Entrega del informe</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={enviarAlPaciente}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-green-800 bg-green-50 hover:bg-green-100 border border-green-300 rounded-xl cursor-pointer"
+                  title="Enviar el aviso de resultados al paciente por WhatsApp (el informe debe estar publicado)"
+                >
+                  <Send className="w-3.5 h-3.5 text-green-600" />
+                  <span>Enviar al paciente</span>
+                </button>
+                {ordenDelInforme && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmarDevolver(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-rose-700 bg-white hover:bg-rose-50 border border-rose-300 rounded-xl cursor-pointer"
+                    title="Si falta algún examen, regresa la orden a pendiente"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Devolver orden (falta examen)</span>
+                  </button>
+                )}
+              </div>
+              {confirmarDevolver && ordenDelInforme && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs px-3 py-2 flex flex-wrap items-center justify-between gap-2" data-testid="confirmar-devolver">
+                  <span>
+                    Se devolverá la orden <strong>{ordenDelInforme.orderNumber}</strong> a pendiente
+                    {sinResultado > 0 ? <> porque falta: <strong>{parameters.filter((p) => !String(p.value ?? '').trim()).map((p) => p.name).join(', ')}</strong></> : null}.
+                    Lo que ya capturaste se guarda como borrador.
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <button type="button" onClick={devolverOrden} className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">Devolver</button>
+                    <button type="button" onClick={() => setConfirmarDevolver(false)} className="px-3 py-1 rounded-lg bg-white border border-amber-300 font-semibold cursor-pointer">Cancelar</button>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           {/* Bottom Save & Clinical Validation Action Bar */}
-          <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 ${soloOrden ? 'sticky bottom-0 z-30 shadow-lg !p-3' : ''}`}>
+          <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 ${soloOrden ? 'sticky bottom-0 z-30 shadow-lg !p-2 !rounded-xl' : ''}`}>
             <div className="flex items-center gap-3">
               {!soloOrden && (<div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                 outOfRangeParameters.length > 0 
@@ -2137,73 +2212,6 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
               </div>
             </div>
 
-            {soloOrden && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2" data-testid="acciones-informe">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Acciones del informe</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAiInterpretation(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl cursor-pointer"
-                    title="Genera una explicación sencilla con IA (no diagnostica) y la agrega al informe cuando tú la apruebas"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>{incluirExplicacion && patientExplanation.trim() ? 'Interpretación IA agregada ✓' : 'Agregar interpretación IA'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowPhysicalPrintPreview(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-300 rounded-xl cursor-pointer"
-                    title="Ver cómo queda el informe"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-sky-600" />
-                    <span>Ver informe</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowPhysicalPrintPreview(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl cursor-pointer"
-                    title="Abre la vista previa y desde ahí se imprime"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Imprimir</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={enviarAlPaciente}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-green-800 bg-green-50 hover:bg-green-100 border border-green-300 rounded-xl cursor-pointer"
-                    title="Enviar el aviso de resultados al paciente por WhatsApp (el informe debe estar publicado)"
-                  >
-                    <Send className="w-3.5 h-3.5 text-green-600" />
-                    <span>Enviar al paciente</span>
-                  </button>
-                  {ordenDelInforme && (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmarDevolver(true)}
-                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-rose-700 bg-white hover:bg-rose-50 border border-rose-300 rounded-xl cursor-pointer"
-                      title="Si falta algún examen, regresa la orden a pendiente"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-                      <span>Devolver orden (falta examen)</span>
-                    </button>
-                  )}
-                </div>
-                {confirmarDevolver && ordenDelInforme && (
-                  <div className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs px-3 py-2 flex flex-wrap items-center justify-between gap-2" data-testid="confirmar-devolver">
-                    <span>
-                      Se devolverá la orden <strong>{ordenDelInforme.orderNumber}</strong> a pendiente
-                      {sinResultado > 0 ? <> porque falta: <strong>{parameters.filter((p) => !String(p.value ?? '').trim()).map((p) => p.name).join(', ')}</strong></> : null}.
-                      Lo que ya capturaste se guarda como borrador.
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <button type="button" onClick={devolverOrden} className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">Devolver</button>
-                      <button type="button" onClick={() => setConfirmarDevolver(false)} className="px-3 py-1 rounded-lg bg-white border border-amber-300 font-semibold cursor-pointer">Cancelar</button>
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="flex flex-wrap items-center gap-2">
               {outOfRangeParameters.length > 0 && (
@@ -2796,6 +2804,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
           patientPhone={currentPatient?.phone || ''}
           patientCode={currentPatient?.patientCode || ''}
           accessCode={ordenDelInforme?.codigoConsulta || ''}
+          orderNumber={ordenDelInforme?.orderNumber || ''}
           type="aviso_resultados"
         />
       )}
@@ -2808,6 +2817,7 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
           patientPhone={avisoPublicado.telefono}
           patientCode={avisoPublicado.codigoPaciente}
           accessCode={avisoPublicado.codigoConsulta}
+          orderNumber={avisoPublicado.numeroOrden}
           type="aviso_resultados"
         />
       )}
@@ -2841,10 +2851,6 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
         parameters={parameters}
         onConfirmAndSave={handleConfirmAndSaveFromModal}
         targetStatus={pendingSaveTargetStatus}
-        patientName={currentPatient?.fullName}
-        patientAge={currentPatient?.age}
-        patientGender={currentPatient?.gender}
-        studyTitle={title}
       />
 
       {/* Hematology Analyzer Uploader Modal */}
@@ -2852,7 +2858,6 @@ Histogramas e Imágenes Celulares: 3 curvas de distribución y ${data.morphology
         isOpen={showHematologyAnalyzerModal}
         onClose={() => setShowHematologyAnalyzerModal(false)}
         onApplyToCurrentEditor={handleApplyAnalyzerData}
-        initialPatientId={patientId}
       />
 
       {/* Attached Analyzer Report Full Viewer Modal */}

@@ -24,12 +24,20 @@ const aIso = (v: string | Date | null | undefined): string | null => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };
 
+function compararIso(a: string | null, b: string | null): number {
+  const x = a ?? '';
+  const y = b ?? '';
+  if (x < y) return -1;
+  return x > y ? 1 : 0;
+}
+
 export function calcularSeguimiento(e: EntradaSeguimiento): PasoSeguimiento[] {
   const enRevisionOMas = e.informes.filter((i) => ['revision', 'publicado', 'entregado'].includes(i.estado));
   const publicados = e.informes.filter((i) => ['publicado', 'entregado'].includes(i.estado));
   const muestraRecibida = (!!e.estadoFlujo && e.estadoFlujo !== 'Pendiente') || e.informes.length > 0;
-  const primeraCreacion = enRevisionOMas.map((i) => aIso(i.fechaCreacion)).filter(Boolean).sort()[0] ?? null;
-  const ultimaPublicacion = publicados.map((i) => aIso(i.fechaPublicacion)).filter(Boolean).sort().slice(-1)[0] ?? null;
+  // Fechas ISO 8601: el orden por unidades de codigo coincide con el cronologico (no se usa localeCompare).
+  const primeraCreacion = enRevisionOMas.map((i) => aIso(i.fechaCreacion)).filter(Boolean).sort(compararIso)[0] ?? null;
+  const ultimaPublicacion = publicados.map((i) => aIso(i.fechaPublicacion)).filter(Boolean).sort(compararIso).slice(-1)[0] ?? null;
   const fechaOrden = aIso(e.fechaRegistro);
   const n = e.totalExamenes;
   return [

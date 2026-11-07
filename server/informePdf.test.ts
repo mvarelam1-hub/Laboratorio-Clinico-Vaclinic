@@ -77,4 +77,31 @@ describe('generarInformePdf', () => {
     const pdf = await generarInformePdf({ ...base, laboratorio: { nombre: 'X', color_primario: 'no-es-color' }, sello });
     expect(pdf.length).toBeGreaterThan(1000);
   });
+
+  it('imprime hasta 3 firmantes (Elaborado por / Visto bueno / Autorizado por) y acepta su imagen de firma', async () => {
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const firmas = {
+      validado_por: [], verificado_por: [],
+      firmantes: [
+        { rotulo: 'Elaborado por', nombre: 'Ana Uno' },
+        { rotulo: 'Visto bueno', nombre: 'Beto Dos', colegiado: '4504', imagen: png },
+        { rotulo: 'Autorizado por', nombre: 'Carla Tres', imagen: 'no-es-una-imagen' }
+      ]
+    };
+    const pdf = await generarInformePdf({ ...base, numero_orden: '105-2026', firmas, sello });
+    expect(Buffer.from(pdf).subarray(0, 5).toString()).toBe('%PDF-');
+    expect(Buffer.from(pdf).toString('latin1')).toContain('/Subtype /Image');
+    // Un borrador nunca lleva imágenes, aunque haya firmas configuradas.
+    const borrador = await generarInformePdf({ ...base, estado: 'borrador', firmas });
+    expect(Buffer.from(borrador).toString('latin1')).not.toContain('/Subtype /Image');
+  });
+  it('usa el logo configurado en Ajustes (imagen incrustada aun en borrador) y tolera un logo inválido', async () => {
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const conLogo = await generarInformePdf({ ...base, estado: 'borrador', laboratorio: { nombre: 'VACLINIC', logo: png } });
+    expect(Buffer.from(conLogo).subarray(0, 5).toString()).toBe('%PDF-');
+    expect(Buffer.from(conLogo).toString('latin1')).toContain('/Subtype /Image');
+    // Un logo roto no impide emitir el informe: se dibuja la cruz de VACLINIC.
+    const roto = await generarInformePdf({ ...base, estado: 'borrador', laboratorio: { nombre: 'VACLINIC', logo: 'data:image/png;base64,AAAA' } });
+    expect(Buffer.from(roto).subarray(0, 5).toString()).toBe('%PDF-');
+  });
 });

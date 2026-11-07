@@ -5,7 +5,7 @@ import {
   convertOzelleToReportParameters, 
   createOzelleMedicalReport 
 } from '../../data/ozelleHematologySample';
-import { AttachedAnalyzerReport, MedicalReport } from '../../types';
+import { AttachedAnalyzerReport, MedicalReport, ReportParameter } from '../../types';
 import { OzelleCbcReportView } from './OzelleCbcReportView';
 import { 
   Upload, 
@@ -26,7 +26,7 @@ import {
 interface HematologyAnalyzerUploaderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onApplyToCurrentEditor?: (ozelleData: AttachedAnalyzerReport) => void;
+  onApplyToCurrentEditor?: (ozelleData: AttachedAnalyzerReport, extractedParams: ReportParameter[]) => void;
 }
 
 export const HematologyAnalyzerUploaderModal: React.FC<HematologyAnalyzerUploaderModalProps> = ({
@@ -93,11 +93,11 @@ export const HematologyAnalyzerUploaderModal: React.FC<HematologyAnalyzerUploade
   };
 
   // Option 1: Populate the current ReportEditor with parameters and the attachment
-  const handleApplyToEditor = () => {
+  const handleApplyToEditor = async () => {
     if (!loadedOzelleData) return;
 
     if (onApplyToCurrentEditor) {
-      onApplyToCurrentEditor(loadedOzelleData);
+      onApplyToCurrentEditor(loadedOzelleData, convertOzelleToReportParameters(loadedOzelleData));
       onClose();
       showNotification('Parámetros y anexo Ozelle aplicados al redactor de informes.', 'success');
     } else {
@@ -106,23 +106,25 @@ export const HematologyAnalyzerUploaderModal: React.FC<HematologyAnalyzerUploade
       const existingPat = patients.find(p => p.fullName.toLowerCase().includes('reyna calanche') || p.id === targetPatientId);
       
       if (!existingPat && autoSyncPatient) {
-        addPatient({
-          id: targetPatientId,
-          patientCode: 'VAC-20260908',
-          nationalId: loadedOzelleData.sampleId,
-          accessCode: 'MED-9509',
-          pinCode: '9509',
-          fullName: loadedOzelleData.patientName,
-          gender: loadedOzelleData.patientGender,
-          birthDate: '1959-09-08',
-          age: 66,
-          phone: loadedOzelleData.phone,
-          email: 'reyna.calanche@gmail.com',
-          bloodType: 'O+',
-          allergies: ['Ninguna reportada'],
-          address: `${loadedOzelleData.location}, Santa Rosa`,
-          createdAt: new Date().toISOString()
-        });
+        try {
+          const creado = await addPatient({
+            nationalId: loadedOzelleData.sampleId,
+            fullName: loadedOzelleData.patientName,
+            gender: loadedOzelleData.patientGender,
+            birthDate: '1959-09-08',
+            age: 66,
+            phone: loadedOzelleData.phone,
+            email: 'reyna.calanche@gmail.com',
+            bloodType: 'O+',
+            allergies: ['Ninguna reportada'],
+            address: `${loadedOzelleData.location}, Santa Rosa`,
+            emergencyContact: { name: '', phone: '', relation: '' }
+          });
+          targetPatientId = creado.id;
+        } catch (e) {
+          showNotification(e instanceof Error ? e.message : 'No se pudo registrar al paciente.', 'error');
+          return;
+        }
       } else if (existingPat) {
         targetPatientId = existingPat.id;
       }
@@ -136,30 +138,32 @@ export const HematologyAnalyzerUploaderModal: React.FC<HematologyAnalyzerUploade
   };
 
   // Option 2: Generate and publish directly as an official report
-  const handleSaveAndPublishDirectly = () => {
+  const handleSaveAndPublishDirectly = async () => {
     if (!loadedOzelleData) return;
 
     let targetPatientId = 'pat-reyna-calanche';
     const existingPat = patients.find(p => p.fullName.toLowerCase().includes('reyna calanche') || p.id === targetPatientId);
     
     if (!existingPat && autoSyncPatient) {
-      addPatient({
-        id: targetPatientId,
-        patientCode: 'VAC-20260908',
-        nationalId: loadedOzelleData.sampleId,
-        accessCode: 'MED-9509',
-        pinCode: '9509',
-        fullName: loadedOzelleData.patientName,
-        gender: loadedOzelleData.patientGender,
-        birthDate: '1959-09-08',
-        age: 66,
-        phone: loadedOzelleData.phone,
-        email: 'reyna.calanche@gmail.com',
-        bloodType: 'O+',
-        allergies: ['Ninguna reportada'],
-        address: `${loadedOzelleData.location}, Santa Rosa`,
-        createdAt: new Date().toISOString()
-      });
+      try {
+        const creado = await addPatient({
+          nationalId: loadedOzelleData.sampleId,
+          fullName: loadedOzelleData.patientName,
+          gender: loadedOzelleData.patientGender,
+          birthDate: '1959-09-08',
+          age: 66,
+          phone: loadedOzelleData.phone,
+          email: 'reyna.calanche@gmail.com',
+          bloodType: 'O+',
+          allergies: ['Ninguna reportada'],
+          address: `${loadedOzelleData.location}, Santa Rosa`,
+          emergencyContact: { name: '', phone: '', relation: '' }
+        });
+        targetPatientId = creado.id;
+      } catch (e) {
+        showNotification(e instanceof Error ? e.message : 'No se pudo registrar al paciente.', 'error');
+        return;
+      }
     } else if (existingPat) {
       targetPatientId = existingPat.id;
     }

@@ -34,12 +34,20 @@ export function formatearCodigo(codigo: string): string {
   return codigo.match(/.{1,4}/g)?.join('-') ?? codigo;
 }
 
+/** Compara por unidades de codigo UTF-16: el mismo orden que Array.prototype.sort() sin argumentos. */
+export function compararCodigo(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 export function canonizar(valor: unknown): string {
   if (valor === undefined) return 'null';
   if (valor === null || typeof valor !== 'object') return JSON.stringify(valor);
   if (Array.isArray(valor)) return `[${valor.map(canonizar).join(',')}]`;
   const o = valor as Record<string, unknown>;
-  return `{${Object.keys(o).sort().filter((k) => o[k] !== undefined).map((k) => `${JSON.stringify(k)}:${canonizar(o[k])}`).join(',')}}`;
+  // Orden por unidades de codigo (igual que sort() sin argumentos) y explicito: la forma canonica
+  // del sello NO debe depender del idioma del servidor, por eso no se usa localeCompare.
+  return `{${Object.keys(o).sort(compararCodigo).filter((k) => o[k] !== undefined).map((k) => `${JSON.stringify(k)}:${canonizar(o[k])}`).join(',')}}`;
 }
 
 export interface InformeParaSello {

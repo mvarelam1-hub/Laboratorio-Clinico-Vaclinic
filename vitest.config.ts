@@ -10,7 +10,7 @@ export default defineConfig({
     include: ['server/**/*.test.ts', 'src/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json-summary', 'html'],
+      reporter: ['text', 'json-summary', 'html', 'lcov'],
       // Cobertura medida SOLO sobre los módulos críticos identificados en el
       // entregable E2 (sección 2.5), contra la línea base de 0% registrada
       // en la sección 2.4 del enunciado de ACS.

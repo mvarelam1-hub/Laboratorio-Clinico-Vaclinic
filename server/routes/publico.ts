@@ -2,7 +2,8 @@
  * Información PÚBLICA del laboratorio para el Portal del Paciente (sin sesión).
  *
  * Todo es de solo lectura y limitado a lo que el laboratorio ya muestra al
- * público: catálogo de pruebas vendibles con su precio, perfiles/paneles
+ * público: catálogo de pruebas vendibles (el precio solo con sesión del
+ * portal), perfiles/paneles
  * activos, datos de contacto y las noticias/promociones que el personal marcó
  * como "publicado". Nunca se expone nada de pacientes, órdenes ni personal.
  *
@@ -12,6 +13,7 @@ import { Router } from 'express';
 import { pool } from '../db';
 import { asyncHandler } from '../asyncHandler';
 import { obtenerNoticiasExternas } from '../noticiasExternas';
+import { verifyPortalToken } from '../token';
 
 export const publicoRouter = Router();
 
@@ -49,10 +51,31 @@ publicoRouter.get('/laboratorio', asyncHandler(async (_req, res) => {
 }));
 
 /**
- * Catálogo vendible: solo exámenes activos y visibles para la venta. El precio
- * 0 significa "sin precio definido" → se devuelve null (nunca "Q0").
+ * Los precios NO son públicos: solo los recibe quien trae una sesión vigente
+ * del portal (la que se abre con un código de consulta de una orden del
+ * laboratorio). Se valida aquí, en el servidor: ocultarlos solo en pantalla no
+ * sirve porque se verían en la respuesta de la red.
  */
-publicoRouter.get('/catalogo', asyncHandler(async (_req, res) => {
+function puedeVerPrecios(req: any): boolean {
+  const cabecera = String(req.headers?.authorization || '');
+  if (!cabecera.startsWith('Bearer ')) return false;
+  try {
+    return !!verifyPortalToken(cabecera.slice(7));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Catálogo vendible: solo exámenes activos y visibles para la venta. El precio
+ * 0 significa "sin precio definido" → se devuelve null (nunca "Q0"). Sin sesión
+ * del portal el precio siempre es null y `preciosVisibles` es false.
+ */
+publicoRouter.get('/catalogo', asyncHandler(async (req, res) => {
+  const verPrecios = puedeVerPrecios(req);
+  // La respuesta cambia según la sesión: no se comparte en cachés públicas.
+  res.set('Vary', 'Authorization');
+  res.set('Cache-Control', verPrecios ? 'private, no-store' : 'public, max-age=60');
   const { rows } = await pool.query(
     `SELECT codigo_examen, nombre_examen, categoria, categoria_nombre, tipo_muestra, precio,
             tiempo_entrega_horas, es_perfil, datos_adicionales
@@ -69,7 +92,7 @@ publicoRouter.get('/catalogo', asyncHandler(async (_req, res) => {
       categoria: r.categoria,
       categoriaNombre: texto(r.categoria_nombre),
       tipoMuestra: texto(r.tipo_muestra),
-      precio: Number.isFinite(precio) && precio > 0 ? precio : null,
+      precio: verPrecios && Number.isFinite(precio) && precio > 0 ? precio : null,
       entregaHoras: r.tiempo_entrega_horas ?? null,
       esPerfil: !!r.es_perfil,
       descripcion: texto(extra.description),
@@ -91,12 +114,12 @@ publicoRouter.get('/catalogo', asyncHandler(async (_req, res) => {
     codigo: p.codigo,
     nombre: p.nombre,
     categoriaNombre: texto(p.nombre_categoria),
-    precio: Number(p.precio) > 0 ? Number(p.precio) : null,
+    precio: verPrecios && Number(p.precio) > 0 ? Number(p.precio) : null,
     descripcion: texto(p.descripcion),
     examenes: Array.isArray(p.nombres_examenes) ? p.nombres_examenes.map(String) : [],
   }));
 
-  return res.json({ examenes, perfiles });
+  return res.json({ examenes, perfiles, preciosVisibles: verPrecios });
 }));
 
 /** Noticias y promociones YA publicadas (y promociones aún vigentes). */
