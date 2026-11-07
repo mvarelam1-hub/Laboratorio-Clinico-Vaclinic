@@ -55,3 +55,9 @@ el codigo, un nombre de variable ambiguo.
 
 Cada persona abre PRs sobre su area y revisa los PRs de otra persona (rotacion: Marlon revisa a Josue, Josue a Juan Jose,
 Juan Jose a Marlon).
+
+## Estado actual de las ramas (verificado en GitHub)
+
+Las tres ramas permanentes ya existen: dev, qa y main. Las ramas qa y main tienen proteccion activa: exigen Pull Request y una aprobacion antes de fusionar. La rama dev se protegera con la misma regla para que el flujo feature -> dev -> qa -> main quede cerrado.
+
+Desde esta actualizacion, cada Pull Request indica en su descripcion quien lo revisa segun la rotacion de roles, y la aprobacion debe darla un integrante distinto del autor.
