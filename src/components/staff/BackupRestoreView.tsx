@@ -298,19 +298,6 @@ export const BackupRestoreView: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="mt-8 pt-4">
-                    <button
-                      id="btn-full-backup-download-main"
-                      onClick={downloadFullBackupJson}
-                      className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white py-3.5 px-6 rounded-2xl text-xs sm:text-sm font-black shadow-lg shadow-teal-900/30 transition-all cursor-pointer"
-                    >
-                      <Download className="w-5 h-5" />
-                      Descargar Copia de Seguridad Completa (.json)
-                    </button>
-                    <p className="text-[11px] text-slate-500 text-center mt-2">
-                      Descarga instantánea sin conexión requerida • Archivo universal JSON
-                    </p>
-                  </div>
                 </div>
 
                 {/* Reports Only Backup Card */}
@@ -585,13 +572,6 @@ export const BackupRestoreView: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleManualSnapshot}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Crear Punto Manual
-                  </button>
 
                   {backupSnapshots.length > 0 && (
                     <button

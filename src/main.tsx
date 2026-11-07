@@ -4,6 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import { instalarNavegacionTablas } from './utils/navegacionTeclado';
 import { cargarYAplicarTema } from './services/temaApiService';
+import './utils/instalarApp';
 
 instalarNavegacionTablas();
 // Paleta de colores del laboratorio (Ajustes → Paleta del sistema).

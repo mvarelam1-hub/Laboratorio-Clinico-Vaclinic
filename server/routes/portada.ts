@@ -4,7 +4,8 @@
  *  - Router PÚBLICO (`portadaPublicaRouter`, montado ANTES de requireStaffAuth):
  *    la pantalla de login aún no tiene sesión, así que necesita leer las
  *    imágenes sin credenciales. Solo lectura: GET /api/portada y
- *    GET /api/portada/imagen/:clave.
+ *    GET /api/portada/imagen/:clave. (Las imágenes del Atlas Microscópico usan
+ *    claves `atlas_<id>`; ver esClaveAtlas.)
  *  - Router de ADMINISTRACIÓN (`portadaAdminRouter`, montado después del
  *    middleware de sesión): PUT/DELETE /api/portada-admin/imagen/:clave.
  *    Exige el permiso `admin_usuarios_roles` (administrador_ti y director) y
@@ -25,11 +26,20 @@ import { registrarBitacora } from '../bitacora';
 import { combinarNosotros, normalizarNosotros, type Nosotros } from '../nosotros';
 
 export const CLAVES_PORTADA = ['logo', 'fondo', 'fondo_pagina', 'escudo', 'area_hematologia', 'area_parasitos', 'area_cristales', 'area_quimica', 'nosotros_vision', 'nosotros_mision', 'nosotros_servicios', 'equipo_1', 'equipo_2', 'equipo_3', 'equipo_4'] as const;
-export type ClavePortada = (typeof CLAVES_PORTADA)[number];
+type ClaveFija = (typeof CLAVES_PORTADA)[number];
+/** Además de las posiciones fijas, cada elemento del Atlas Microscópico puede tener su propia imagen: `atlas_<id>`. */
+export type ClavePortada = ClaveFija | `atlas_${string}`;
 export const MAX_BYTES_PORTADA = 1.5 * 1024 * 1024;
+/** Tope de imágenes de Atlas guardadas (el atlas tiene menos de 20 elementos): evita llenar la base con claves inventadas. */
+export const MAX_IMAGENES_ATLAS = 60;
+const FORMATO_CLAVE_ATLAS = /^atlas_[a-z0-9_]{1,50}$/;
+
+export function esClaveAtlas(valor: unknown): valor is `atlas_${string}` {
+  return typeof valor === 'string' && FORMATO_CLAVE_ATLAS.test(valor);
+}
 
 export function esClavePortada(valor: unknown): valor is ClavePortada {
-  return typeof valor === 'string' && (CLAVES_PORTADA as readonly string[]).includes(valor);
+  return typeof valor === 'string' && ((CLAVES_PORTADA as readonly string[]).includes(valor) || esClaveAtlas(valor));
 }
 
 /** Detecta el formato real por los primeros bytes. `null` si no es PNG/JPEG/WebP. */
@@ -40,7 +50,7 @@ export function detectarMime(bytes: Buffer): 'image/png' | 'image/jpeg' | 'image
   return null;
 }
 
-const NOMBRES: Record<ClavePortada, string> = {
+const NOMBRES: Record<ClaveFija, string> = {
   logo: 'logo principal',
   fondo: 'fondo de la portada',
   fondo_pagina: 'fondo de la pantalla de acceso',
@@ -57,6 +67,10 @@ const NOMBRES: Record<ClavePortada, string> = {
   equipo_3: 'foto del integrante 3 del equipo',
   equipo_4: 'foto del integrante 4 del equipo'
 };
+
+function nombreDe(clave: ClavePortada): string {
+  return clave in NOMBRES ? NOMBRES[clave as ClaveFija] : `imagen del Atlas Microscópico (${clave.slice(6)})`;
+}
 
 // ---------------------------------------------------------------- público
 export const portadaPublicaRouter = Router();
@@ -102,6 +116,10 @@ portadaAdminRouter.put('/imagen/:clave', asyncHandler(async (req, res) => {
   if (datos.length > MAX_BYTES_PORTADA) return res.status(413).json({ error: 'La imagen pesa más de 1.5 MB. Elige una más ligera.' });
   const mime = detectarMime(datos);
   if (!mime) return res.status(400).json({ error: 'Solo se aceptan imágenes PNG, JPG o WebP.' });
+  if (esClaveAtlas(clave)) {
+    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM portada_imagen WHERE clave LIKE 'atlas\\_%' AND clave <> $1`, [clave]);
+    if ((rows[0]?.n ?? 0) >= MAX_IMAGENES_ATLAS) return res.status(400).json({ error: 'Ya hay demasiadas imágenes del Atlas guardadas.' });
+  }
 
   await pool.query(
     `INSERT INTO portada_imagen (clave, tipo_mime, datos, tamano_bytes, actualizado_en, id_usuario)
@@ -114,7 +132,7 @@ portadaAdminRouter.put('/imagen/:clave', asyncHandler(async (req, res) => {
   try {
     await registrarBitacora({
       idUsuario: req.staffUser!.idUsuario,
-      accion: `Portada del login: se cambió el ${NOMBRES[clave]}`,
+      accion: `Portada del login: se cambió el ${nombreDe(clave)}`,
       modulo: 'catalogo',
       severidad: 'info',
       detalles: `${mime}, ${datos.length} bytes.`
@@ -133,7 +151,7 @@ portadaAdminRouter.delete('/imagen/:clave', asyncHandler(async (req, res) => {
     try {
       await registrarBitacora({
         idUsuario: req.staffUser!.idUsuario,
-        accion: `Portada del login: se quitó el ${NOMBRES[clave]}`,
+        accion: `Portada del login: se quitó el ${nombreDe(clave)}`,
         modulo: 'catalogo',
         severidad: 'info',
         detalles: 'Vuelve a mostrarse el dibujo por defecto.'

@@ -10,9 +10,11 @@ import {
   obtenerPortada,
   subirImagenPortada,
   quitarImagenPortada,
-  prepararImagen
+  prepararImagen,
+  claveImagenAtlas
 } from './portadaApiService';
-import { CLAVES_PORTADA } from '../../server/routes/portada';
+import { CLAVES_PORTADA, esClavePortada } from '../../server/routes/portada';
+import { MICROSCOPIC_ATLAS } from '../data/microscopicAtlas';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -22,6 +24,13 @@ afterEach(() => {
 describe('portadaApiService', () => {
   it('las posiciones del cliente son exactamente las que acepta el servidor', () => {
     expect(POSICIONES_PORTADA.map((p) => p.clave).sort()).toEqual([...CLAVES_PORTADA].sort());
+  });
+
+  it('cada elemento del Atlas tiene una clave que el servidor acepta, sin repetirse', () => {
+    const claves = MICROSCOPIC_ATLAS.map((h) => claveImagenAtlas(h.id));
+    expect(claves.every((c) => esClavePortada(c))).toBe(true);
+    expect(new Set(claves).size).toBe(claves.length);
+    expect(claveImagenAtlas('giardia_lamblia')).toBe('atlas_giardia_lamblia');
   });
 
   it('calcularTamano reduce conservando la proporción y nunca agranda', () => {

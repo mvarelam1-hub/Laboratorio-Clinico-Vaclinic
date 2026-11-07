@@ -122,6 +122,36 @@ describe('administración', () => {
     expect(queryMock).not.toHaveBeenCalled();
   });
 
+  it('acepta imágenes del Atlas Microscópico (clave atlas_<id>) y las audita con su nombre', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ n: 3 }] }).mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    const app = await buildApp();
+    const res = await request(app).put('/api/portada-admin/imagen/atlas_giardia_lamblia').send({ base64: PNG.toString('base64') });
+    expect(res.status).toBe(200);
+    const insert = queryMock.mock.calls.find((c) => String(c[0]).includes('INSERT INTO portada_imagen'));
+    expect(insert?.[1][0]).toBe('atlas_giardia_lamblia');
+    expect(bitacoraMock.mock.calls[0][0].accion).toMatch(/Atlas Microscópico \(giardia_lamblia\)/);
+  });
+
+  it('rechaza claves de atlas mal formadas y respeta el tope de imágenes del Atlas', async () => {
+    const app = await buildApp();
+    for (const clave of ['atlas_', 'atlas_MAYUS', 'atlas_con-guion', 'atlas_' + 'a'.repeat(60)]) {
+      expect((await request(app).put(`/api/portada-admin/imagen/${clave}`).send({ base64: PNG.toString('base64') })).status).toBe(404);
+    }
+    expect(queryMock).not.toHaveBeenCalled();
+    queryMock.mockResolvedValueOnce({ rows: [{ n: 60 }] });
+    const lleno = await request(app).put('/api/portada-admin/imagen/atlas_nueva').send({ base64: PNG.toString('base64') });
+    expect(lleno.status).toBe(400);
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('un rol sin permiso de administración no puede cambiar imágenes del Atlas', async () => {
+    currentStaffUser = { idUsuario: 9, roleId: 'recepcionista', status: 'activo', nombreCompleto: 'Recepción' };
+    const app = await buildApp();
+    const res = await request(app).put('/api/portada-admin/imagen/atlas_giardia_lamblia').send({ base64: PNG.toString('base64') });
+    expect(res.status).toBe(403);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
   it('quita una imagen y audita solo si existía', async () => {
     const app = await buildApp();
     queryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });

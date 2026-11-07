@@ -3,7 +3,6 @@ import { useClinic } from '../context/ClinicContext';
 import { PatientNotificationCenter } from './patient/PatientNotificationCenter';
 import { 
   UserCheck, 
-  PlusCircle, 
   FlaskConical, 
   Lock, 
   LogOut, 
@@ -11,9 +10,7 @@ import {
   Menu,
   Sparkles,
   MapPin,
-  MessageSquare,
-  Keyboard,
-  Database
+  Keyboard
 } from 'lucide-react';
 import { DEMO_MODE } from '../config/demoMode';
 import { KeyboardShortcutsHelpModal } from './staff/KeyboardShortcutsHelpModal';
@@ -31,20 +28,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
     setStaffActiveTab, 
     currentPatient, 
     currentBranch,
+    branches,
     isMultiBranchEnabled,
     currentStaffUser,
-    setActiveReportToEdit,
     logoutPatient,
     isStaffAuthenticated,
     setIsStaffAuthenticated,
-    logoutStaff,
     showNotification,
-    pushNotifications,
-    unreadChatCount,
-    isChatFloatingOpen,
-    setIsChatFloatingOpen,
-    setIsBackupModalOpen
+    pushNotifications
   } = useClinic();
+  const nombreSedeActiva = branches.find((b) => b.id === currentBranch)?.name ?? currentBranch;
 
   const [showNotificationCenter, setShowNotificationCenter] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -60,7 +53,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
       {/* Offline Alert Persistent Banner */}
       <OfflineWarningBanner />
 
-      {/* Top VACLINIC Institutional Bar */}
+      {/* Franja institucional: solo en el portal público. En el panel del personal los datos del laboratorio ya salen en el pie de página. */}
+      {role !== 'personal' && (
       <div className="bg-canopy text-mint-wash text-xs px-4 py-1.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-leaf font-black tracking-wide">
@@ -87,13 +81,14 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
           </span>
         </div>
       </div>
+      )}
 
       {/* Main Header Container */}
       <div className="w-full px-4 sm:px-6">
         <div className="flex items-center justify-between min-h-15 py-1 gap-3 sm:gap-4">
           
           {/* Left: Mobile Menu Toggle & Logo */}
-          <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+          <div className="flex items-center gap-3 min-w-[11rem] flex-1 overflow-hidden">
             {/* Hamburger button for mobile staff navigation */}
             {role === 'personal' && (
               <button
@@ -113,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-none">
+                <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-none whitespace-nowrap">
                   VACLINIC
                 </span>
                 <span className="text-[10px] font-extrabold uppercase tracking-wider bg-mint-wash text-canopy px-2 py-0.5 rounded-full hidden xs:inline-block">
@@ -147,7 +142,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                   PIN
                 </span>
               ) : (
-                <span className="hidden xl:inline-block text-[10px] bg-teal-100 text-teal-800 font-bold px-1.5 py-0.2 rounded">
+                <span className="hidden min-[2000px]:inline-block text-[10px] bg-teal-100 text-teal-800 font-bold px-1.5 py-0.2 rounded">
                   Staff
                 </span>
               )}
@@ -165,7 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
               <UserCheck className={`w-3.5 sm:w-4 h-3.5 sm:h-4 ${role === 'paciente' ? 'text-cyan-600' : 'text-slate-500'}`} />
               <span>Pacientes</span>
               {currentPatient && (
-                <span className="hidden md:inline-block text-[10px] bg-cyan-100 text-cyan-800 font-bold px-1.5 py-0.2 rounded truncate max-w-[90px]">
+                <span className="hidden min-[1600px]:inline-block text-[10px] bg-cyan-100 text-cyan-800 font-bold px-1.5 py-0.2 rounded truncate max-w-[90px]">
                   {currentPatient.fullName.split(' ')[0]}
                 </span>
               )}
@@ -180,13 +175,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             {/* Active Branch indicator (Desktop) */}
             {role === 'personal' && (
               <div 
-                className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition-all"
-                title={isMultiBranchEnabled ? `Sede Activa: ${currentBranch.name}` : "Operando en Modo Sede Única (Multi-sede desactivado por el momento)"}
+                className="hidden min-[2400px]:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition-all"
+                title={isMultiBranchEnabled ? `Sede Activa: ${nombreSedeActiva}` : "Operando en Modo Sede Única (Multi-sede desactivado por el momento)"}
                 onClick={() => setStaffActiveTab('ajustes')}
               >
                 <MapPin className="w-3.5 h-3.5 text-teal-600" />
                 <span className="font-bold">
-                  {isMultiBranchEnabled ? currentBranch.name : 'Sede Única: VACLINIC'}
+                  {isMultiBranchEnabled ? nombreSedeActiva : 'Sede Única: VACLINIC'}
                 </span>
                 {!isMultiBranchEnabled && (
                   <span className="text-[10px] bg-teal-50 text-teal-700 font-bold px-1.5 py-0.2 rounded border border-teal-200">
@@ -197,7 +192,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             )}
 
             {/* Notifications Bell Hub Button (el portal real no tiene avisos push simulados) */}
-            {(role === 'personal' || DEMO_MODE) && <button
+            {DEMO_MODE && <button
               onClick={() => setShowNotificationCenter(true)}
               className="relative p-2 rounded-xl text-slate-600 hover:text-cyan-700 hover:bg-cyan-50 border border-slate-200 transition-all cursor-pointer"
               title="Avisos y Notificaciones Push"
@@ -210,30 +205,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
               )}
             </button>}
 
-            {/* Internal Staff Chat Button */}
-            {role === 'personal' && (
-              <button
-                id="btn-navbar-internal-chat"
-                onClick={() => setIsChatFloatingOpen(!isChatFloatingOpen)}
-                className={`relative flex items-center gap-1.5 px-2.5 py-2 rounded-xl border transition-all cursor-pointer ${
-                  isChatFloatingOpen
-                    ? 'bg-teal-50 text-teal-700 border-teal-300 font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-teal-700 hover:bg-teal-50 border-slate-200'
-                }`}
-                title="Chat Intercom (Escribir mensaje a Recepción, Analistas o Admón)"
-              >
-                <div className="relative">
-                  <MessageSquare className="w-4 h-4 text-teal-600" />
-                  {unreadChatCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[9px] font-black text-white animate-pulse">
-                      {unreadChatCount}
-                    </span>
-                  )}
-                </div>
-                <span className="hidden xl:inline text-xs font-bold">Chat</span>
-              </button>
-            )}
-
             {/* Global Keyboard Shortcuts Help Button */}
             {role === 'personal' && (
               <button
@@ -244,53 +215,14 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
                 title="Atajos de Teclado Globales (Ctrl+N, Ctrl+B, etc.)"
               >
                 <Keyboard className="w-4 h-4 text-teal-600" />
-                <span className="hidden 2xl:inline text-[11px] font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                <span className="hidden min-[2400px]:inline text-[11px] font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
                   Ctrl+B / N
                 </span>
               </button>
             )}
 
-            {/* Quick Backup & Restore Hub Trigger */}
-            {role === 'personal' && (
-              <button
-                id="btn-navbar-backup-hub"
-                type="button"
-                onClick={() => setIsBackupModalOpen(true)}
-                className="flex items-center gap-1.5 text-slate-700 hover:text-teal-700 hover:bg-teal-50 px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                title="Copia de Seguridad y Respaldo de Datos (.json)"
-              >
-                <Database className="w-4 h-4 text-teal-600" />
-                <span className="hidden xl:inline text-xs font-bold">Respaldo</span>
-              </button>
-            )}
-
             {role === 'personal' ? (
-              <div className="flex items-center gap-2">
-                <button
-                  id="btn-nueva-redaccion"
-                  onClick={() => {
-                    setActiveReportToEdit(null);
-                    setStaffActiveTab('redactor');
-                  }}
-                  className="flex items-center gap-1.5 bg-coral-pulse hover:bg-coral-hover active:scale-98 text-[#1a1a1a] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer"
-                  title="Abrir Editor de Informes Clínicos y Analizador Ozelle"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span className="hidden lg:inline">Editor de Informes</span>
-                </button>
-
-                {/* Staff Lock / Logout Button */}
-                <button
-                  id="btn-lock-staff-terminal"
-                  type="button"
-                  onClick={logoutStaff}
-                  title={`Sesión activa: ${currentStaffUser?.fullName || 'Staff'}. Clic para bloquear terminal LIS`}
-                  className="flex items-center gap-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-200 text-xs font-semibold transition-all cursor-pointer"
-                >
-                  <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 hover:text-rose-600" />
-                  <span className="hidden xl:inline">Bloquear Terminal</span>
-                </button>
-              </div>
+              null
             ) : (
               <div className="flex items-center gap-2">
                 {currentPatient ? (

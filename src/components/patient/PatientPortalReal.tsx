@@ -15,7 +15,7 @@ import {
 const formatoFecha = (v: string | null) =>
   v ? new Date(v).toLocaleDateString('es-GT', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
 
-export const ConsultaResultados: React.FC = () => {
+export const ConsultaResultados: React.FC<{ alCambiarSesion?: (token: string | null) => void }> = ({ alCambiarSesion }) => {
   const [codigo, setCodigo] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [datos, setDatos] = useState<RespuestaInformesPortal | null>(null);
@@ -30,7 +30,8 @@ export const ConsultaResultados: React.FC = () => {
     setDatos(null);
     setCodigo('');
     setError(mensaje ?? null);
-  }, []);
+    alCambiarSesion?.(null);
+  }, [alCambiarSesion]);
 
   useEffect(() => () => window.clearTimeout(temporizador.current), []);
 
@@ -44,6 +45,7 @@ export const ConsultaResultados: React.FC = () => {
       const respuesta = await obtenerInformesPortal(sesion.token);
       setToken(sesion.token);
       setDatos(respuesta);
+      alCambiarSesion?.(sesion.token);
       // La sesión del servidor dura 15 min: se cierra sola un poco antes.
       temporizador.current = window.setTimeout(
         () => cerrarSesion('Por tu seguridad la sesión se cerró. Ingresa tu código otra vez para continuar.'),
@@ -230,6 +232,13 @@ export const ConsultaResultados: React.FC = () => {
               <div className="px-4 py-3 border-t border-slate-300">
                 <h3 className="text-xs uppercase tracking-wide font-semibold text-slate-600">Conclusión del laboratorio</h3>
                 <p className="text-sm text-slate-900 mt-1 whitespace-pre-line">{inf.conclusion}</p>
+              </div>
+            )}
+            {inf.interpretacion && inf.interpretacion.trim() && (
+              <div className="px-4 py-3 border-t border-slate-300">
+                <h3 className="text-xs uppercase tracking-wide font-semibold text-slate-600">Interpretación de sus resultados</h3>
+                <p className="text-sm text-slate-900 mt-1 whitespace-pre-line">{inf.interpretacion}</p>
+                <p className="text-xs text-slate-500 mt-2">Redactada con apoyo de inteligencia artificial y revisada por el laboratorio. Es informativa y no es un diagnóstico.</p>
               </div>
             )}
             {inf.recomendaciones.length > 0 && (

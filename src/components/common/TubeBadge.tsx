@@ -70,8 +70,10 @@ export const TubeBadge: React.FC<TubeBadgeProps> = ({
             viewBox="0 0 20 20" 
             fill="none" 
             className={size === 'xs' ? 'w-3 h-3 shrink-0' : 'w-3.5 h-3.5 shrink-0'}
-            title="Recipiente / Frasco de Muestra"
+            role="img"
+            aria-label="Recipiente / Frasco de Muestra"
           >
+            <title>Recipiente / Frasco de Muestra</title>
             {/* Flask / jar container body */}
             <rect x="4" y="6" width="12" height="12" rx="2.5" fill="currentColor" fillOpacity="0.15" stroke="currentColor" strokeWidth="1.2" />
             {/* Liquid or sample fill */}
@@ -87,8 +89,10 @@ export const TubeBadge: React.FC<TubeBadgeProps> = ({
             viewBox="0 0 20 20" 
             fill="none" 
             className={size === 'xs' ? 'w-3 h-3 shrink-0' : 'w-3.5 h-3.5 shrink-0'}
-            title="Tubo de Ensayo / Vacío"
+            role="img"
+            aria-label="Tubo de Ensayo / Vacío"
           >
+            <title>Tubo de Ensayo / Vacío</title>
             {/* Glass tube body */}
             <rect x="6" y="6" width="8" height="12" rx="4" fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="1.2" />
             {/* Liquid meniscus */}

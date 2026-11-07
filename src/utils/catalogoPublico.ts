@@ -70,6 +70,19 @@ export function filtrarCatalogo(lista: ExamenPublico[], texto: string, categoria
 export const formatoPrecio = (p: number | null): string =>
   p == null ? 'Consultar precio' : `Q${Number.isInteger(p) ? p : p.toFixed(2)}`;
 
+/**
+ * Enlace de WhatsApp para pedir autorización y conocer los precios. Devuelve
+ * null si el laboratorio no tiene número. Un número de 8 dígitos es de
+ * Guatemala (+502).
+ */
+export function enlaceSolicitudPrecios(whatsapp: string | null | undefined, nombreLab: string): string | null {
+  let numero = (whatsapp || '').replace(/\D/g, '');
+  if (numero.length === 8) numero = `502${numero}`;
+  if (numero.length < 8) return null;
+  const mensaje = `Hola, quisiera autorización para conocer los precios de las pruebas de ${nombreLab}.`;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
+}
+
 export function textoEntrega(horas: number | null): string | null {
   if (horas == null || horas <= 0) return null;
   if (horas < 24) return `${horas} h`;

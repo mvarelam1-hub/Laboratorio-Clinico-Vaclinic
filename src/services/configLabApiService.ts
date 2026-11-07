@@ -10,7 +10,8 @@
  */
 
 import { getStaffSessionToken } from './staffSessionToken';
-import type { LabSettings } from '../types/labSettings';
+import type { LabSettings, LabSignerConfig } from '../types/labSettings';
+import { INITIAL_LAB_SETTINGS } from '../data/initialLabSettings';
 
 export class ConfigLabError extends Error {
   constructor(message: string, public status?: number) {
@@ -159,6 +160,21 @@ function aBodyApi(settings: Partial<LabSettings>): Record<string, unknown> {
 }
 
 /**
+ * Garantiza que existan siempre los tres firmantes del informe
+ * (Elaborado por, Visto bueno y Autorizado por). Si la configuración guardada
+ * en el servidor no los trae (o trae solo algunos), se completan con los
+ * valores iniciales para que las ranuras de firma y sello siempre aparezcan
+ * en Ajustes. Los firmantes ya guardados no se tocan.
+ */
+export function completarFirmantes(guardados: unknown): LabSignerConfig[] {
+  const lista: LabSignerConfig[] = Array.isArray(guardados) ? (guardados as LabSignerConfig[]) : [];
+  const faltantes = INITIAL_LAB_SETTINGS.signers.filter(
+    (base) => !lista.some((s) => s && s.id === base.id)
+  );
+  return [...lista, ...faltantes.map((f) => ({ ...f }))];
+}
+
+/**
  * Convierte ConfigLabRow (backend) a LabSettings (frontend).
  * Reconstruye datos_adicionales desde JSONB.
  */
@@ -205,7 +221,7 @@ function fromDbRow(rowInput: ConfigLabRow): LabSettings {
     footerBannerUrl: datosAdicionales.footerBannerUrl,
     footerBannerHeightMm: datosAdicionales.footerBannerHeightMm,
 
-    signers: datosAdicionales.signers || [],
+    signers: completarFirmantes(datosAdicionales.signers),
     signaturesLayout: datosAdicionales.signaturesLayout || 'horizontal',
     includeQrInSignatures: datosAdicionales.includeQrInSignatures !== false,
     cryptoSealText: datosAdicionales.cryptoSealText || '',

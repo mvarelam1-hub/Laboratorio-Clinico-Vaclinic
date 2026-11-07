@@ -28,6 +28,9 @@ import type { Pool } from 'pg';
 const PREFIJO_SESION = 'vc1';
 const TTL_SESION_SEGUNDOS = 8 * 60 * 60; // 8 horas
 
+/** Motivo guardado cuando una sesión se cierra porque el mismo usuario inició otra. */
+export const MOTIVO_NUEVO_INICIO = 'nuevo_inicio';
+
 export interface SessionTokenPayload {
   idUsuario: number;
   sessionId: string;
@@ -61,9 +64,21 @@ function firmar(body: string): string {
 export async function createSession(
   pool: Pool,
   idUsuario: number,
-  opts: { mustChangePassword?: boolean; ttlSeconds?: number; userAgent?: string | null } = {}
+  opts: { mustChangePassword?: boolean; ttlSeconds?: number; userAgent?: string | null; conservarOtras?: boolean } = {}
 ): Promise<{ token: string; sessionId: string }> {
   const ttlSeconds = opts.ttlSeconds ?? TTL_SESION_SEGUNDOS;
+
+  // Una sola sesión activa por usuario: al iniciar sesión se cierran las
+  // anteriores (la página que quedó abierta en otro lugar recibirá el aviso
+  // en su próxima comprobación). `conservarOtras` existe solo para pruebas.
+  if (!opts.conservarOtras) {
+    await pool.query(
+      `UPDATE sesion_personal
+          SET revocado_en = NOW(), revocado_motivo = $2
+        WHERE id_usuario = $1 AND revocado_en IS NULL AND expira > NOW()`,
+      [idUsuario, MOTIVO_NUEVO_INICIO]
+    );
+  }
   const sessionId = randomBytes(24).toString('hex');
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
 
@@ -120,6 +135,15 @@ export async function isSessionRevoked(pool: Pool, sessionId: string): Promise<b
   );
   if (rows.length === 0) return true; // no existe -> tratar como revocada
   return rows[0].revocado_en !== null;
+}
+
+/** Motivo por el que se revocó una sesión (null si no hay motivo guardado o no existe). */
+export async function motivoDeRevocacion(pool: Pool, sessionId: string): Promise<string | null> {
+  const { rows } = await pool.query(
+    `SELECT revocado_motivo FROM sesion_personal WHERE session_id = $1`,
+    [sessionId]
+  );
+  return rows[0]?.revocado_motivo ?? null;
 }
 
 /** Revoca una sesión (logout): queda registrada, no se borra, por trazabilidad. */

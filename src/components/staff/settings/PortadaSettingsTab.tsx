@@ -7,11 +7,14 @@ import {
   subirImagenPortada,
   quitarImagenPortada,
   urlImagenPortada,
+  claveImagenAtlas,
   type ClavePortada,
   type MapaPortada
 } from '../../../services/portadaApiService';
 import { PortadaLogin } from '../PortadaLogin';
 import { NosotrosEditor } from './NosotrosEditor';
+import { MICROSCOPIC_ATLAS } from '../../../data/microscopicAtlas';
+import { MicroscopicIllustration } from '../../common/MicroscopicIllustration';
 
 /**
  * Ajustes → "8. Portada del acceso": el laboratorio elige las imágenes que
@@ -62,6 +65,60 @@ export const PortadaSettingsTab: React.FC = () => {
     }
   };
 
+  const renderFila = (p: { clave: ClavePortada; etiqueta: string; ayuda: string; maxLado: number }, porDefecto?: React.ReactNode) => {
+    const version = imagenes[p.clave]?.version;
+    const trabajando = ocupada === p.clave;
+    return (
+      <li key={p.clave} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
+        <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+          {version ? (
+            <img src={urlImagenPortada(p.clave, version)} alt={p.etiqueta} className="h-full w-full object-contain" />
+          ) : (
+            porDefecto ?? <span className="px-1 text-center text-[10px] font-semibold leading-tight text-slate-400">Dibujo por defecto</span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-black text-slate-900">{p.etiqueta}</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{p.ayuda}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              ref={(el) => { entradas.current[p.clave] = el; }}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              aria-label={`Elegir imagen: ${p.etiqueta}`}
+              onChange={(e) => {
+                const archivo = e.target.files?.[0];
+                e.target.value = '';
+                elegir(p.clave, p.maxLado, archivo);
+              }}
+            />
+            <button
+              type="button"
+              disabled={trabajando}
+              onClick={() => entradas.current[p.clave]?.click()}
+              className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-teal-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {trabajando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+              {version ? 'Cambiar' : 'Seleccionar imagen'}
+            </button>
+            {version && (
+              <button
+                type="button"
+                disabled={trabajando}
+                onClick={() => quitar(p.clave)}
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Quitar
+              </button>
+            )}
+          </div>
+        </div>
+      </li>
+    );
+  };
+
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
       <div className="space-y-4 xl:col-span-7">
@@ -90,59 +147,21 @@ export const PortadaSettingsTab: React.FC = () => {
         )}
 
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {POSICIONES_PORTADA.map((p) => {
-            const version = imagenes[p.clave]?.version;
-            const trabajando = ocupada === p.clave;
-            return (
-              <li key={p.clave} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
-                <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-                  {version ? (
-                    <img src={urlImagenPortada(p.clave, version)} alt={p.etiqueta} className="h-full w-full object-contain" />
-                  ) : (
-                    <span className="px-1 text-center text-[10px] font-semibold leading-tight text-slate-400">Dibujo por defecto</span>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black text-slate-900">{p.etiqueta}</p>
-                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{p.ayuda}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <input
-                      ref={(el) => { entradas.current[p.clave] = el; }}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      className="hidden"
-                      aria-label={`Elegir imagen: ${p.etiqueta}`}
-                      onChange={(e) => {
-                        const archivo = e.target.files?.[0];
-                        e.target.value = '';
-                        elegir(p.clave, p.maxLado, archivo);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={trabajando}
-                      onClick={() => entradas.current[p.clave]?.click()}
-                      className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-teal-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {trabajando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
-                      {version ? 'Cambiar' : 'Seleccionar imagen'}
-                    </button>
-                    {version && (
-                      <button
-                        type="button"
-                        disabled={trabajando}
-                        onClick={() => quitar(p.clave)}
-                        className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Quitar
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
+          {POSICIONES_PORTADA.map((p) => renderFila(p))}
+        </ul>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <h3 className="text-sm font-black text-slate-900">Imágenes del Atlas Microscópico</h3>
+          <p className="mt-1 text-xs text-slate-600">
+            Cada elemento del atlas del portal del paciente muestra un dibujo por defecto. Aquí puedes poner tu propia imagen o microfotografía
+            (PNG, JPG o WebP; mejor cuadrada). Si quitas una, vuelve el dibujo. Usa imágenes educativas o de ejemplo; nunca de muestras con datos de pacientes.
+          </p>
+        </div>
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {MICROSCOPIC_ATLAS.map((h) => renderFila(
+            { clave: claveImagenAtlas(h.id), etiqueta: h.commonName || h.name, ayuda: `${h.specimenType} · ${h.magnification}`, maxLado: 700 },
+            <MicroscopicIllustration type={h.illustrationType} size="sm" />
+          ))}
         </ul>
 
         <NosotrosEditor />

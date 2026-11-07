@@ -3,7 +3,10 @@ import { DEMO_MODE } from '../../config/demoMode';
 import React, { useRef, useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { PdfReportService } from '../../services/pdfReportService';
+import { tienePdfOficial, descargarPdfOficial, abrirPdfOficial } from '../../services/pdfOficial';
+import { InformesApiError } from '../../services/informesApiService';
 import { VaclinicOfficialReportSheet } from './VaclinicOfficialReportSheet';
+import { VistaPdfOficial } from './VistaPdfOficial';
 import { buildVerificationUrl } from '../../services/verificacionInforme';
 import { AiSummaryModeModal } from './AiSummaryModeModal';
 import { 
@@ -22,16 +25,18 @@ import {
   Copy,
   Check,
   Share2,
-  Droplet
+  Droplet,
+  ImageIcon
 } from 'lucide-react';
 
 export const PrintReportModal: React.FC = () => {
-  const { activeReportToPrint, setActiveReportToPrint, reports, labSettings, currentStaffUser } = useClinic();
+  const { activeReportToPrint, setActiveReportToPrint, reports, labSettings, currentStaffUser, orders, showNotification, setStaffActiveTab, setActiveSettingsSubTab } = useClinic();
   const printSheetRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showAiSummaryModal, setShowAiSummaryModal] = useState(false);
+  const [falloPdfOficial, setFalloPdfOficial] = useState(false);
 
   // Customization State (initialized with labSettings defaults)
   const [templateStyle, setTemplateStyle] = useState<'vaclinic' | 'compact'>('vaclinic');
@@ -54,6 +59,28 @@ export const PrintReportModal: React.FC = () => {
   if (!activeReportToPrint) return null;
 
   const report = activeReportToPrint;
+
+  // Único código visible del informe: el N.º de orden.
+  const numeroOrden = report.orderId ? orders.find((o) => o.id === report.orderId)?.orderNumber : undefined;
+
+  // UN solo formato: si el informe está en el servidor, descargar e imprimir es siempre el PDF oficial.
+  // Un informe que todavía no está en el servidor no tiene PDF oficial: se avisa en lugar de imprimir la copia local sin decir nada.
+  const avisoCopiaLocal = () =>
+    showNotification('Este informe aún no está en el servidor: se usa la copia local, que no es el PDF oficial. Publícalo o sincroniza para obtener el oficial.', 'warning');
+
+  const conPdfOficial = async (accion: () => Promise<void>) => {
+    setIsExporting(true);
+    try {
+      await accion();
+    } catch (err) {
+      showNotification(
+        err instanceof InformesApiError ? err.message : 'No se pudo obtener el PDF oficial. Revisa tu conexión e inténtalo de nuevo.',
+        'warning'
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Custom Signers mapped from labSettings
   const activeSigners = labSettings.signers.filter(s => s.enabled);
@@ -104,6 +131,11 @@ export const PrintReportModal: React.FC = () => {
   });
 
   const handlePrint = () => {
+    if (tienePdfOficial(report)) {
+      void conPdfOficial(() => abrirPdfOficial(report, numeroOrden));
+      return;
+    }
+    avisoCopiaLocal();
     // Inject dynamic print media stylesheet to guarantee exact print margins
     const styleId = 'vaclinic-official-print-margins-style';
     let styleEl = document.getElementById(styleId) as HTMLStyleElement;
@@ -153,7 +185,7 @@ export const PrintReportModal: React.FC = () => {
         .report-sheet-container {
           display: flex !important;
           flex-direction: column !important;
-          min-height: 100% !important;
+          min-height: 0 !important;
         }
         .avoid-page-break, .report-signatures-footer, .signatures-block {
           break-inside: avoid !important;
@@ -161,7 +193,7 @@ export const PrintReportModal: React.FC = () => {
           -webkit-column-break-inside: avoid !important;
         }
         .report-signatures-footer, footer.report-footer {
-          margin-top: auto !important;
+          margin-top: 8px !important;
           break-inside: avoid !important;
           page-break-inside: avoid !important;
           break-before: auto !important;
@@ -177,6 +209,11 @@ export const PrintReportModal: React.FC = () => {
   };
 
   const handleDownloadPdf = async () => {
+    if (tienePdfOficial(report)) {
+      await conPdfOficial(() => descargarPdfOficial(report, numeroOrden));
+      return;
+    }
+    avisoCopiaLocal();
     if (!printSheetRef.current) return;
     setIsExporting(true);
     try {
@@ -200,7 +237,7 @@ export const PrintReportModal: React.FC = () => {
   };
 
   const handleShareWhatsApp = () => {
-    const text = `Hola, adjunto el informe oficial de laboratorio VACLINIC para ${report.patientName}. Folio: ${report.reportNumber}.${verificationUrl ? ` Verificación en: ${verificationUrl}` : ''}`;
+    const text = `Hola, le comparto el informe oficial de laboratorio VACLINIC de ${report.patientName}.${numeroOrden ? ` N.º de orden: ${numeroOrden}.` : ''}${verificationUrl ? ` Puede comprobar que es auténtico aquí: ${verificationUrl}` : ''}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -285,6 +322,22 @@ export const PrintReportModal: React.FC = () => {
               <Download className={`w-4 h-4 ${isExporting ? 'animate-bounce' : ''}`} />
               <span>{isExporting ? 'Generando PDF...' : 'Descargar PDF'}</span>
             </button>
+
+            {currentStaffUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveSettingsSubTab('membrete');
+                  setStaffActiveTab('ajustes');
+                  setActiveReportToPrint(null);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all cursor-pointer"
+                title="Abrir Ajustes → Membrete para subir otro logo, cambiar su tamaño o su posición"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Cambiar logo</span>
+              </button>
+            )}
 
             {/* Close Modal */}
             <button
@@ -473,6 +526,13 @@ export const PrintReportModal: React.FC = () => {
             id="vaclinic-official-pdf-sheet"
             className="w-full max-w-4xl flex justify-center print:w-full print:max-w-none"
           >
+            {tienePdfOficial(report) && !falloPdfOficial ? (
+              <VistaPdfOficial
+                key={report.remoteId}
+                idInforme={report.remoteId as number}
+                alFallar={() => setFalloPdfOficial(true)}
+              />
+            ) : (
             <VaclinicOfficialReportSheet 
               report={report}
               watermark={watermark}
@@ -484,6 +544,7 @@ export const PrintReportModal: React.FC = () => {
               customSettings={labSettings}
               fitToSinglePage={fitToSinglePage}
             />
+            )}
           </div>
         </div>
 

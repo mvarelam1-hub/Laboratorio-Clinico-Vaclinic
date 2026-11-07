@@ -239,3 +239,30 @@ export async function actualizarOrdenRemota(idOrden: number, updates: OrdenUpdat
   if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
   return res.json();
 }
+
+export interface AgregarExamenesResultado {
+  numero_orden: string;
+  monto_agregado: number;
+  total_cobrado: number;
+  saldo_pendiente: number;
+  estado_flujo: 'Pendiente' | 'En Proceso' | 'Listo' | 'Entregado';
+  /** Detalle COMPLETO de la orden después de agregar (un elemento por examen). */
+  detalle: OrdenDetalleApiRow[];
+}
+
+/**
+ * Agrega exámenes a una orden que ya existe (POST /api/ordenes/:id/examenes).
+ * El número de pago es obligatorio cuando los exámenes tienen costo.
+ */
+export async function agregarExamenesOrdenRemota(
+  idOrden: number,
+  examenesIds: number[],
+  numeroPago?: string
+): Promise<AgregarExamenesResultado> {
+  const res = await authFetch(`/api/ordenes/${idOrden}/examenes`, {
+    method: 'POST',
+    body: JSON.stringify({ examenesIds, numeroPago })
+  });
+  if (!res.ok) throw new OrdenesApiError(await parseErrorBody(res), res.status);
+  return res.json();
+}

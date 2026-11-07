@@ -4,8 +4,10 @@ import { MedicalReport } from '../../types';
 import { useClinic } from '../../context/ClinicContext';
 import { PdfReportService } from '../../services/pdfReportService';
 import { VaclinicOfficialReportSheet } from '../common/VaclinicOfficialReportSheet';
+import { VistaPdfOficial } from '../common/VistaPdfOficial';
 import { buildVerificationUrl, formatVerificationCode } from '../../services/verificacionInforme';
 import { descargarInformePdfOficial, InformesApiError } from '../../services/informesApiService';
+import { tienePdfOficial, descargarPdfOficial, abrirPdfOficial } from '../../services/pdfOficial';
 import { LabSettings } from '../../types/labSettings';
 import { 
   X, 
@@ -46,7 +48,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   defaultBioanalyst,
   defaultDoctor
 }) => {
-  const { labSettings, updateLabSettings, showNotification, currentStaffUser } = useClinic();
+  const { labSettings, updateLabSettings, showNotification, currentStaffUser, orders } = useClinic();
   const firmantesIniciales = firmantesPorDefecto(labSettings, currentStaffUser);
   const bioInicial = defaultBioanalyst ?? firmantesIniciales.bioanalista;
   const medicoInicial = defaultDoctor ?? firmantesIniciales.medico;
@@ -55,6 +57,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   // Export & customization settings
   const [templateStyle, setTemplateStyle] = useState<'vaclinic' | 'compact'>('vaclinic');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [falloPdfOficial, setFalloPdfOficial] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [drawerTab, setDrawerTab] = useState<'margins' | 'content'>('margins');
 
@@ -141,7 +144,33 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   };
 
   // Trigger PDF file download via html2canvas and jsPDF
+  const numeroOrden = report.orderId ? orders.find((o) => o.id === report.orderId)?.orderNumber : undefined;
+
+  // UN solo formato: si el informe está en el servidor, se descarga e imprime el PDF oficial.
+  // Un informe que todavía no está en el servidor no tiene PDF oficial: se avisa en lugar de imprimir la copia local sin decir nada.
+  const avisoCopiaLocal = () =>
+    showNotification('Este informe aún no está en el servidor: se usa la copia local, que no es el PDF oficial. Publícalo o sincroniza para obtener el oficial.', 'warning');
+
+  const conPdfOficial = async (accion: () => Promise<void>) => {
+    setIsGeneratingPdf(true);
+    try {
+      await accion();
+    } catch (err) {
+      showNotification(
+        err instanceof InformesApiError ? err.message : 'No se pudo obtener el PDF oficial. Revisa tu conexión e inténtalo de nuevo.',
+        'warning'
+      );
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const handleDownloadPdf = async () => {
+    if (tienePdfOficial(report)) {
+      await conPdfOficial(() => descargarPdfOficial(report, numeroOrden));
+      return;
+    }
+    avisoCopiaLocal();
     if (!printAreaRef.current) return;
     setIsGeneratingPdf(true);
     try {
@@ -159,6 +188,11 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
 
   // Trigger browser print
   const handleNativePrint = () => {
+    if (tienePdfOficial(report)) {
+      void conPdfOficial(() => abrirPdfOficial(report, numeroOrden));
+      return;
+    }
+    avisoCopiaLocal();
     window.print();
   };
 
@@ -752,6 +786,13 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             id="vaclinic-official-pdf-sheet"
             className="w-full max-w-4xl flex justify-center print:w-full print:max-w-none"
           >
+            {tienePdfOficial(report) && !falloPdfOficial ? (
+              <VistaPdfOficial
+                key={report.remoteId}
+                idInforme={report.remoteId as number}
+                alFallar={() => setFalloPdfOficial(true)}
+              />
+            ) : (
             <VaclinicOfficialReportSheet 
               report={customizedReport}
               watermark={watermark}
@@ -762,6 +803,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
               templateStyle={templateStyle}
               customSettings={activeLabSettings}
             />
+            )}
           </div>
         </div>
 
