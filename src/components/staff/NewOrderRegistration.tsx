@@ -51,6 +51,8 @@ import {
 import { TubeBadge } from '../common/TubeBadge';
 import { LabCatalogItem, OriginDepartment, PatientType, MedicalReport, LabOrder, Patient } from '../../types';
 import { PacientesApiError } from '../../services/pacientesApiService';
+import { crearMuestraRemota } from '../../services/muestrasApiService';
+import { DEMO_MODE } from '../../config/demoMode';
 import {
   CampoPaciente,
   edadDesdeFecha,
@@ -58,6 +60,35 @@ import {
   validarDatosPaciente
 } from '../../services/validacionPaciente';
 import { construirBorradorDeOrden } from '../../utils/borradorInforme';
+
+// Edad detallada (años, meses y días) a partir de la fecha de nacimiento
+function edadDetallada(fecha: string): { anios: number; meses: number; dias: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(fecha || '');
+  if (!m) return null;
+  const hoy = new Date();
+  let anios = hoy.getFullYear() - Number(m[1]);
+  let meses = hoy.getMonth() + 1 - Number(m[2]);
+  let dias = hoy.getDate() - Number(m[3]);
+  if (dias < 0) {
+    meses -= 1;
+    dias += new Date(hoy.getFullYear(), hoy.getMonth(), 0).getDate();
+  }
+  if (meses < 0) {
+    anios -= 1;
+    meses += 12;
+  }
+  return anios < 0 ? null : { anios, meses, dias };
+}
+
+// Fecha de nacimiento aproximada a partir de años, meses y días
+function fechaDesdeEdadDetallada(anios: number, meses: number, dias: number): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - anios);
+  d.setMonth(d.getMonth() - meses);
+  d.setDate(d.getDate() - dias);
+  const dos = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}
 
 export function getStaffFriendlyCapLabel(tube: TubeDefinition): string {
   if (tube.id === 'lila') return 'Tapa Morada (EDTA)';
@@ -113,6 +144,8 @@ export const NewOrderRegistration: React.FC = () => {
     showNotification,
     setStaffActiveTab,
     currentBranch,
+    branches,
+    isMultiBranchEnabled,
     selectedPatientId,
     setSelectedPatientId,
     staffUsers,
@@ -133,6 +166,8 @@ export const NewOrderRegistration: React.FC = () => {
   const [nationalId, setNationalId] = useState('');
   const [gender, setGender] = useState<'' | 'M' | 'F' | 'Otro'>('');
   const [age, setAge] = useState('');
+  const [ageMonths, setAgeMonths] = useState('');
+  const [ageDays, setAgeDays] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [birthDateEstimated, setBirthDateEstimated] = useState(false);
   const [phone, setPhone] = useState('');
@@ -267,6 +302,9 @@ export const NewOrderRegistration: React.FC = () => {
     setBirthDateEstimated(p.birthDateEstimated === true);
     const edad = p.birthDate ? edadDesdeFecha(p.birthDate) : null;
     setAge(edad !== null ? String(edad) : (p.age ? String(p.age) : ''));
+      const detP = edadDetallada(p.birthDate || '');
+      setAgeMonths(detP ? String(detP.meses) : '');
+      setAgeDays(detP ? String(detP.dias) : '');
     setPhone(p.phone || '');
     setEmail(p.email || '');
     setGuardianName(p.emergencyContact?.relation === 'Encargado legal' ? p.emergencyContact.name : '');
@@ -281,6 +319,8 @@ export const NewOrderRegistration: React.FC = () => {
     setNationalId('');
     setGender('');
     setAge('');
+    setAgeMonths('');
+    setAgeDays('');
     setBirthDate('');
     setBirthDateEstimated(false);
     setPhone('');
@@ -297,22 +337,40 @@ export const NewOrderRegistration: React.FC = () => {
     setBirthDateEstimated(false);
     const edad = edadDesdeFecha(val);
     setAge(edad !== null ? String(edad) : '');
+    const det = edadDetallada(val);
+    setAgeMonths(det ? String(det.meses) : '');
+    setAgeDays(det ? String(det.dias) : '');
   };
 
   // Solo se conoce la edad -> se guarda una fecha APROXIMADA y se marca como estimada
   const handleAgeChange = (val: string) => {
     const limpio = val.replace(/[^\d]/g, '').slice(0, 3);
     setAge(limpio);
-    if (limpio === '') {
+    if (limpio === '' && !ageMonths && !ageDays) {
       setBirthDate('');
       setBirthDateEstimated(false);
       return;
     }
-    const n = parseInt(limpio, 10);
+    const n = parseInt(limpio || '0', 10);
     if (n >= 0 && n <= 120) {
-      setBirthDate(fechaDesdeEdadAproximada(n));
+      setBirthDate(ageMonths || ageDays ? fechaDesdeEdadDetallada(n, parseInt(ageMonths || '0', 10), parseInt(ageDays || '0', 10)) : fechaDesdeEdadAproximada(n));
       setBirthDateEstimated(true);
     }
+  };
+
+  const handleAgeDetailChange = (campo: 'meses' | 'dias', val: string) => {
+    const limpio = val.replace(/[^\d]/g, '').slice(0, 2);
+    const meses = campo === 'meses' ? limpio : ageMonths;
+    const dias = campo === 'dias' ? limpio : ageDays;
+    if (campo === 'meses') setAgeMonths(limpio);
+    else setAgeDays(limpio);
+    if (!age && !meses && !dias) {
+      setBirthDate('');
+      setBirthDateEstimated(false);
+      return;
+    }
+    setBirthDate(fechaDesdeEdadDetallada(parseInt(age || '0', 10), parseInt(meses || '0', 10), parseInt(dias || '0', 10)));
+    setBirthDateEstimated(true);
   };
 
   const validacion = useMemo(
@@ -558,6 +616,9 @@ export const NewOrderRegistration: React.FC = () => {
       drawOrder: g.tube.drawOrder
     }));
 
+    // Solo en modo demostración el código se inventa en el navegador. En
+    // producción los códigos de tubo los genera el servidor (tabla `muestra`)
+    // cuando la orden ya existe, ver más abajo.
     const barcodeNumber = `TUB-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
 
     // Calculate dates & times
@@ -612,7 +673,7 @@ export const NewOrderRegistration: React.FC = () => {
       folderId: priority === 'stat_panico' ? 'folder-stat' : priority === 'urgente' ? 'folder-urgentes' : 'folder-unassigned',
       priority,
       branchId: currentBranch || 'central',
-      tubeBarcodes: [barcodeNumber],
+      tubeBarcodes: DEMO_MODE ? [barcodeNumber] : [],
       isHighRisk: isCritical,
       origin,
       patientType,
@@ -635,6 +696,37 @@ export const NewOrderRegistration: React.FC = () => {
       return;
     }
 
+    // Tubos reales: una muestra por cada tubo/recipiente que pide el análisis,
+    // guardada en la base de datos y ligada a ESTA orden. El código de barras
+    // lo genera el servidor. Si algo falla la orden ya está guardada y los tubos
+    // se pueden registrar después en "Recepción de muestras".
+    let codigosTubo: string[] = DEMO_MODE ? [barcodeNumber] : [];
+    let tubosSinRegistrar = 0;
+    if (!DEMO_MODE) {
+      if (typeof savedOrder.remoteId === 'number') {
+        for (const g of phlebotomyAudit.tubesGrouped) {
+          const unidades = Math.min(Math.max(g.count, 1), 20);
+          for (let i = 0; i < unidades; i++) {
+            try {
+              const fila = await crearMuestraRemota({
+                idOrden: savedOrder.remoteId,
+                categoria: g.tube.containerType,
+                tipoContenedor: g.tube.id,
+                etiquetaContenedor: g.tube.name,
+                examenes: g.parameters,
+                flebotomista: phlebotomistName || undefined
+              });
+              codigosTubo.push(fila.codigo_barras);
+            } catch (err) {
+              console.error('[NewOrderRegistration] No se pudo registrar el tubo en el servidor:', err);
+              tubosSinRegistrar += 1;
+            }
+          }
+        }
+      } else {
+        for (const g of phlebotomyAudit.tubesGrouped) tubosSinRegistrar += Math.max(g.count, 1);
+      }
+    }
 
     // Create 4D Lab Episode
     const createdEpisode = await addEpisode({
@@ -650,24 +742,37 @@ export const NewOrderRegistration: React.FC = () => {
       currentDimension: 'D1_admision',
       priority,
       requestedTests: selectedTests.map(t => t.name),
-      tubeBarcodes: [barcodeNumber],
+      tubeBarcodes: codigosTubo,
       sampleType,
       tatTargetMinutes: priority === 'stat_panico' ? 45 : priority === 'urgente' ? 90 : 180,
       tatElapsedMinutes: 0,
       notes: `Orden liquidada y registrada. Fecha de muestra: ${orderDate} (${formattedTime}). Prioridad: ${priority.toUpperCase()}. Origen: ${origin}. Ayuno: ${fastingCondition}. Flebotomista: ${phlebotomistName}. Tubos: ${tubesDetailed.map(t => t.label).join(', ')}`
     });
 
+    // Un solo código visible: el N.º de orden real (el mismo del informe, del
+    // WhatsApp y del portal). Si la orden quedó sin sincronizar (sin conexión)
+    // el número provisional es '#n', y entonces se usa el del episodio.
+    const numeroOrdenVisible = savedOrder.orderNumber && !savedOrder.orderNumber.startsWith('#')
+      ? savedOrder.orderNumber
+      : createdEpisode.episodeNumber;
+
     playNotificationChime('success');
-    showNotification(`¡Orden ${createdEpisode.episodeNumber} liquidada y registrada exitosamente!`, 'success');
+    showNotification(`¡Orden ${numeroOrdenVisible} liquidada y registrada exitosamente!`, 'success');
+    if (tubosSinRegistrar > 0) {
+      showNotification(
+        `La orden se guardó, pero ${tubosSinRegistrar} tubo(s) no se pudieron registrar. Regístralos en "Recepción de muestras".`,
+        'warning'
+      );
+    }
 
     setIsReviewModalOpen(false);
 
     setCreatedOrderModal({
       patientId: patientObj.id,
-      orderNumber: createdEpisode.episodeNumber,
+      orderNumber: numeroOrdenVisible,
       orderDate: orderDate || getTodayStr(),
       orderTime: formattedTime,
-      barcode: barcodeNumber,
+      barcode: codigosTubo.join(', '),
       patientName: patientObj.fullName,
       nationalId: patientDni,
       patientAge: validacion.edad ?? patientObj.age,
@@ -731,7 +836,9 @@ export const NewOrderRegistration: React.FC = () => {
       catalogTests,
       customProfiles,
       sampleDate: modalData.orderDate,
-      laboratoryName: currentBranch?.name ? `VACLINIC - ${currentBranch.name}` : 'VACLINIC LABORATORIO CLÍNICO',
+      laboratoryName: isMultiBranchEnabled && branches.find((b) => b.id === currentBranch)?.name
+        ? `VACLINIC - ${branches.find((b) => b.id === currentBranch)!.name}`
+        : 'VACLINIC LABORATORIO CLÍNICO',
       tubeType: modalData.tubesRequired.map(t => t.label).join(', ')
     });
     setActiveReportToEdit(draftReport);
@@ -995,16 +1102,40 @@ export const NewOrderRegistration: React.FC = () => {
                 </div>
                 <div className="md:col-span-2">
                   <label htmlFor="input-patient-age" className="block text-xs font-semibold text-slate-700 mb-1">
-                    Edad <span className="text-slate-400 font-normal">(años)</span>
+                    Edad <span className="text-slate-400 font-normal">(años · meses · días)</span>
                   </label>
-                  <input
-                    id="input-patient-age"
-                    type="text"
-                    inputMode="numeric"
-                    value={age}
-                    onChange={(e) => handleAgeChange(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
-                  />
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <input
+                      id="input-patient-age"
+                      type="text"
+                      inputMode="numeric"
+                      value={age}
+                      onChange={(e) => handleAgeChange(e.target.value)}
+                      placeholder="Años"
+                      aria-label="Edad en años"
+                      className="w-full px-2 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                    />
+                    <input
+                      id="input-patient-age-months"
+                      type="text"
+                      inputMode="numeric"
+                      value={ageMonths}
+                      onChange={(e) => handleAgeDetailChange('meses', e.target.value)}
+                      placeholder="Meses"
+                      aria-label="Edad en meses"
+                      className="w-full px-2 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                    />
+                    <input
+                      id="input-patient-age-days"
+                      type="text"
+                      inputMode="numeric"
+                      value={ageDays}
+                      onChange={(e) => handleAgeDetailChange('dias', e.target.value)}
+                      placeholder="Días"
+                      aria-label="Edad en días"
+                      className="w-full px-2 py-2 rounded-lg border border-slate-300 text-slate-800 text-sm outline-hidden bg-white focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                    />
+                  </div>
                 </div>
 
                 {/* Contacto */}
@@ -1488,8 +1619,8 @@ export const NewOrderRegistration: React.FC = () => {
           </section>
 
           {/* ===== BARRA INFERIOR ===== */}
-          <div className="sticky bottom-3 z-20">
-            <div className="bg-slate-900 rounded-xl shadow-xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="sticky bottom-2 z-20">
+            <div className="bg-slate-900 rounded-xl shadow-xl px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span>{selectedTestIds.length} {selectedTestIds.length === 1 ? 'examen' : 'exámenes'}</span>
                 <span>{getDateLabel(orderDate)} {orderTime}</span>
@@ -1504,7 +1635,7 @@ export const NewOrderRegistration: React.FC = () => {
                 id="btn-submit-order"
                 type="submit"
                 title="Revisar y liquidar (Ctrl+S)"
-                className="w-full sm:w-auto bg-coral-pulse hover:bg-coral-hover text-[#1a1a1a] font-semibold text-sm px-6 py-2.5 rounded-full transition-colors cursor-pointer flex items-center justify-center gap-2"
+                className="w-full sm:w-auto bg-coral-pulse hover:bg-coral-hover text-[#1a1a1a] font-semibold text-sm px-6 py-2 rounded-full transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <Receipt className="w-4 h-4" />
                 <span>Revisar y liquidar</span>
@@ -1885,7 +2016,7 @@ export const NewOrderRegistration: React.FC = () => {
 
               <div className="flex justify-between items-center pb-2 border-b border-slate-200">
                 <span className="font-bold text-slate-500 uppercase">Código Tubos (LABVACLINIC LIS):</span>
-                <span className="font-mono font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">{createdOrderModal.barcode}</span>
+                <span className="font-mono font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">{createdOrderModal.barcode || 'Sin registrar (ver Recepción de muestras)'}</span>
               </div>
 
               <div className="flex justify-between items-center pb-2 border-b border-slate-200">

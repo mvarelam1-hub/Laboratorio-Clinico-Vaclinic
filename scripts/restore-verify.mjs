@@ -110,7 +110,7 @@ async function main() {
     try {
       const { rows: tablas } = await c2.query(`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`);
       for (const { tablename } of tablas) {
-        const { rows } = await c2.query(`SELECT count(*)::bigint AS n FROM "${tablename.replace(/"/g, '""')}"`);
+        const { rows } = await c2.query(`SELECT count(*)::bigint AS n FROM "public"."${tablename.replace(/"/g, '""')}"`);
         obtenido[tablename] = Number(rows[0].n);
       }
     } finally {

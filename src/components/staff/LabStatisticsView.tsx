@@ -1011,13 +1011,6 @@ export const LabStatisticsView: React.FC = () => {
             )}
           </div>
 
-          <button
-            onClick={() => handleExportToExcel()}
-            className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors cursor-pointer"
-            title="Exportación rápida a Excel con filtro activo"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -1212,14 +1205,6 @@ export const LabStatisticsView: React.FC = () => {
                 <span className="text-slate-500 font-medium">
                   ¿Deseas analizar estos datos en Microsoft Excel?
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleExportToExcel()}
-                  className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 cursor-pointer bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Descargar .xlsx</span>
-                </button>
               </div>
             </div>
 
@@ -1267,14 +1252,6 @@ export const LabStatisticsView: React.FC = () => {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleExportToExcel()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Exportar Pacientes a Excel</span>
-            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -1345,14 +1322,6 @@ export const LabStatisticsView: React.FC = () => {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleExportToExcel()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Exportar Catálogo y Volumen (.xlsx)</span>
-            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -1419,14 +1388,6 @@ export const LabStatisticsView: React.FC = () => {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleExportToExcel()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Exportar Órdenes a Excel</span>
-            </button>
           </div>
 
           <div className="overflow-x-auto">

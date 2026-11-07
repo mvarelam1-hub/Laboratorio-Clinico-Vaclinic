@@ -154,7 +154,7 @@ portalRouter.get('/informes', requirePortalToken, asyncHandler(async (req: any, 
 
   const { rows } = await pool.query(
     `SELECT id_informe, numero_informe, titulo, categoria, estado, fecha_muestra, fecha_publicacion,
-            conclusiones_medico, recomendaciones, datos_json, publicado_por_nombre, codigo_verificacion
+            conclusiones_medico, explicacion_paciente, recomendaciones, datos_json, publicado_por_nombre, codigo_verificacion
      FROM informe_clinico
      WHERE id_orden = $1 AND eliminado = FALSE AND estado IN ('publicado', 'entregado')
      ORDER BY fecha_publicacion DESC NULLS LAST, id_informe DESC`,
@@ -186,6 +186,8 @@ portalRouter.get('/informes', requirePortalToken, asyncHandler(async (req: any, 
       const d = r.datos_json || {};
       const incluirConclusion = d.includeConclusionsInReport !== false;
       const incluirRecom = d.includeRecommendationsInReport !== false;
+      // La interpretación con IA solo se muestra si el personal la revisó y marcó «incluir en el informe».
+      const interpretacion = d.includeAiExplanationInReport === true && String(r.explicacion_paciente ?? '').trim() ? String(r.explicacion_paciente).trim() : null;
       return {
         id: r.id_informe,
         numero: r.numero_informe,
@@ -200,6 +202,7 @@ portalRouter.get('/informes', requirePortalToken, asyncHandler(async (req: any, 
           referencia: p.referenceRange ?? '', estado: p.status ?? 'normal', seccion: p.section ?? null
         })),
         conclusion: incluirConclusion ? r.conclusiones_medico : null,
+        interpretacion,
         recomendaciones: incluirRecom ? (r.recomendaciones || []) : []
       };
     })

@@ -4,6 +4,8 @@ import { useClinic } from '../../context/ClinicContext';
 import { VaclinicOfficialReportSheet } from '../common/VaclinicOfficialReportSheet';
 import { OzelleCbcReportView } from '../laboratory/OzelleCbcReportView';
 import { PdfReportService } from '../../services/pdfReportService';
+import { tienePdfOficial, descargarPdfOficial, abrirPdfOficial } from '../../services/pdfOficial';
+import { InformesApiError } from '../../services/informesApiService';
 import {
   X,
   Printer,
@@ -23,7 +25,8 @@ import {
   Info,
   Palette,
   LayoutTemplate,
-  Bookmark
+  Bookmark,
+  ImageIcon
 } from 'lucide-react';
 
 export interface PhysicalPrintPreviewModalProps {
@@ -52,16 +55,22 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
   doctorSpecialty,
   doctorLicense
 }) => {
-  const { labSettings } = useClinic();
+  const { labSettings, orders, showNotification, setStaffActiveTab, setActiveSettingsSubTab } = useClinic();
+
+  const irACambiarLogo = () => {
+    setActiveSettingsSubTab('membrete');
+    setStaffActiveTab('ajustes');
+    onClose();
+  };
   const printSheetRef = useRef<HTMLDivElement>(null);
 
   // Simulation controls state
   const [paperFilter, setPaperFilter] = useState<PaperFilterType>('bond_laser');
   const [paperSize, setPaperSize] = useState<PaperSizeType>('letter');
   const [zoomLevel, setZoomLevel] = useState<number>(85); // 85% default fits nicely on desktop
-  const [showPrintMargins, setShowPrintMargins] = useState<boolean>(true);
+  const [showPrintMargins, setShowPrintMargins] = useState<boolean>(false);
   const [showPageBreaks, setShowPageBreaks] = useState<boolean>(true);
-  const [pinFooterToBottom, setPinFooterToBottom] = useState<boolean>(true);
+  const [pinFooterToBottom, setPinFooterToBottom] = useState<boolean>(false);
   const [showPaperClips, setShowPaperClips] = useState<boolean>(true);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [separateAnnexSheet, setSeparateAnnexSheet] = useState<boolean>(true);
@@ -110,12 +119,43 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
   const hasAnnex = Boolean(report.attachedAnalyzerReport && report.attachedAnalyzerReport.attachedToOfficialPdf !== false);
 
   // Trigger system print
+  const numeroOrden = report.orderId ? orders.find((o) => o.id === report.orderId)?.orderNumber : undefined;
+
+  // UN solo formato: si el informe está en el servidor, se imprime y se descarga el PDF oficial.
+  // Un informe que todavía no está en el servidor no tiene PDF oficial: se avisa en lugar de imprimir la copia local sin decir nada.
+  const avisoCopiaLocal = () =>
+    showNotification('Este informe aún no está en el servidor: se usa la copia local, que no es el PDF oficial. Publícalo o sincroniza para obtener el oficial.', 'warning');
+
+  const conPdfOficial = async (accion: () => Promise<void>) => {
+    setIsExportingPdf(true);
+    try {
+      await accion();
+    } catch (err) {
+      showNotification(
+        err instanceof InformesApiError ? err.message : 'No se pudo obtener el PDF oficial. Revisa tu conexión e inténtalo de nuevo.',
+        'warning'
+      );
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const handlePrint = () => {
+    if (tienePdfOficial(report)) {
+      void conPdfOficial(() => abrirPdfOficial(report, numeroOrden));
+      return;
+    }
+    avisoCopiaLocal();
     window.print();
   };
 
   // Trigger PDF download
   const handleDownloadPdf = async () => {
+    if (tienePdfOficial(report)) {
+      await conPdfOficial(() => descargarPdfOficial(report, numeroOrden));
+      return;
+    }
+    avisoCopiaLocal();
     if (!printSheetRef.current) return;
     setIsExportingPdf(true);
     try {
@@ -292,6 +332,16 @@ export const PhysicalPrintPreviewModal: React.FC<PhysicalPrintPreviewModalProps>
           >
             <Printer className="w-3.5 h-3.5 text-slate-950" />
             <span>Imprimir Ahora</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={irACambiarLogo}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all cursor-pointer"
+            title="Abrir Ajustes → Membrete para subir otro logo, cambiar su tamaño o su posición"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Cambiar logo</span>
           </button>
 
           <button

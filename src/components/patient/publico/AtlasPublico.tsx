@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { MICROSCOPIC_ATLAS, MicroscopicCategory } from '../../../data/microscopicAtlas';
 import { MicroscopicIllustration } from '../../common/MicroscopicIllustration';
 import { normalizarTexto } from '../../../utils/catalogoPublico';
+import { ImagenPortada, usePortadaImagenes } from '../../staff/PortadaLogin';
+import { claveImagenAtlas } from '../../../services/portadaApiService';
 import { TituloSeccion, AvisoGeneral } from './comunes';
 
 const CATEGORIAS: { id: MicroscopicCategory | 'todas'; etiqueta: string }[] = [
@@ -14,14 +16,18 @@ const CATEGORIAS: { id: MicroscopicCategory | 'todas'; etiqueta: string }[] = [
 ];
 
 /**
- * Atlas microscópico educativo. Usa SOLO ilustraciones esquemáticas y texto
- * descriptivo: no se muestran las "microfotografías asistidas por IA" ni notas
- * de algoritmos del atlas interno, porque no son imágenes reales del laboratorio.
+ * Atlas microscópico educativo. Por defecto usa ilustraciones esquemáticas y texto
+ * descriptivo (no las "microfotografías asistidas por IA" ni notas de algoritmos
+ * del atlas interno, porque no son imágenes reales del laboratorio). Si el
+ * laboratorio sube su propia imagen para un elemento (Ajustes → Portada del
+ * acceso → Atlas Microscópico), se muestra esa.
  */
 const AtlasPublico: React.FC = () => {
   const [cat, setCat] = useState<MicroscopicCategory | 'todas'>('todas');
   const [texto, setTexto] = useState('');
   const [abierto, setAbierto] = useState<string | null>(null);
+  // Imágenes que el laboratorio subió en Ajustes; si un elemento no tiene, se muestra su dibujo.
+  const imagenes = usePortadaImagenes();
 
   const lista = useMemo(() => {
     const t = normalizarTexto(texto);
@@ -34,7 +40,7 @@ const AtlasPublico: React.FC = () => {
       <div id="titulo-atlas"><TituloSeccion titulo="Atlas Microscópico" subtitulo="Conoce qué busca el laboratorio al mirar al microscopio tus muestras de orina, heces y sangre." /></div>
 
       <p className="text-sm bg-slate-50 border border-slate-300 text-slate-800 rounded-lg px-4 py-3 mb-4">
-        Las imágenes son ilustraciones esquemáticas con fines educativos; no son fotografías de tu muestra.
+        Las imágenes son ilustraciones o fotografías de referencia con fines educativos; no son de tu muestra.
       </p>
 
       <div className="flex flex-wrap gap-2 mb-3" role="group" aria-label="Filtrar por tipo de muestra">
@@ -59,7 +65,13 @@ const AtlasPublico: React.FC = () => {
               <li key={h.id} className="bg-white border border-slate-200 rounded-2xl p-4">
                 <div className="flex gap-3">
                   <div className="shrink-0 bg-slate-900 rounded-xl overflow-hidden" aria-hidden="true">
-                    <MicroscopicIllustration type={h.illustrationType} size="md" />
+                    <ImagenPortada
+                      clave={claveImagenAtlas(h.id)}
+                      imagenes={imagenes}
+                      alt=""
+                      className="w-28 h-28 object-cover"
+                      alternativa={<MicroscopicIllustration type={h.illustrationType} size="md" />}
+                    />
                   </div>
                   <div className="min-w-0">
                     <h2 className="font-extrabold text-slate-900 leading-tight">{h.commonName || h.name}</h2>

@@ -176,14 +176,6 @@ export const LabSettingsView: React.FC = () => {
             <span>Copia de Respaldo</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => handleSave()}
-            className="bg-teal-600 hover:bg-teal-500 text-white font-black px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>Guardar Ajustes</span>
-          </button>
         </div>
       </div>
 

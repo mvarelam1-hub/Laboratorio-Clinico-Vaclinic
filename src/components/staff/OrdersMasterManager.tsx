@@ -44,6 +44,8 @@ import {
   Droplet,
   FlaskConical,
   Edit3,
+  Pencil,
+  FileEdit,
   User,
   Phone,
   CreditCard,
@@ -57,8 +59,11 @@ import {
   ClipboardList,
   PackageCheck,
   ShieldCheck,
-  Send
+  Send,
+  MessageCircle
 } from 'lucide-react';
+import { EditarOrdenModal } from './EditarOrdenModal';
+import { WhatsAppMessageModal } from './WhatsAppMessageModal';
 import { BiometricAuthModal } from './BiometricAuthModal';
 import { BiometricAuthResult } from '../../services/biometricService';
 import { construirBorradorDeOrden } from '../../utils/borradorInforme';
@@ -227,6 +232,11 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
     labSettings,
     currentStaffUser
   } = useClinic();
+
+  // Editor de la orden (corregir datos y agregar exámenes)
+  const [ordenAEditar, setOrdenAEditar] = useState<string | null>(null);
+  // Enviar al paciente su código de consulta o el aviso de resultados
+  const [ordenAEnviar, setOrdenAEnviar] = useState<LabOrder | null>(null);
 
   // View state: 'list' (table) or 'folders' (grid)
   const [viewMode, setViewMode] = useState<'list' | 'folders'>('list');
@@ -1302,6 +1312,29 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                               <Eye className="w-3.5 h-3.5" />
                             </button>
 
+                            {mode !== 'trash' && (
+                              <button
+                                onClick={() => setOrdenAEditar(ord.id)}
+                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-sky-50 text-sky-700 cursor-pointer"
+                                title="Corregir datos de la orden o agregar exámenes"
+                                aria-label="Corregir datos de la orden"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {mode !== 'trash' && (
+                              <button
+                                onClick={() => handleEditResultsInEditor(ord)}
+                                className="p-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 cursor-pointer"
+                                title="Abrir en el editor de resultados"
+                                aria-label="Editor de resultados"
+                                data-testid="btn-editor-resultados"
+                              >
+                                <FileEdit className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
                             <button
                               onClick={() => setOrdenSeguimiento(ord)}
                               className="p-1.5 rounded-lg border border-slate-200 hover:bg-violet-50 text-violet-600 cursor-pointer"
@@ -1322,6 +1355,17 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
                             >
                               <Fingerprint className="w-3.5 h-3.5" />
                             </button>)}
+
+                            {mode !== 'trash' && (
+                              <button
+                                onClick={() => setOrdenAEnviar(ord)}
+                                className="p-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 cursor-pointer"
+                                title="Enviar código de consulta o resultados al paciente (WhatsApp o correo)"
+                                aria-label="Enviar código o resultados al paciente"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                              </button>
+                            )}
 
                             <button
                               onClick={() => handlePrintOfficialReport(ord)}
@@ -1406,6 +1450,30 @@ export const OrdersMasterManager: React.FC<OrdersMasterManagerProps> = ({ mode }
             </table>
           </div>
         </div>
+      )}
+
+      {ordenAEnviar && (() => {
+        const pac = patients.find((p) => (ordenAEnviar.patientId && p.id === ordenAEnviar.patientId)
+          || (ordenAEnviar.nationalId && p.nationalId === ordenAEnviar.nationalId));
+        const listo = ordenAEnviar.reportStatus === 'Validado' || ordenAEnviar.status === 'Listo' || ordenAEnviar.status === 'Entregado';
+        return (
+          <WhatsAppMessageModal
+            isOpen
+            onClose={() => setOrdenAEnviar(null)}
+            patientName={ordenAEnviar.patientName}
+            patientPhone={ordenAEnviar.phone || pac?.phone || ''}
+            patientEmail={ordenAEnviar.email || pac?.email || ''}
+            patientCode={ordenAEnviar.patientCode}
+            accessCode={ordenAEnviar.codigoConsulta || ''}
+            orderNumber={ordenAEnviar.orderNumber}
+            type={listo ? 'aviso_resultados' : 'codigo_consulta'}
+            permitirElegirTipo
+          />
+        );
+      })()}
+
+      {ordenAEditar && (
+        <EditarOrdenModal ordenId={ordenAEditar} onClose={() => setOrdenAEditar(null)} />
       )}
 
       {/* ========================================================

@@ -25,7 +25,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { pool } from './db';
 import type { PermissionSubject } from '../src/shared/permissions';
-import { verifySessionToken, isSessionRevoked } from './session';
+import { verifySessionToken, isSessionRevoked, motivoDeRevocacion, MOTIVO_NUEVO_INICIO } from './session';
 import { isTotpMandatoryForRole } from './totp';
 
 export interface AuthenticatedUser extends PermissionSubject {
@@ -81,7 +81,12 @@ export async function requireStaffAuth(req: Request, res: Response, next: NextFu
         return res.status(401).json({ error: 'Token inválido o expirado.' });
       }
       if (await isSessionRevoked(pool, payload.sessionId)) {
-        return res.status(403).json({ error: 'La sesión fue cerrada. Inicia sesión nuevamente.' });
+        const motivo = await motivoDeRevocacion(pool, payload.sessionId);
+        return res.status(403).json({
+          error: motivo === MOTIVO_NUEVO_INICIO
+            ? 'Tu sesión se cerró porque este usuario inició sesión en otro lugar. Solo se permite una sesión abierta por usuario.'
+            : 'La sesión fue cerrada. Inicia sesión nuevamente.'
+        });
       }
       idUsuario = payload.idUsuario;
       mustChangePasswordClaim = payload.mustChangePassword;

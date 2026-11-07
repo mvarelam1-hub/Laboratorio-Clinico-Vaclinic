@@ -109,6 +109,7 @@ import {
 } from '../services/informesApiService';
 import {
   fetchConfigLab,
+  completarFirmantes,
   updateConfigLab,
   ConfigLabError
 } from '../services/configLabApiService';
@@ -1918,7 +1919,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (isEffectiveOnline) {
       try {
         const fila = await createPacienteRemote(patientDataToApiInput(patientData) as CrearPacienteInput);
-        const newPatient: Patient = mapPacienteApiToPatient(fila, { ...patientData, patientCode: generatedCode });
+        // El código definitivo lo da el número real del registro en la base, no el conteo local.
+        const newPatient: Patient = mapPacienteApiToPatient(fila, { ...patientData, patientCode: undefined });
         setPatients((prev) => [newPatient, ...prev]);
         showNotification(`Paciente ${newPatient.fullName} registrado en la base de datos real. Código: ${newPatient.patientCode}`);
         createBackupSnapshot('save_patient', `Nuevo paciente: ${newPatient.fullName} (${newPatient.patientCode})`);
@@ -3181,6 +3183,35 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showNotification('Sesión de personal bloqueada', 'info');
   };
 
+  // Una sola sesión por usuario: si este mismo usuario inicia sesión en otro
+  // navegador o equipo, el servidor cierra esta. Se comprueba cada 30 s y al
+  // volver a la pestaña, para avisar al momento y no recién al guardar algo.
+  useEffect(() => {
+    if (!isStaffAuthenticated) return;
+    let cancelado = false;
+    const comprobar = async () => {
+      let token: string | null = null;
+      try { token = localStorage.getItem(STAFF_SESSION_TOKEN_STORAGE_KEY); } catch { /* ignore */ }
+      if (!token) return;
+      const r = await verifyStaffSession(token);
+      if (cancelado || r.ok === true) return;
+      if (r.reason === 'network' || r.reason === 'unknown') return;
+      try { localStorage.removeItem(STAFF_SESSION_TOKEN_STORAGE_KEY); } catch { /* ignore */ }
+      setIsStaffAuthenticated(false);
+      setStaffAuthMeta(null);
+      showNotification(r.message, 'warning');
+    };
+    const cadaTanto = window.setInterval(comprobar, 30_000);
+    const alVolver = () => { if (document.visibilityState === 'visible') void comprobar(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      cancelado = true;
+      window.clearInterval(cadaTanto);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStaffAuthenticated]);
+
   const hasPermission = (user: LabStaffUser, permissionId: string): boolean => {
     // Etapa 3: misma función que usa el backend (src/shared/permissions.ts),
     // para que ocultar un botón aquí y rechazar la petición en el servidor
@@ -3425,7 +3456,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (parsed.email && parsed.email.toLowerCase().includes('medilab')) {
           parsed.email = 'laboratoriovaclinic@gmail.com';
         }
-        return { ...INITIAL_LAB_SETTINGS, ...parsed };
+        return { ...INITIAL_LAB_SETTINGS, ...parsed, signers: completarFirmantes(parsed.signers) };
       }
     } catch (e) {
       console.error('Error loading lab settings from localStorage:', e);
@@ -3776,7 +3807,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           ...o,
           isArchived: true,
           archivedAt: formattedDate,
-          archivedBy: currentStaffUser?.name || 'Administrador VACLINIC'
+          archivedBy: currentStaffUser?.fullName || 'Administrador VACLINIC'
         };
       }
       return o;
@@ -3828,7 +3859,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           ...o,
           isArchived: true,
           archivedAt: formattedDate,
-          archivedBy: currentStaffUser?.name || 'Administrador VACLINIC'
+          archivedBy: currentStaffUser?.fullName || 'Administrador VACLINIC'
         };
       }
       return o;
@@ -4094,7 +4125,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         previousStock: 0,
         newStock: newItem.currentStock,
         reason: 'Ingreso inicial al catálogo',
-        operator: currentStaffUser?.name || 'Administrador',
+        operator: currentStaffUser?.fullName || 'Administrador',
         timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16)
       };
       setReagentMovements(prev => [initialLog, ...prev]);
@@ -4247,7 +4278,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       previousStock,
       newStock,
       reason,
-      operator: currentStaffUser?.name || 'Bioanalista en Turno',
+      operator: currentStaffUser?.fullName || 'Bioanalista en Turno',
       timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16),
       remoteId: remoteMovementId
     };
@@ -4395,7 +4426,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }, {
         userId: currentStaffUser?.id,
         userName: currentStaffUser?.fullName,
-        userRole: currentStaffUser?.role
+        userRole: currentStaffUser?.roleName || currentStaffUser?.roleId
       });
 
       const jsonStr = JSON.stringify(fullBackup);
@@ -4453,7 +4484,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, {
       userId: currentStaffUser?.id,
       userName: currentStaffUser?.fullName,
-      userRole: currentStaffUser?.role
+      userRole: currentStaffUser?.roleName || currentStaffUser?.roleId
     });
 
     const filename = BackupService.downloadFullBackup(fullBackup);
@@ -4468,7 +4499,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAuditEvent({
       userId: currentStaffUser?.id || 'usr-system',
       userName: currentStaffUser?.fullName || 'Personal',
-      userRole: currentStaffUser?.role || 'staff',
+      userRole: currentStaffUser?.roleName || currentStaffUser?.roleId || 'staff',
       module: 'seguridad',
       action: 'Exportación de Respaldo Completo',
       details: `Descargado archivo de respaldo ${filename} con ${fullBackup.backupMetadata.totalRecords} registros clínicos.`,
@@ -4575,7 +4606,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       logAuditEvent({
         userId: currentStaffUser?.id || 'usr-system',
         userName: currentStaffUser?.fullName || 'Personal',
-        userRole: currentStaffUser?.role || 'staff',
+        userRole: currentStaffUser?.roleName || currentStaffUser?.roleId || 'staff',
         module: 'seguridad',
         action: 'Restauración de Respaldo',
         details: `Restauración de datos ejecutada exitosamente (${mode.toUpperCase()}). Informes: ${restoredReports}, Pacientes: ${restoredPatients}, Órdenes: ${restoredOrders}.`,

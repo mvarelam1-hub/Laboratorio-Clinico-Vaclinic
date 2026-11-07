@@ -72,6 +72,7 @@ describe('POST /api/auth/login', () => {
         totp_secret: null, totp_enabled: false, must_change_password: false
       }]
     });
+    queryMock.mockResolvedValueOnce({ rows: [] }); // UPDATE sesion_personal (cierra las sesiones anteriores del usuario)
     queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO sesion_personal
 
     queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO historial_auditoria (bitácora, migración 0011/convergencia)
@@ -82,7 +83,8 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(200);
     expect(res.body.requiresTotp).toBe(false);
     expect(res.body.token.startsWith('vc1.')).toBe(true);
-    const [sqlBitacora, paramsBitacora] = queryMock.mock.calls[2];
+    expect(queryMock.mock.calls[1][0]).toMatch(/UPDATE sesion_personal/);
+    const [sqlBitacora, paramsBitacora] = queryMock.mock.calls[3];
     expect(sqlBitacora).toMatch(/INSERT INTO historial_auditoria/);
     expect(paramsBitacora[0]).toBe(1);
     expect(paramsBitacora[2]).toBe('autenticacion');
@@ -159,6 +161,7 @@ describe('POST /api/auth/verify-totp', () => {
         totp_secret: encryptSecret(secret), totp_enabled: true, must_change_password: false
       }]
     });
+    queryMock.mockResolvedValueOnce({ rows: [] }); // UPDATE sesion_personal (cierra las sesiones anteriores)
     queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO sesion_personal
     queryMock.mockResolvedValueOnce({ rows: [] }); // INSERT INTO historial_auditoria (bitácora)
 
@@ -167,7 +170,7 @@ describe('POST /api/auth/verify-totp', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.token.startsWith('vc1.')).toBe(true);
-    const [sqlBitacora] = queryMock.mock.calls[2];
+    const [sqlBitacora] = queryMock.mock.calls[3];
     expect(sqlBitacora).toMatch(/INSERT INTO historial_auditoria/);
   });
 
