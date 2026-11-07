@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  generarCodigoVerificacion, esCodigoVerificacionValido, formatearCodigo, canonizar,
+  generarCodigoVerificacion, esCodigoVerificacionValido, formatearCodigo, canonizar, compararCodigo,
   hashContenido, huellaCorta, enmascararNombre, InformeParaSello, LONGITUD_CODIGO
 } from './informeIntegridad';
 
@@ -81,5 +81,20 @@ describe('presentación', () => {
     expect(m).toBe('M**** F****** L****');
     expect(m).not.toMatch(/aría|ernanda|ópez/);
     expect(enmascararNombre(null)).toBe('—');
+  });
+});
+
+// Remediacion Sonar S2871 (E12): el orden de claves del sello debe seguir siendo el de sort() sin
+// argumentos (unidades de codigo), independiente del idioma; si cambiara, los sellos ya emitidos
+// dejarian de verificarse.
+describe('compararCodigo (orden canonico del sello)', () => {
+  it('ordena igual que sort() sin comparador, incluso con mayusculas y acentos', () => {
+    const claves = ['b', 'Z', 'a', 'ñ', 'A', 'é', '_x', '10', '2'];
+    expect([...claves].sort(compararCodigo)).toEqual([...claves].sort());
+  });
+
+  it('canonizar mantiene el mismo texto para el mismo objeto con claves en otro orden', () => {
+    expect(canonizar({ b: 1, a: { d: 2, c: 3 } })).toBe(canonizar({ a: { c: 3, d: 2 }, b: 1 }));
+    expect(canonizar({ b: 1, a: 2 })).toBe('{"a":2,"b":1}');
   });
 });
